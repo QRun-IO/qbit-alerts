@@ -114,7 +114,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildAlertTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = text(base(config, AlertsAlert.TABLE_NAME, "Alert", "notifications_active", AlertsAlert.class), "details", "links", "attributes")
+      QTableMetaData table = text(base(config, AlertsAlert.TABLE_NAME, "Alerts", "notifications_active", AlertsAlert.class), "details", "links", "attributes")
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("title")
          .withRecordSecurityLock(AlertsSecurity.visibilityLock(null))
@@ -138,7 +138,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildTypeTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = text(base(config, AlertsType.TABLE_NAME, "Alert Type", "category", AlertsType.class), "description", "howToFix")
+      QTableMetaData table = text(base(config, AlertsType.TABLE_NAME, "Alert Types", "category", AlertsType.class), "description", "howToFix")
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("label")
          .withUniqueKey(new UniqueKey("name"))
@@ -161,7 +161,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildGroupTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = text(base(config, AlertsGroup.TABLE_NAME, "Alert Group", "folder", AlertsGroup.class), "description")
+      QTableMetaData table = text(base(config, AlertsGroup.TABLE_NAME, "Alert Groups", "folder", AlertsGroup.class), "description")
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("label")
          .withUniqueKey(new UniqueKey("name"))
@@ -180,7 +180,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildMonitorTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = text(base(config, AlertsMonitor.TABLE_NAME, "Monitor", "monitor_heart", AlertsMonitor.class), "description", "definition")
+      QTableMetaData table = text(base(config, AlertsMonitor.TABLE_NAME, "Monitors", "monitor_heart", AlertsMonitor.class), "description", "definition")
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("name")
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
@@ -204,7 +204,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildRecordRefTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsRecordRef.TABLE_NAME, "Alert Record", "link", AlertsRecordRef.class)
+      QTableMetaData table = base(config, AlertsRecordRef.TABLE_NAME, "Alert Records", "link", AlertsRecordRef.class)
          .withRecordLabelFormat("%s %s")
          .withRecordLabelFields("tableName", "recordId")
          .withRecordSecurityLock(AlertsSecurity.visibilityLock(JOIN_ALERT_RECORD_REF))
@@ -220,7 +220,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildEventTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsEvent.TABLE_NAME, "Alert Timeline Entry", "history", AlertsEvent.class)
+      QTableMetaData table = base(config, AlertsEvent.TABLE_NAME, "Alert Timeline", "history", AlertsEvent.class)
          .withRecordLabelFormat("%s %s")
          .withRecordLabelFields("eventType", "at")
          .withRecordSecurityLock(AlertsSecurity.visibilityLock(JOIN_ALERT_EVENT))
@@ -237,7 +237,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildSubscriptionTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsSubscription.TABLE_NAME, "Subscription", "notifications", AlertsSubscription.class)
+      QTableMetaData table = base(config, AlertsSubscription.TABLE_NAME, "Subscriptions", "notifications", AlertsSubscription.class)
          .withRecordLabelFormat("%s %s %s")
          .withRecordLabelFields("subscriberType", "scopeType", "scopeValue")
          .withRecordSecurityLock(AlertsSecurity.ownerLock("userId"))
@@ -288,7 +288,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildTeamTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = text(base(config, AlertsTeam.TABLE_NAME, "Team", "groups", AlertsTeam.class), "description")
+      QTableMetaData table = text(base(config, AlertsTeam.TABLE_NAME, "Teams", "groups", AlertsTeam.class), "description")
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("label")
          .withUniqueKey(new UniqueKey("name"))
@@ -308,7 +308,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildTeamMemberTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsTeamMember.TABLE_NAME, "Team Member", "person", AlertsTeamMember.class)
+      QTableMetaData table = base(config, AlertsTeamMember.TABLE_NAME, "Team Members", "person", AlertsTeamMember.class)
          .withRecordLabelFormat("%s %s")
          .withRecordLabelFields("teamId", "userId")
          .withUniqueKey(new UniqueKey("teamId", "userId"))
@@ -326,7 +326,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildChannelTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = text(base(config, AlertsChannel.TABLE_NAME, "Channel", "campaign", AlertsChannel.class), "settings")
+      QTableMetaData table = text(base(config, AlertsChannel.TABLE_NAME, "Channels", "campaign", AlertsChannel.class), "settings")
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("label")
          .withUniqueKey(new UniqueKey("name"))
@@ -352,7 +352,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildMuteTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsMute.TABLE_NAME, "Mute or Maintenance Window", "notifications_off", AlertsMute.class)
+      QTableMetaData table = base(config, AlertsMute.TABLE_NAME, "Mutes and Maintenance", "notifications_off", AlertsMute.class)
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("name")
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
@@ -372,7 +372,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildNotificationTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsNotification.TABLE_NAME, "Notification", "send", AlertsNotification.class)
+      QTableMetaData table = base(config, AlertsNotification.TABLE_NAME, "Notification Log", "send", AlertsNotification.class)
          .withRecordLabelFormat("%s %s")
          .withRecordLabelFields("kind", "recipientLabel")
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "alertId", "kind", "status", "channelId", "recipientLabel")))
@@ -388,7 +388,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildInboxItemTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsInboxItem.TABLE_NAME, "Inbox Item", "inbox", AlertsInboxItem.class)
+      QTableMetaData table = base(config, AlertsInboxItem.TABLE_NAME, "My Alerts Inbox", "inbox", AlertsInboxItem.class)
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("alertId")
          .withRecordSecurityLock(AlertsSecurity.ownerLock("userId"))
@@ -406,7 +406,7 @@ public final class AlertsTableMetaDataHelper
     *******************************************************************************/
    public static QTableMetaData buildHeartbeatTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsHeartbeat.TABLE_NAME, "Heartbeat", "favorite", AlertsHeartbeat.class)
+      QTableMetaData table = base(config, AlertsHeartbeat.TABLE_NAME, "Heartbeats", "favorite", AlertsHeartbeat.class)
          .withRecordLabelFormat("%s")
          .withRecordLabelFields("heartbeatKey")
          .withUniqueKey(new UniqueKey("heartbeatKey"))

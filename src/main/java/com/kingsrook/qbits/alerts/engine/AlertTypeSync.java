@@ -230,7 +230,7 @@ public class AlertTypeSync
       }
       QRecord inserted = AlertsDb.insert(AlertsGroup.TABLE_NAME, new QRecord()
          .withValue("name", name)
-         .withValue("label", AlertsPossibleValues.label(name.replace('-', '_').replace('.', '_').toUpperCase())));
+         .withValue("label", name.length() <= 3 ? name.toUpperCase(java.util.Locale.ROOT) : AlertsPossibleValues.label(name.replace('-', '_').replace('.', '_').toUpperCase(java.util.Locale.ROOT))));
       return (inserted.getValueInteger("id"));
    }
 

@@ -19,7 +19,6 @@ package com.kingsrook.qbits.alerts.engine;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -450,7 +449,7 @@ public class MonitorEvaluator
             String       label = labelField == null ? null : row.getValueString(labelField);
             signals.add(base(monitor, typeName)
                .withDedupKey("record:" + id)
-               .withTitle(name + ": " + table.getLabel() + " " + id)
+               .withTitle(name + ": " + (label != null && !label.isBlank() ? label : table.getLabel() + " " + id))
                .withRecordRef(AlertRecordRef.of(tableName, id).withLabel(label))
                .withLink(AlertLink.toRecord(tableName, id, "Open the record")));
          }
@@ -564,11 +563,11 @@ public class MonitorEvaluator
       {
          return (List.of());
       }
-      String age = last == null ? "ever" : "in " + Duration.between(last, now).toMinutes() + " minutes";
+      String age = last == null ? "yet" : "for " + com.kingsrook.qbits.alerts.delivery.AlertMessageRenderer.age(last, now);
       return (List.of(base(monitor, typeName)
          .withDedupKey("monitor:" + monitor.getValue("id"))
          .withTitle(monitor.getValueString("name") + ": no " + what.replaceFirst("^an? ", "") + " " + age)
-         .withSummary("Expected " + what + " every " + Duration.ofSeconds(expected).toMinutes() + " minutes.")));
+         .withSummary("Expected " + what + " every " + com.kingsrook.qbits.alerts.delivery.AlertMessageRenderer.age(now.minusSeconds(expected), now) + ".")));
    }
 
 
