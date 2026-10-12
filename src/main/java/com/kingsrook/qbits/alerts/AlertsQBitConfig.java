@@ -87,6 +87,8 @@ public class AlertsQBitConfig implements QBitConfig
 
    private List<QCodeReference> channelTypes = new ArrayList<>();
 
+   private String alertmanagerIngestTokenSecretRef;
+
    private Boolean registerRoutes  = true;
    private Boolean synchronousSink = false;
 
@@ -556,6 +558,30 @@ public class AlertsQBitConfig implements QBitConfig
    public AlertsQBitConfig withSynchronousSink(Boolean synchronousSink)
    {
       this.synchronousSink = synchronousSink;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for alertmanagerIngestTokenSecretRef
+    *******************************************************************************/
+   public String getAlertmanagerIngestTokenSecretRef()
+   {
+      return (this.alertmanagerIngestTokenSecretRef);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for alertmanagerIngestTokenSecretRef: the reference (an
+    ** environment variable name or ${...} expression, never the value) of the
+    ** bearer token Alertmanager sends to POST /qqq/v1/alerts/ingest/alertmanager.
+    ** Null (the default) turns ingest off.
+    *******************************************************************************/
+   public AlertsQBitConfig withAlertmanagerIngestTokenSecretRef(String alertmanagerIngestTokenSecretRef)
+   {
+      this.alertmanagerIngestTokenSecretRef = alertmanagerIngestTokenSecretRef;
       return (this);
    }
 
