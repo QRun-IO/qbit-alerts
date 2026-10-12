@@ -1,0 +1,107 @@
+/*
+ * Copyright 2026 Kingsrook, LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.kingsrook.qbits.alerts.engine;
+
+
+import java.util.List;
+import com.kingsrook.qbits.alerts.AlertsQBitConfig;
+import com.kingsrook.qbits.alerts.BaseAlertsTest;
+import com.kingsrook.qbits.alerts.metadata.AlertsProcessesMetaDataProducer;
+import com.kingsrook.qbits.alerts.model.AlertsAlert;
+import com.kingsrook.qbits.alerts.model.AlertsHeartbeat;
+import com.kingsrook.qbits.alerts.processes.AlertsScheduledSteps;
+import com.kingsrook.qbits.alerts.spi.AlertResolution;
+import com.kingsrook.qbits.alerts.spi.AlertSignal;
+import com.kingsrook.qqq.backend.core.actions.processes.RunProcessAction;
+import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessInput;
+import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessOutput;
+import com.kingsrook.qqq.backend.core.model.data.QRecord;
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+
+
+/*******************************************************************************
+ ** The asynchronous sink (queue, flush, flood protection), the registered
+ ** sink adapter, and the two hidden scheduled processes.
+ *******************************************************************************/
+class SinkAndScheduleTest extends BaseAlertsTest
+{
+
+   /*******************************************************************************
+    ** Process signals on the background queue in these tests.
+    *******************************************************************************/
+   @Override
+   protected void customizeConfig(AlertsQBitConfig config)
+   {
+      config.withSynchronousSink(false);
+   }
+
+
+
+   /*******************************************************************************
+    ** Signals queue and are drained (by the thread, or by flush).
+    *******************************************************************************/
+   @Test
+   void testQueueAndAdapter() throws Exception
+   {
+      AlertsSinkAdapter adapter = new AlertsSinkAdapter();
+      adapter.raise(new AlertSignal("test.queue.thing").withTitle("Queued"));
+      adapter.heartbeat("queue.beat", null);
+      runtime.sink().flush();
+      for(int i = 0; i < 50 && all(AlertsAlert.TABLE_NAME).isEmpty(); i++)
+      {
+         Thread.sleep(50);
+      }
+      assertThat(all(AlertsAlert.TABLE_NAME)).hasSize(1);
+
+      adapter.resolve(new AlertResolution("test.queue.thing", null, "done"));
+      runtime.sink().stop();
+      List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
+      assertThat(alerts.get(0).getValueString("status")).isEqualTo("RESOLVED");
+      assertThat(all(AlertsHeartbeat.TABLE_NAME)).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** Past 1,000 signals a minute for a type, the rest are counted, not stored.
+    *******************************************************************************/
+   @Test
+   void testFlood()
+   {
+      for(int i = 0; i < 1005; i++)
+      {
+         runtime.sink().raise(new AlertSignal("test.flood.thing").withDedupKey("same"));
+      }
+      assertThat(runtime.sink().getDroppedCount()).isEqualTo(5);
+      runtime.sink().stop();
+   }
+
+
+
+   /*******************************************************************************
+    ** The scheduled processes run their steps.
+    *******************************************************************************/
+   @Test
+   void testScheduledProcesses() throws Exception
+   {
+      RunProcessOutput evaluated = new RunProcessAction().execute(new RunProcessInput().withProcessName(AlertsProcessesMetaDataProducer.EVALUATE_MONITORS));
+      assertThat(evaluated.getValues().get(AlertsScheduledSteps.OUTPUT_COUNT)).isEqualTo(0);
+      RunProcessOutput delivered = new RunProcessAction().execute(new RunProcessInput().withProcessName(AlertsProcessesMetaDataProducer.DELIVER_NOTIFICATIONS));
+      assertThat(delivered.getValues().get(AlertsScheduledSteps.OUTPUT_COUNT)).isEqualTo(0);
+   }
+}

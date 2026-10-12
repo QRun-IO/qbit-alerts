@@ -4,7 +4,7 @@ This file provides guidance to Codex when working with code in this repository.
 
 ## Project Overview
 
-**QBit Alerts**: QQQ QBit: alerts and manage-by-exception (monitors, alerts, subscriptions, channels and notifications as standard QQQ tables). Design: [QRun-IO/qqq#1090](https://github.com/QRun-IO/qqq/pull/1090). Implementation in progress.
+**QBit Alerts**: QQQ QBit: alerts and manage-by-exception (monitors, alerts, subscriptions, channels and notifications as standard QQQ tables). Design: [QRun-IO/qqq#1090](https://github.com/QRun-IO/qqq/pull/1090). Phases P1 to P3 are implemented; see README.md for the remaining phases and the core SPI stand-in in `spi/`.
 
 ## Build Commands
 
@@ -16,7 +16,16 @@ This file provides guidance to Codex when working with code in this repository.
 
 ## Architecture
 
-**Entry point:** `AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig>` in `com.kingsrook.qbits.alerts`. Component producers in this package (and below) are found by package scanning.
+**Entry point:** `AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig>` in `com.kingsrook.qbits.alerts`. Component producers are found by package scanning, in the `metadata` package only (the `api` package needs the optional Javalin dependency).
+
+Packages:
+- `model`: entities, generated from one schema together with the changelog and the test DDL. If you change a table, change all three.
+- `engine`: the state machine (`AlertsEngine`), routing (`AlertRouter`), monitors (`MonitorEvaluator`), type sync, the sink and the process listener.
+- `delivery`: channels, rendering, redaction and the delivery worker.
+- `processes`: the record actions (`AlertsAction`, `AlertsActionSteps`) and the scheduled steps.
+- `home`: the Alerts home and `AlertSummaryLoader`.
+- `api`: the bell and record-panel routes.
+- `spi`: the stand-in for the core producer SPI.
 
 ## Naming (owner rule)
 
