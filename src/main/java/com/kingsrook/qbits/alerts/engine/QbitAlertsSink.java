@@ -56,6 +56,8 @@ public class QbitAlertsSink implements AlertSinkInterface
 
    static final int QUEUE_CAPACITY      = 10_000;
    static final int FLOOD_PER_MINUTE    = 1_000;
+   static final long POLL_MILLIS        = 200;
+   static final long STOP_WAIT_MILLIS   = 10_000;
 
    private final AlertsRuntime          runtime;
    private final BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
@@ -65,6 +67,7 @@ public class QbitAlertsSink implements AlertSinkInterface
    private final Map<String, AtomicInteger> perMinute = new ConcurrentHashMap<>();
    private volatile long                minute = -1;
    private volatile Thread              drainThread;
+   private volatile boolean             stopping = false;
 
 
 
@@ -144,16 +147,33 @@ public class QbitAlertsSink implements AlertSinkInterface
 
 
    /*******************************************************************************
-    ** Stop the drain thread (queued signals are processed first).
+    ** Stop the drain thread. Work it already took off the queue finishes first
+    ** (it is not interrupted), then everything still queued is processed here,
+    ** so no signal submitted before stop() is lost.
     *******************************************************************************/
    public void stop()
    {
-      flush();
+      stopping = true;
       Thread thread = drainThread;
       if(thread != null)
       {
-         thread.interrupt();
+         try
+         {
+            thread.join(STOP_WAIT_MILLIS);
+         }
+         catch(InterruptedException e)
+         {
+            Thread.currentThread().interrupt();
+         }
+
+         if(thread.isAlive())
+         {
+            LOG.warn("The alerts drain thread did not stop in time", logPair("waitMillis", STOP_WAIT_MILLIS));
+            thread.interrupt();
+         }
       }
+      flush();
+      drainThread = null;
       started.set(false);
    }
 
@@ -243,13 +263,14 @@ public class QbitAlertsSink implements AlertSinkInterface
    {
       if(started.compareAndSet(false, true))
       {
+         stopping = false;
          drainThread = Thread.ofVirtual().name("alerts-sink").start(() ->
          {
-            while(!Thread.currentThread().isInterrupted())
+            while(!stopping && !Thread.currentThread().isInterrupted())
             {
                try
                {
-                  Runnable work = queue.poll(1, TimeUnit.SECONDS);
+                  Runnable work = queue.poll(POLL_MILLIS, TimeUnit.MILLISECONDS);
                   if(work != null)
                   {
                      work.run();
