@@ -53,6 +53,32 @@ class SinkAndScheduleTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** stop() returns only after every signal submitted before it is recorded,
+    ** including one the drain thread already took off the queue (regression:
+    ** stop() used to flush an empty queue and return while the drain thread
+    ** was still writing, so a resolve could be lost).
+    *******************************************************************************/
+   @Test
+   void testStopWaitsForInFlightSignals() throws Exception
+   {
+      AlertsSinkAdapter adapter = new AlertsSinkAdapter();
+      for(int i = 0; i < 25; i++)
+      {
+         String type = "test.stop.thing" + i;
+         adapter.raise(new AlertSignal(type).withTitle("Stop " + i));
+         runtime.sink().stop();
+         adapter.resolve(new AlertResolution(type, null, "done"));
+         runtime.sink().stop();
+      }
+
+      List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
+      assertThat(alerts).hasSize(25);
+      assertThat(alerts).allSatisfy(alert -> assertThat(alert.getValueString("status")).isEqualTo("RESOLVED"));
+   }
+
+
+
+   /*******************************************************************************
     ** Signals queue and are drained (by the thread, or by flush).
     *******************************************************************************/
    @Test
