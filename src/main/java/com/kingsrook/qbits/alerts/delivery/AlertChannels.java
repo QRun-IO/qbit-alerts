@@ -34,8 +34,8 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
 
 /*******************************************************************************
- ** The channel types (built-in in-app, email and email list, plus any the
- ** config adds) and the two default channel rows every install has: "in-app"
+ ** The channel types (built-in in-app, email, email list, Slack, Teams,
+ ** webhook, PagerDuty and Alertmanager, plus any the config adds) and the two default channel rows every install has: "in-app"
  ** (the bell; always available) and "email" (a person's own address).
  *******************************************************************************/
 public class AlertChannels
@@ -60,6 +60,10 @@ public class AlertChannels
       register(new InAppChannel());
       register(new EmailChannel(runtime.getConfig(), ChannelType.EMAIL));
       register(new EmailChannel(runtime.getConfig(), ChannelType.EMAIL_LIST));
+      for(AlertChannelInterface external : com.kingsrook.qbits.alerts.delivery.channels.ExternalChannels.all())
+      {
+         register(external);
+      }
       for(QCodeReference reference : runtime.getConfig().getChannelTypes())
       {
          try

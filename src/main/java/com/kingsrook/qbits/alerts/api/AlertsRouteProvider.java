@@ -42,6 +42,8 @@ import io.javalin.http.Context;
  ** - POST /inbox/read      {"alertId": n} or {"all": true}
  ** - GET  /record-panel?tableName=t&amp;recordId=id   the "Open alerts" panel
  ** - POST /record-panel/watch   {"tableName": t, "recordId": id}
+ ** - POST /ingest/alertmanager  Alertmanager's webhook (bearer token; off
+ **   unless alertmanagerIngestTokenSecretRef is configured)
  ** Each request gets a session from the instance's authentication module;
  ** AlertsApi checks alerts.view and works in that session. Errors map
  ** through QJavalinUtils.handleException (400, 401, 403, 404). POST bodies
@@ -50,6 +52,8 @@ import io.javalin.http.Context;
 public class AlertsRouteProvider implements QJavalinRouteProviderInterface
 {
    public static final String BASE_PATH = "/qqq/v1/alerts";
+
+   static final int MAX_INGEST_BYTES = 1024 * 1024;
 
    private QInstance qInstance;
 
@@ -92,6 +96,36 @@ public class AlertsRouteProvider implements QJavalinRouteProviderInterface
       config.routes.post(BASE_PATH + "/inbox/read", context -> respond(context, true, AlertsApi::markRead));
       config.routes.get(BASE_PATH + "/record-panel", context -> respond(context, false, (api, body) -> api.recordPanel(context.queryParam("tableName"), context.queryParam("recordId"))));
       config.routes.post(BASE_PATH + "/record-panel/watch", context -> respond(context, true, AlertsApi::watchRecord));
+      config.routes.post(BASE_PATH + "/ingest/alertmanager", this::ingestAlertmanager);
+   }
+
+
+
+   /*******************************************************************************
+    ** Alertmanager's webhook (no QQQ session: a bearer token instead).
+    *******************************************************************************/
+   private void ingestAlertmanager(Context context)
+   {
+      try
+      {
+         if(context.body().length() > MAX_INGEST_BYTES)
+         {
+            throw (new QBadRequestException("The payload is larger than 1 MB."));
+         }
+         com.kingsrook.qbits.alerts.engine.AlertmanagerIngest ingest = new com.kingsrook.qbits.alerts.engine.AlertmanagerIngest(AlertsRuntime.get(qInstance));
+         ingest.authenticate(context.header("Authorization"));
+         com.kingsrook.qbits.alerts.engine.AlertmanagerIngest.Result result = ingest.ingest(readJsonBody(context));
+         context.contentType(ContentType.APPLICATION_JSON);
+         context.result(JsonUtils.toJson(Map.of("raised", result.raised(), "resolved", result.resolved(), "ignored", result.ignored())));
+      }
+      catch(Exception e)
+      {
+         QJavalinUtils.handleException(null, context, e);
+      }
+      finally
+      {
+         QContext.clear();
+      }
    }
 
 

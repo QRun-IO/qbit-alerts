@@ -31,7 +31,48 @@ import java.util.List;
  ** @param kind      RAISED, RESOLVED, REMINDER, ESCALATED, DIGEST or TEST
  ** @param alertIds  the alerts in the message
  ** @param link      a link to the alert (or the Alerts list) in the app
+ ** @param entries   one structured entry per alert, for channels that send
+ **                  one event per alert (PagerDuty, Alertmanager, webhooks);
+ **                  already redacted and capped by the detail level
  *******************************************************************************/
-public record AlertMessage(String subject, String text, String html, String severity, String kind, List<Integer> alertIds, String link)
+public record AlertMessage(String subject, String text, String html, String severity, String kind, List<Integer> alertIds, String link, List<Entry> entries)
 {
+   /*******************************************************************************
+    ** A message without structured entries.
+    *******************************************************************************/
+   public AlertMessage(String subject, String text, String html, String severity, String kind, List<Integer> alertIds, String link)
+   {
+      this(subject, text, html, severity, kind, alertIds, link, List.of());
+   }
+
+
+
+   /*******************************************************************************
+    ** One alert, as structured channels send it.
+    **
+    ** @param alertId       the alert's id (null for a test message)
+    ** @param alertTypeName the type, e.g. cdn.purge.dead
+    ** @param typeLabel     the type's label
+    ** @param dedupKey      the producer's dedup key
+    ** @param severity      INFO, WARNING, ERROR or CRITICAL
+    ** @param status        OPEN, ACKNOWLEDGED, SNOOZED or RESOLVED
+    ** @param title         the redacted title
+    ** @param summary       the redacted summary (null at MINIMAL)
+    ** @param group         the group's label
+    ** @param itemCount     the record count (null at MINIMAL)
+    ** @param link          the alert in the app
+    ** @param firstRaisedAt when it opened (ISO)
+    ** @param resolvedAt    when it resolved (ISO), or null
+    *******************************************************************************/
+   public record Entry(Integer alertId, String alertTypeName, String typeLabel, String dedupKey, String severity, String status, String title, String summary,
+                       String group, Integer itemCount, String link, String firstRaisedAt, String resolvedAt)
+   {
+      /***************************************************************************
+       ** The stable key for systems that dedup (PagerDuty, Alertmanager).
+       ***************************************************************************/
+      public String stableKey()
+      {
+         return ((alertTypeName == null ? "alerts.test" : alertTypeName) + ":" + (dedupKey == null ? String.valueOf(alertId) : dedupKey));
+      }
+   }
 }

@@ -18,7 +18,15 @@ Any qbit or app reports exceptional conditions ("a person should do something").
   - `HEARTBEAT`, on a key, a process or a table's newest row
   - `PROCESS_FAILED`
   - `CODE`, through `AlertCheckInterface`
-- **Notifies subscribers** (users, teams or channels) through in-app (the bell), email and email lists, and through any channel another qbit registers. Every suppressed notification is logged with its reason.
+- **Notifies subscribers** (users, teams or channels) through in-app (the bell), email and email lists. These optional channels are also built in:
+  - Slack (an Incoming Webhook)
+  - Microsoft Teams (a Workflows webhook)
+  - a generic signed webhook
+  - PagerDuty (Events API v2)
+  - Prometheus Alertmanager, as a sink
+
+  Any channel another qbit registers works too. Every suppressed notification is logged with its reason.
+- **Ingests Prometheus Alertmanager** at `POST /qqq/v1/alerts/ingest/alertmanager`, with notifications off for those types, so infrastructure alerts are triaged in one place.
 - **Owns the Alerts home:** open alerts by severity, my alerts, needs action, by group, a 30-day trend, the noisiest types, delivery health and recently resolved. Other pages get link-only summaries from `AlertSummaryLoader`.
 
 All data is in standard QQQ tables named `alerts_*`. People change alerts through record actions, never by editing rows.
@@ -78,13 +86,36 @@ Once the RC ships, producers call `QAlerts.raise(...)` from core and need no dep
 | POST | `/qqq/v1/alerts/inbox/read` | `{"alertId": n}` or `{"all": true}` |
 | GET | `/qqq/v1/alerts/record-panel?tableName=t&recordId=id` | The "Open alerts" panel for a record (`visible: false` when there is nothing to show) |
 | POST | `/qqq/v1/alerts/record-panel/watch` | `{"tableName": t, "recordId": id}`: a RECORD subscription for the user |
+| POST | `/qqq/v1/alerts/ingest/alertmanager` | Alertmanager's webhook receiver (version 4). It takes a bearer token whose reference is set by `withAlertmanagerIngestTokenSecretRef`, and is off without one. |
+
+## External channels
+
+Each external channel is an `alerts_channel` row that an admin creates. Its secret is a reference (`secretRef`, an environment variable name or a `${...}` expression), never the value. The minimum detail level is MINIMAL by default.
+
+| Type | Secret | Settings |
+|---|---|---|
+| `SLACK` | The Incoming Webhook URL | none |
+| `TEAMS` | The Workflows "when a webhook request is received" URL | none |
+| `WEBHOOK` | The signing key (`whsec_...`) | `{"url": "https://receiver"}` |
+| `PAGERDUTY` | The Events API v2 routing key | optional `url`, `source` |
+| `ALERTMANAGER` | An optional bearer token | `{"url": "https://alertmanager:9093"}` |
+
+How each one sends:
+
+- **Webhook** bodies are `{type, subject, severity, link, alerts: [...]}`, signed with the Standard Webhooks headers (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256 of id.timestamp.body>`). This is the shared format from the qbit-webhooks assessment (QRun-IO/qqq#1105). The signer is a stand-in until core's `WebhookSigner` (QRun-IO/qqq#1109) is released.
+- **PagerDuty** gets one event per alert: `trigger`, `acknowledge` or `resolve`, with `dedup_key` set to the type and key.
+- **Alertmanager** alerts carry the labels `qqq_type`, `qqq_group`, `qqq_key` and `qqq_origin="qbit-alerts"`. Ingest ignores alerts with that origin, so nothing loops.
+- **Responses:** 2xx is sent. 408, 425, 429, 5xx and network errors are retried. Any other 4xx fails permanently.
+- **URLs** must be https, unless the channel's settings say `"allowInsecureHttp": true`, which is meant for local receivers.
 
 ## Known limits (v1)
 
 - **Claims are best-effort.** Delivery and monitor claims use a lease, not an atomic conditional update. With several scheduler nodes, run the two scheduled processes on one node, or accept at-least-once delivery.
 - **Email threading headers.** `Message-ID` and `In-Reply-To` need core messaging support for custom headers, so they are not set.
 - **Recipient visibility.** It is checked through `createAutomatedSessionForUser`. If a host's authentication module can't build a session with permissions for a user, email goes out only for alerts that have no visibility permission and no subject table. In-app delivery is always filtered by the record locks.
-- **Not in v1:** digests, quiet hours, reminders, escalation, external channels (Slack, Teams, webhook, PagerDuty, Alertmanager), mirrored lock columns and a configurable table namespace. These are design phases P4 to P6.
+- **Outbound HTTP** blocks plain http, but has no full SSRF guard. Channels are admin-only. Core's `SafeHttpClient` (QRun-IO/qqq#1109) replaces the client when it is released.
+- **Alertmanager sink:** open alerts are sent with an `endsAt` a week out, not re-posted.
+- **Not built yet:** digests, quiet hours, reminders, Micrometer metrics, ROLE and IdP-group team resolvers, escalation, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
 
 ## Build
 

@@ -147,7 +147,22 @@ public final class AlertMessageRenderer
       html.append("<p style=\"font-size:12px;opacity:.75\"><a href=\"").append(HomeHtml.escape(base + "/app/alerts_subscription")).append("\">Change or stop these emails</a>. ")
          .append("Personal data and secrets are removed from alert messages.</p></div>");
 
-      return (new AlertMessage(subject, text.toString(), html.toString(), highest.name(), kind.name(), alertIds, link));
+      List<AlertMessage.Entry> entries = new ArrayList<>();
+      for(Item item : items)
+      {
+         QRecord     alert    = item.alert();
+         DetailLevel level    = item.level() == null ? DetailLevel.MINIMAL : item.level();
+         boolean     standard = level.compareTo(DetailLevel.STANDARD) >= 0;
+         Integer     id       = alert.getValueInteger("id");
+         entries.add(new AlertMessage.Entry(id, alert.getValueString("alertTypeName"), safe(item.typeLabel()), alert.getValueString("dedupKey"),
+            AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING).name(),
+            kind == NotificationKind.RESOLVED ? "RESOLVED" : (alert.getValueString("status") == null ? "OPEN" : alert.getValueString("status")),
+            safe(alert.getValueString("title")), standard ? AlertRedactor.redact(alert.getValueString("summary")) : null, item.groupLabel(),
+            standard ? alert.getValueInteger("itemCount") : null, id == null ? base + "/app/" + AlertsAlert.TABLE_NAME : base + "/app/" + AlertsAlert.TABLE_NAME + "/" + id,
+            alert.getValueInstant("firstRaisedAt") == null ? null : alert.getValueInstant("firstRaisedAt").toString(),
+            alert.getValueInstant("resolvedAt") == null ? null : alert.getValueInstant("resolvedAt").toString()));
+      }
+      return (new AlertMessage(subject, text.toString(), html.toString(), highest.name(), kind.name(), alertIds, link, entries));
    }
 
 

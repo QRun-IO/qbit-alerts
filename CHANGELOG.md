@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Added
+- Optional external channels:
+  - Slack (an Incoming Webhook, Block Kit)
+  - Microsoft Teams (a Workflows webhook, an Adaptive Card)
+  - a generic webhook, signed with Standard Webhooks headers through a stand-in for core's `WebhookSigner` (QRun-IO/qqq#1109)
+  - PagerDuty (Events API v2: trigger, acknowledge and resolve)
+  - an Alertmanager sink (`/api/v2/alerts`, with the qqq labels and the origin guard)
+- Prometheus Alertmanager ingest at `POST /qqq/v1/alerts/ingest/alertmanager`. It takes a bearer token, creates EXTERNAL types with notifications off, and keeps a loop guard.
 - Tables (`alerts_*`), with the Liquibase changelog `db/liquibase/qbit-alerts/alerts.changelog.sql`:
   - alerts, their timeline and records
   - types, groups and monitors
