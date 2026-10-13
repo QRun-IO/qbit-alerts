@@ -85,7 +85,7 @@ public class AlertsApi
    static final int MAX_PAGE           = 100;
    static final int POLL_SECONDS       = 60;
 
-   public static final String NOTIFICATIONS_HREF = "/notifications";
+   public static final String NOTIFICATIONS_HREF = "/app/notifications";
    static final int PANEL_ROWS         = 5;
    static final int RESOLVED_LOOKBACK  = 30;
 
