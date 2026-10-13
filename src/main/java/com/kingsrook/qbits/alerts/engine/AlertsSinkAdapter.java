@@ -22,6 +22,7 @@ import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.spi.AlertResolution;
 import com.kingsrook.qbits.alerts.spi.AlertSignal;
 import com.kingsrook.qbits.alerts.spi.AlertSinkInterface;
+import com.kingsrook.qbits.alerts.spi.NotificationSignal;
 import com.kingsrook.qqq.backend.core.context.QContext;
 
 
@@ -74,6 +75,21 @@ public class AlertsSinkAdapter implements AlertSinkInterface
       if(runtime != null)
       {
          runtime.sink().heartbeat(heartbeatKey, at);
+      }
+   }
+
+
+
+   /*******************************************************************************
+    **
+    *******************************************************************************/
+   @Override
+   public void notify(NotificationSignal signal)
+   {
+      AlertsRuntime runtime = AlertsRuntime.find(QContext.getQInstance());
+      if(runtime != null)
+      {
+         runtime.sink().notify(signal);
       }
    }
 }

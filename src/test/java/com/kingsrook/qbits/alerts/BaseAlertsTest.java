@@ -361,7 +361,7 @@ public class BaseAlertsTest
       public void customizeAutomatedSessionForUser(QInstance qInstance, QSession automatedSessionForUser, java.io.Serializable userId)
       {
          String id = String.valueOf(userId);
-         if(id.startsWith("admin") || id.startsWith("manager") || id.startsWith("viewer") || id.startsWith("outsider"))
+         if(id.startsWith("admin") || id.startsWith("author") || id.startsWith("manager") || id.startsWith("viewer") || id.startsWith("outsider"))
          {
             automatedSessionForUser.setPermissions(sessionFor(id).getPermissions());
          }
@@ -384,6 +384,10 @@ public class BaseAlertsTest
          if(userId.startsWith("admin"))
          {
             session.getPermissions().addAll(defaults.getAdminPermissionNames());
+         }
+         else if(userId.startsWith("author"))
+         {
+            session.getPermissions().addAll(defaults.getNotificationAdminPermissionNames());
          }
          else if(userId.startsWith("manager"))
          {

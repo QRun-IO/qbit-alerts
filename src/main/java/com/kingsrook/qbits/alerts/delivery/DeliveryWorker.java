@@ -29,12 +29,12 @@ import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
-import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryKind;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.HealthStatus;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationKind;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Resolution;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
@@ -100,8 +100,8 @@ public class DeliveryWorker
       return (runtime.asSystem(() ->
       {
          Instant now = runtime.now();
-         List<QRecord> due = AlertsDb.query(AlertsNotification.TABLE_NAME, new QQueryFilter()
-            .withCriteria("status", QCriteriaOperator.IN, List.of(NotificationStatus.PENDING.name(), NotificationStatus.RETRYING.name()))
+         List<QRecord> due = AlertsDb.query(AlertsDelivery.TABLE_NAME, new QQueryFilter()
+            .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.PENDING.name(), DeliveryStatus.RETRYING.name()))
             .withCriteria("nextAttemptAt", QCriteriaOperator.LESS_THAN_OR_EQUALS, now)
             .withOrderBy(new QFilterOrderBy("id"))
             .withLimit(BATCH_LIMIT));
@@ -110,11 +110,11 @@ public class DeliveryWorker
          for(QRecord row : due)
          {
             Instant claimedUntil = row.getValueInstant("claimedUntil");
-            if(claimedUntil != null && claimedUntil.isAfter(now) && NotificationStatus.SENDING.name().equals(row.getValueString("status")))
+            if(claimedUntil != null && claimedUntil.isAfter(now) && DeliveryStatus.SENDING.name().equals(row.getValueString("status")))
             {
                continue;
             }
-            AlertsDb.update(AlertsNotification.TABLE_NAME, new QRecord().withValue("id", row.getValue("id")).withValue("status", NotificationStatus.SENDING.name())
+            AlertsDb.update(AlertsDelivery.TABLE_NAME, new QRecord().withValue("id", row.getValue("id")).withValue("status", DeliveryStatus.SENDING.name())
                .withValue("claimedUntil", now.plus(Duration.ofMinutes(2))));
             groups.computeIfAbsent(row.getValue("channelId") + "|" + row.getValueString("recipientUserId") + "|" + row.getValueString("kind"), key -> new ArrayList<>()).add(row);
          }
@@ -140,10 +140,10 @@ public class DeliveryWorker
          int count = 0;
          for(Serializable id : notificationIds)
          {
-            QRecord row = AlertsDb.byId(AlertsNotification.TABLE_NAME, id);
-            if(row != null && List.of(NotificationStatus.FAILED.name(), NotificationStatus.DEAD.name()).contains(row.getValueString("status")))
+            QRecord row = AlertsDb.byId(AlertsDelivery.TABLE_NAME, id);
+            if(row != null && List.of(DeliveryStatus.FAILED.name(), DeliveryStatus.DEAD.name()).contains(row.getValueString("status")))
             {
-               AlertsDb.update(AlertsNotification.TABLE_NAME, new QRecord().withValue("id", id).withValue("status", NotificationStatus.PENDING.name())
+               AlertsDb.update(AlertsDelivery.TABLE_NAME, new QRecord().withValue("id", id).withValue("status", DeliveryStatus.PENDING.name())
                   .withValue("nextAttemptAt", runtime.now()).withValue("attempts", 0).withValue("claimedUntil", null).withValue("lastError", null));
                count++;
             }
@@ -171,17 +171,17 @@ public class DeliveryWorker
          String  channelType = channel.getValueString("channelType");
          boolean personal    = ChannelType.IN_APP.name().equals(channelType) || ChannelType.EMAIL.name().equals(channelType);
          Instant now         = runtime.now();
-         QRecord row = AlertsDb.insert(AlertsNotification.TABLE_NAME, new QRecord()
+         QRecord row = AlertsDb.insert(AlertsDelivery.TABLE_NAME, new QRecord()
             .withValue("channelId", channelId)
             .withValue("recipientUserId", personal ? actorUserId : null)
             .withValue("recipientLabel", personal ? actorUserId : channel.getValueString("label"))
-            .withValue("kind", NotificationKind.TEST.name())
-            .withValue("status", NotificationStatus.SENDING.name())
+            .withValue("kind", DeliveryKind.TEST.name())
+            .withValue("status", DeliveryStatus.SENDING.name())
             .withValue("attempts", 0)
             .withValue("nextAttemptAt", now)
             .withValue("claimedUntil", now.plus(Duration.ofMinutes(2))));
          sendGroup(List.of(row), now);
-         return (AlertsDb.byId(AlertsNotification.TABLE_NAME, row.getValue("id")));
+         return (AlertsDb.byId(AlertsDelivery.TABLE_NAME, row.getValue("id")));
       }));
    }
 
@@ -204,7 +204,7 @@ public class DeliveryWorker
          return (rows.size());
       }
 
-      NotificationKind kind  = NotificationKind.valueOf(first.getValueString("kind"));
+      DeliveryKind kind  = DeliveryKind.valueOf(first.getValueString("kind"));
       List<AlertMessageRenderer.Item> items = new ArrayList<>();
       Map<Integer, QRecord> types  = new HashMap<>();
       Map<Integer, QRecord> groups = new HashMap<>();
@@ -275,22 +275,22 @@ public class DeliveryWorker
       QRecord update   = new QRecord().withValue("id", row.getValue("id")).withValue("attempts", attempts).withValue("claimedUntil", null);
       switch(result.outcome())
       {
-         case SENT -> update.withValue("status", NotificationStatus.SENT.name()).withValue("sentAt", now).withValue("providerMessageId", result.providerMessageId()).withValue("lastError", null);
-         case FAILED -> update.withValue("status", NotificationStatus.FAILED.name()).withValue("lastError", truncate(result.error()));
+         case SENT -> update.withValue("status", DeliveryStatus.SENT.name()).withValue("sentAt", now).withValue("providerMessageId", result.providerMessageId()).withValue("lastError", null);
+         case FAILED -> update.withValue("status", DeliveryStatus.FAILED.name()).withValue("lastError", truncate(result.error()));
          case RETRY ->
          {
             if(attempts > BACKOFF.size())
             {
-               update.withValue("status", NotificationStatus.DEAD.name()).withValue("lastError", truncate(result.error()));
+               update.withValue("status", DeliveryStatus.DEAD.name()).withValue("lastError", truncate(result.error()));
             }
             else
             {
-               update.withValue("status", NotificationStatus.RETRYING.name()).withValue("nextAttemptAt", now.plus(BACKOFF.get(attempts - 1))).withValue("lastError", truncate(result.error()));
+               update.withValue("status", DeliveryStatus.RETRYING.name()).withValue("nextAttemptAt", now.plus(BACKOFF.get(attempts - 1))).withValue("lastError", truncate(result.error()));
             }
          }
          default -> throw (new IllegalStateException("Unexpected outcome " + result.outcome()));
       }
-      AlertsDb.update(AlertsNotification.TABLE_NAME, update);
+      AlertsDb.update(AlertsDelivery.TABLE_NAME, update);
    }
 
 

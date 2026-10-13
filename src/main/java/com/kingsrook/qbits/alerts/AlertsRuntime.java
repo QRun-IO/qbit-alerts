@@ -26,6 +26,7 @@ import com.kingsrook.qbits.alerts.engine.AlertTypeSync;
 import com.kingsrook.qbits.alerts.engine.AlertsEngine;
 import com.kingsrook.qbits.alerts.engine.MonitorEvaluator;
 import com.kingsrook.qbits.alerts.engine.QbitAlertsSink;
+import com.kingsrook.qbits.alerts.notifications.NotificationService;
 import com.kingsrook.qqq.backend.core.context.CapturedContext;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -53,6 +54,7 @@ public class AlertsRuntime
    private final DeliveryWorker   deliveryWorker;
    private final MonitorEvaluator evaluator;
    private final QbitAlertsSink   sink;
+   private final NotificationService notifications;
 
 
 
@@ -84,6 +86,7 @@ public class AlertsRuntime
       this.deliveryWorker = new DeliveryWorker(this);
       this.evaluator = new MonitorEvaluator(this);
       this.sink = new QbitAlertsSink(this);
+      this.notifications = new NotificationService(this);
    }
 
 
@@ -218,6 +221,16 @@ public class AlertsRuntime
    public AlertsEngine getEngine()
    {
       return (this.engine);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for notifications (user notifications: send, retract, the bell)
+    *******************************************************************************/
+   public NotificationService getNotifications()
+   {
+      return (this.notifications);
    }
 
 

@@ -18,6 +18,7 @@ package com.kingsrook.qbits.alerts.processes;
 
 
 import com.kingsrook.qbits.alerts.AlertsRuntime;
+import com.kingsrook.qbits.alerts.notifications.NotificationEmailer;
 import com.kingsrook.qqq.backend.core.actions.processes.BackendStep;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepInput;
@@ -73,6 +74,9 @@ public final class AlertsScheduledSteps
       {
          AlertsRuntime runtime = AlertsRuntime.get();
          runtime.sink().flush();
+         runtime.getNotifications().sendDue();
+         runtime.getNotifications().purge();
+         new NotificationEmailer(runtime).run();
          output.addValue(OUTPUT_COUNT, runtime.getDeliveryWorker().deliverDue());
       }
    }

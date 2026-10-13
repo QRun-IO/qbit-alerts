@@ -25,9 +25,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.ValueTooLongBehavior
 
 
 /*******************************************************************************
- ** One delivery attempt: who, which channel, status, retries and error.
- ** Suppressed deliveries are logged too, with their reason. Written by the
- ** qbit; read-only.
+ ** A message for people: an announcement an admin writes, or one a producer emits (a failed job, a share, a security notice, a release). One recipient row per user it reaches.
  **
  ** Generated from the qbit-alerts schema (one definition for the entity,
  ** the Liquibase changelog and the test DDL).
@@ -39,50 +37,68 @@ public class AlertsNotification extends QRecordEntity
    @QField(isEditable = false, isPrimaryKey = true)
    private Integer id;
 
-   @QField(isEditable = false, possibleValueSourceName = "alerts_alert", label = "Alert")
-   private Integer alertId;
+   @QField(isRequired = true, maxLength = 200, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS)
+   private String title;
 
-   @QField(isEditable = false, label = "Alert Event")
-   private Integer alertEventId;
+   @QField(label = "Message")
+   private String body;
 
-   @QField(isEditable = false, possibleValueSourceName = "alerts_subscription", label = "Subscription")
-   private Integer subscriptionId;
+   @QField(isRequired = true, maxLength = 16, possibleValueSourceName = "alerts_notification_severity")
+   private String severity;
 
-   @QField(isEditable = false, possibleValueSourceName = "alerts_channel", label = "Channel")
-   private Integer channelId;
+   @QField(isRequired = true, maxLength = 16, possibleValueSourceName = "alerts_notification_category")
+   private String category;
 
-   @QField(isEditable = false, maxLength = 100, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "Recipient")
-   private String recipientUserId;
-
-   @QField(isEditable = false, maxLength = 300, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "Sent To")
-   private String recipientLabel;
-
-   @QField(isEditable = false, maxLength = 16, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, possibleValueSourceName = "alerts_notification_kind")
-   private String kind;
-
-   @QField(isEditable = false, maxLength = 16, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, possibleValueSourceName = "alerts_notification_status")
+   @QField(isEditable = false, maxLength = 16, possibleValueSourceName = "alerts_notification_status")
    private String status;
 
-   @QField(isEditable = false, maxLength = 20, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, possibleValueSourceName = "alerts_suppressed_reason")
-   private String suppressedReason;
+   @QField(maxLength = 100, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "Source")
+   private String sourceName;
 
-   @QField(isEditable = false)
-   private Integer attempts;
+   @QField(maxLength = 200, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS)
+   private String sourceKey;
 
-   @QField(isEditable = false)
-   private Instant nextAttemptAt;
+   @QField(maxLength = 100, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "Source Table")
+   private String sourceTableName;
 
-   @QField(isEditable = false)
-   private Instant claimedUntil;
+   @QField(maxLength = 100, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "Source Record")
+   private String sourceRecordId;
+
+   @QField(maxLength = 1000, valueTooLongBehavior = ValueTooLongBehavior.ERROR, label = "Link")
+   private String linkUrl;
+
+   @QField(maxLength = 200, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS)
+   private String linkLabel;
+
+   @QField(isRequired = true, maxLength = 16, possibleValueSourceName = "alerts_audience_type", label = "Audience")
+   private String audienceType;
+
+   @QField(label = "Audience Members")
+   private String audienceValue;
+
+   @QField()
+   private Instant publishAt;
+
+   @QField()
+   private Instant expireAt;
+
+   @QField(label = "Sticky Banner")
+   private Boolean sticky;
+
+   @QField(isEditable = false, maxLength = 100, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "Author")
+   private String authorUserId;
 
    @QField(isEditable = false)
    private Instant sentAt;
 
-   @QField(isEditable = false, maxLength = 300, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS)
-   private String providerMessageId;
+   @QField(isEditable = false)
+   private Instant retractedAt;
 
-   @QField(isEditable = false, maxLength = 2000, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS)
-   private String lastError;
+   @QField(isEditable = false, label = "Recipients")
+   private Integer recipientCount;
+
+   @QField(isEditable = false, label = "Read")
+   private Integer readCount;
 
    @QField(isEditable = false)
    private Instant createDate;
@@ -100,7 +116,6 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Constructor that populates from a QRecord.
     *******************************************************************************/
@@ -108,7 +123,6 @@ public class AlertsNotification extends QRecordEntity
    {
       populateFromQRecord(record);
    }
-
 
 
    /*******************************************************************************
@@ -120,7 +134,6 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for id
     *******************************************************************************/
@@ -128,7 +141,6 @@ public class AlertsNotification extends QRecordEntity
    {
       this.id = id;
    }
-
 
 
    /*******************************************************************************
@@ -141,222 +153,116 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
-    ** Getter for alertId
+    ** Getter for title
     *******************************************************************************/
-   public Integer getAlertId()
+   public String getTitle()
    {
-      return (this.alertId);
+      return (this.title);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for alertId
+    ** Setter for title
     *******************************************************************************/
-   public void setAlertId(Integer alertId)
+   public void setTitle(String title)
    {
-      this.alertId = alertId;
+      this.title = title;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for alertId
+    ** Fluent setter for title
     *******************************************************************************/
-   public AlertsNotification withAlertId(Integer alertId)
+   public AlertsNotification withTitle(String title)
    {
-      this.alertId = alertId;
+      this.title = title;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for alertEventId
+    ** Getter for body
     *******************************************************************************/
-   public Integer getAlertEventId()
+   public String getBody()
    {
-      return (this.alertEventId);
+      return (this.body);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for alertEventId
+    ** Setter for body
     *******************************************************************************/
-   public void setAlertEventId(Integer alertEventId)
+   public void setBody(String body)
    {
-      this.alertEventId = alertEventId;
+      this.body = body;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for alertEventId
+    ** Fluent setter for body
     *******************************************************************************/
-   public AlertsNotification withAlertEventId(Integer alertEventId)
+   public AlertsNotification withBody(String body)
    {
-      this.alertEventId = alertEventId;
+      this.body = body;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for subscriptionId
+    ** Getter for severity
     *******************************************************************************/
-   public Integer getSubscriptionId()
+   public String getSeverity()
    {
-      return (this.subscriptionId);
+      return (this.severity);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for subscriptionId
+    ** Setter for severity
     *******************************************************************************/
-   public void setSubscriptionId(Integer subscriptionId)
+   public void setSeverity(String severity)
    {
-      this.subscriptionId = subscriptionId;
+      this.severity = severity;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for subscriptionId
+    ** Fluent setter for severity
     *******************************************************************************/
-   public AlertsNotification withSubscriptionId(Integer subscriptionId)
+   public AlertsNotification withSeverity(String severity)
    {
-      this.subscriptionId = subscriptionId;
+      this.severity = severity;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for channelId
+    ** Getter for category
     *******************************************************************************/
-   public Integer getChannelId()
+   public String getCategory()
    {
-      return (this.channelId);
+      return (this.category);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for channelId
+    ** Setter for category
     *******************************************************************************/
-   public void setChannelId(Integer channelId)
+   public void setCategory(String category)
    {
-      this.channelId = channelId;
+      this.category = category;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for channelId
+    ** Fluent setter for category
     *******************************************************************************/
-   public AlertsNotification withChannelId(Integer channelId)
+   public AlertsNotification withCategory(String category)
    {
-      this.channelId = channelId;
+      this.category = category;
       return (this);
    }
-
-
-
-   /*******************************************************************************
-    ** Getter for recipientUserId
-    *******************************************************************************/
-   public String getRecipientUserId()
-   {
-      return (this.recipientUserId);
-   }
-
-
-
-   /*******************************************************************************
-    ** Setter for recipientUserId
-    *******************************************************************************/
-   public void setRecipientUserId(String recipientUserId)
-   {
-      this.recipientUserId = recipientUserId;
-   }
-
-
-
-   /*******************************************************************************
-    ** Fluent setter for recipientUserId
-    *******************************************************************************/
-   public AlertsNotification withRecipientUserId(String recipientUserId)
-   {
-      this.recipientUserId = recipientUserId;
-      return (this);
-   }
-
-
-
-   /*******************************************************************************
-    ** Getter for recipientLabel
-    *******************************************************************************/
-   public String getRecipientLabel()
-   {
-      return (this.recipientLabel);
-   }
-
-
-
-   /*******************************************************************************
-    ** Setter for recipientLabel
-    *******************************************************************************/
-   public void setRecipientLabel(String recipientLabel)
-   {
-      this.recipientLabel = recipientLabel;
-   }
-
-
-
-   /*******************************************************************************
-    ** Fluent setter for recipientLabel
-    *******************************************************************************/
-   public AlertsNotification withRecipientLabel(String recipientLabel)
-   {
-      this.recipientLabel = recipientLabel;
-      return (this);
-   }
-
-
-
-   /*******************************************************************************
-    ** Getter for kind
-    *******************************************************************************/
-   public String getKind()
-   {
-      return (this.kind);
-   }
-
-
-
-   /*******************************************************************************
-    ** Setter for kind
-    *******************************************************************************/
-   public void setKind(String kind)
-   {
-      this.kind = kind;
-   }
-
-
-
-   /*******************************************************************************
-    ** Fluent setter for kind
-    *******************************************************************************/
-   public AlertsNotification withKind(String kind)
-   {
-      this.kind = kind;
-      return (this);
-   }
-
 
 
    /*******************************************************************************
@@ -368,7 +274,6 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for status
     *******************************************************************************/
@@ -376,7 +281,6 @@ public class AlertsNotification extends QRecordEntity
    {
       this.status = status;
    }
-
 
 
    /*******************************************************************************
@@ -389,129 +293,340 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
-    ** Getter for suppressedReason
+    ** Getter for sourceName
     *******************************************************************************/
-   public String getSuppressedReason()
+   public String getSourceName()
    {
-      return (this.suppressedReason);
+      return (this.sourceName);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for suppressedReason
+    ** Setter for sourceName
     *******************************************************************************/
-   public void setSuppressedReason(String suppressedReason)
+   public void setSourceName(String sourceName)
    {
-      this.suppressedReason = suppressedReason;
+      this.sourceName = sourceName;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for suppressedReason
+    ** Fluent setter for sourceName
     *******************************************************************************/
-   public AlertsNotification withSuppressedReason(String suppressedReason)
+   public AlertsNotification withSourceName(String sourceName)
    {
-      this.suppressedReason = suppressedReason;
+      this.sourceName = sourceName;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for attempts
+    ** Getter for sourceKey
     *******************************************************************************/
-   public Integer getAttempts()
+   public String getSourceKey()
    {
-      return (this.attempts);
+      return (this.sourceKey);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for attempts
+    ** Setter for sourceKey
     *******************************************************************************/
-   public void setAttempts(Integer attempts)
+   public void setSourceKey(String sourceKey)
    {
-      this.attempts = attempts;
+      this.sourceKey = sourceKey;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for attempts
+    ** Fluent setter for sourceKey
     *******************************************************************************/
-   public AlertsNotification withAttempts(Integer attempts)
+   public AlertsNotification withSourceKey(String sourceKey)
    {
-      this.attempts = attempts;
+      this.sourceKey = sourceKey;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for nextAttemptAt
+    ** Getter for sourceTableName
     *******************************************************************************/
-   public Instant getNextAttemptAt()
+   public String getSourceTableName()
    {
-      return (this.nextAttemptAt);
+      return (this.sourceTableName);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for nextAttemptAt
+    ** Setter for sourceTableName
     *******************************************************************************/
-   public void setNextAttemptAt(Instant nextAttemptAt)
+   public void setSourceTableName(String sourceTableName)
    {
-      this.nextAttemptAt = nextAttemptAt;
+      this.sourceTableName = sourceTableName;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for nextAttemptAt
+    ** Fluent setter for sourceTableName
     *******************************************************************************/
-   public AlertsNotification withNextAttemptAt(Instant nextAttemptAt)
+   public AlertsNotification withSourceTableName(String sourceTableName)
    {
-      this.nextAttemptAt = nextAttemptAt;
+      this.sourceTableName = sourceTableName;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for claimedUntil
+    ** Getter for sourceRecordId
     *******************************************************************************/
-   public Instant getClaimedUntil()
+   public String getSourceRecordId()
    {
-      return (this.claimedUntil);
+      return (this.sourceRecordId);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for claimedUntil
+    ** Setter for sourceRecordId
     *******************************************************************************/
-   public void setClaimedUntil(Instant claimedUntil)
+   public void setSourceRecordId(String sourceRecordId)
    {
-      this.claimedUntil = claimedUntil;
+      this.sourceRecordId = sourceRecordId;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for claimedUntil
+    ** Fluent setter for sourceRecordId
     *******************************************************************************/
-   public AlertsNotification withClaimedUntil(Instant claimedUntil)
+   public AlertsNotification withSourceRecordId(String sourceRecordId)
    {
-      this.claimedUntil = claimedUntil;
+      this.sourceRecordId = sourceRecordId;
       return (this);
    }
 
+
+   /*******************************************************************************
+    ** Getter for linkUrl
+    *******************************************************************************/
+   public String getLinkUrl()
+   {
+      return (this.linkUrl);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for linkUrl
+    *******************************************************************************/
+   public void setLinkUrl(String linkUrl)
+   {
+      this.linkUrl = linkUrl;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for linkUrl
+    *******************************************************************************/
+   public AlertsNotification withLinkUrl(String linkUrl)
+   {
+      this.linkUrl = linkUrl;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for linkLabel
+    *******************************************************************************/
+   public String getLinkLabel()
+   {
+      return (this.linkLabel);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for linkLabel
+    *******************************************************************************/
+   public void setLinkLabel(String linkLabel)
+   {
+      this.linkLabel = linkLabel;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for linkLabel
+    *******************************************************************************/
+   public AlertsNotification withLinkLabel(String linkLabel)
+   {
+      this.linkLabel = linkLabel;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for audienceType
+    *******************************************************************************/
+   public String getAudienceType()
+   {
+      return (this.audienceType);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for audienceType
+    *******************************************************************************/
+   public void setAudienceType(String audienceType)
+   {
+      this.audienceType = audienceType;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for audienceType
+    *******************************************************************************/
+   public AlertsNotification withAudienceType(String audienceType)
+   {
+      this.audienceType = audienceType;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for audienceValue
+    *******************************************************************************/
+   public String getAudienceValue()
+   {
+      return (this.audienceValue);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for audienceValue
+    *******************************************************************************/
+   public void setAudienceValue(String audienceValue)
+   {
+      this.audienceValue = audienceValue;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for audienceValue
+    *******************************************************************************/
+   public AlertsNotification withAudienceValue(String audienceValue)
+   {
+      this.audienceValue = audienceValue;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for publishAt
+    *******************************************************************************/
+   public Instant getPublishAt()
+   {
+      return (this.publishAt);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for publishAt
+    *******************************************************************************/
+   public void setPublishAt(Instant publishAt)
+   {
+      this.publishAt = publishAt;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for publishAt
+    *******************************************************************************/
+   public AlertsNotification withPublishAt(Instant publishAt)
+   {
+      this.publishAt = publishAt;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for expireAt
+    *******************************************************************************/
+   public Instant getExpireAt()
+   {
+      return (this.expireAt);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for expireAt
+    *******************************************************************************/
+   public void setExpireAt(Instant expireAt)
+   {
+      this.expireAt = expireAt;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for expireAt
+    *******************************************************************************/
+   public AlertsNotification withExpireAt(Instant expireAt)
+   {
+      this.expireAt = expireAt;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for sticky
+    *******************************************************************************/
+   public Boolean getSticky()
+   {
+      return (this.sticky);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for sticky
+    *******************************************************************************/
+   public void setSticky(Boolean sticky)
+   {
+      this.sticky = sticky;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for sticky
+    *******************************************************************************/
+   public AlertsNotification withSticky(Boolean sticky)
+   {
+      this.sticky = sticky;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for authorUserId
+    *******************************************************************************/
+   public String getAuthorUserId()
+   {
+      return (this.authorUserId);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for authorUserId
+    *******************************************************************************/
+   public void setAuthorUserId(String authorUserId)
+   {
+      this.authorUserId = authorUserId;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for authorUserId
+    *******************************************************************************/
+   public AlertsNotification withAuthorUserId(String authorUserId)
+   {
+      this.authorUserId = authorUserId;
+      return (this);
+   }
 
 
    /*******************************************************************************
@@ -523,7 +638,6 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for sentAt
     *******************************************************************************/
@@ -531,7 +645,6 @@ public class AlertsNotification extends QRecordEntity
    {
       this.sentAt = sentAt;
    }
-
 
 
    /*******************************************************************************
@@ -544,67 +657,88 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
-    ** Getter for providerMessageId
+    ** Getter for retractedAt
     *******************************************************************************/
-   public String getProviderMessageId()
+   public Instant getRetractedAt()
    {
-      return (this.providerMessageId);
+      return (this.retractedAt);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for providerMessageId
+    ** Setter for retractedAt
     *******************************************************************************/
-   public void setProviderMessageId(String providerMessageId)
+   public void setRetractedAt(Instant retractedAt)
    {
-      this.providerMessageId = providerMessageId;
+      this.retractedAt = retractedAt;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for providerMessageId
+    ** Fluent setter for retractedAt
     *******************************************************************************/
-   public AlertsNotification withProviderMessageId(String providerMessageId)
+   public AlertsNotification withRetractedAt(Instant retractedAt)
    {
-      this.providerMessageId = providerMessageId;
+      this.retractedAt = retractedAt;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for lastError
+    ** Getter for recipientCount
     *******************************************************************************/
-   public String getLastError()
+   public Integer getRecipientCount()
    {
-      return (this.lastError);
+      return (this.recipientCount);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for lastError
+    ** Setter for recipientCount
     *******************************************************************************/
-   public void setLastError(String lastError)
+   public void setRecipientCount(Integer recipientCount)
    {
-      this.lastError = lastError;
+      this.recipientCount = recipientCount;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for lastError
+    ** Fluent setter for recipientCount
     *******************************************************************************/
-   public AlertsNotification withLastError(String lastError)
+   public AlertsNotification withRecipientCount(Integer recipientCount)
    {
-      this.lastError = lastError;
+      this.recipientCount = recipientCount;
       return (this);
    }
 
+
+   /*******************************************************************************
+    ** Getter for readCount
+    *******************************************************************************/
+   public Integer getReadCount()
+   {
+      return (this.readCount);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for readCount
+    *******************************************************************************/
+   public void setReadCount(Integer readCount)
+   {
+      this.readCount = readCount;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for readCount
+    *******************************************************************************/
+   public AlertsNotification withReadCount(Integer readCount)
+   {
+      this.readCount = readCount;
+      return (this);
+   }
 
 
    /*******************************************************************************
@@ -616,7 +750,6 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for createDate
     *******************************************************************************/
@@ -624,7 +757,6 @@ public class AlertsNotification extends QRecordEntity
    {
       this.createDate = createDate;
    }
-
 
 
    /*******************************************************************************
@@ -637,7 +769,6 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Getter for modifyDate
     *******************************************************************************/
@@ -647,7 +778,6 @@ public class AlertsNotification extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for modifyDate
     *******************************************************************************/
@@ -655,7 +785,6 @@ public class AlertsNotification extends QRecordEntity
    {
       this.modifyDate = modifyDate;
    }
-
 
 
    /*******************************************************************************

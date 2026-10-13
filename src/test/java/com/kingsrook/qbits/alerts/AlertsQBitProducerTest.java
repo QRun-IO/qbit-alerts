@@ -171,7 +171,13 @@ class AlertsQBitProducerTest extends BaseAlertsTest
       }
       for(String tableName : AlertsQBitConfig.allTableNames())
       {
-         int            start = changelog.indexOf("CREATE TABLE IF NOT EXISTS " + tableName + " (");
+         ///////////////////////////////////////////////////////////////////////////////
+         // alerts_delivery was created as alerts_notification (changeset 13) and     //
+         // renamed (16); the user-notification table is the later alerts_notification //
+         ///////////////////////////////////////////////////////////////////////////////
+         String created = "alerts_delivery".equals(tableName) ? "alerts_notification" : tableName;
+         int    start   = "alerts_notification".equals(tableName) ? changelog.lastIndexOf("CREATE TABLE IF NOT EXISTS alerts_notification (")
+            : changelog.indexOf("CREATE TABLE IF NOT EXISTS " + created + " (");
          String         body  = changelog.substring(start, changelog.indexOf(");", start));
          QTableMetaData table = qInstance.getTable(tableName);
          for(QFieldMetaData field : table.getFields().values())
@@ -193,7 +199,7 @@ class AlertsQBitProducerTest extends BaseAlertsTest
       assertThat(available).contains(AlertsQBitConfig.PERMISSION_VIEW, AlertsQBitConfig.PERMISSION_MANAGE, AlertsQBitConfig.PERMISSION_ADMIN, "alerts_alert.read");
       assertThat(config.getManagerPermissionNames()).containsAll(config.getViewerPermissionNames()).contains(AlertsQBitConfig.PERMISSION_MANAGE);
       assertThat(config.getAdminPermissionNames()).containsAll(config.getManagerPermissionNames());
-      assertThat(config.getViewerPermissionNames()).doesNotContain(AlertsQBitConfig.PERMISSION_ADMIN, "alerts_channel.read", "alerts_notification.read");
+      assertThat(config.getViewerPermissionNames()).doesNotContain(AlertsQBitConfig.PERMISSION_ADMIN, "alerts_channel.read", "alerts_delivery.read");
    }
 
 

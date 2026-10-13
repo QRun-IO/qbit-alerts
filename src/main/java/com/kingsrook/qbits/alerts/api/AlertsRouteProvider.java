@@ -38,8 +38,13 @@ import io.javalin.http.Context;
 
 /*******************************************************************************
  ** Javalin routes under /qqq/v1/alerts for the Next UI bell and record panel:
- ** - GET  /inbox/summary   unread count, highest unread severity, latest 10
- ** - POST /inbox/read      {"alertId": n} or {"all": true}
+ ** - GET  /inbox/summary   unread count, highest unread severity, latest 10,
+ **   sticky banners
+ ** - GET  /inbox           the notifications page (status, category,
+ **   severity, offset, limit)
+ ** - POST /inbox/read      {"id": n}, {"ids": [..]}, {"all": true} or {"alertId": n}
+ ** - POST /inbox/unread    {"id": n} or {"ids": [..]}
+ ** - POST /inbox/dismiss   {"id": n}, {"ids": [..]} or {"all": true}
  ** - GET  /record-panel?tableName=t&amp;recordId=id   the "Open alerts" panel
  ** - POST /record-panel/watch   {"tableName": t, "recordId": id}
  ** - POST /ingest/alertmanager  Alertmanager's webhook (bearer token; off
@@ -93,7 +98,10 @@ public class AlertsRouteProvider implements QJavalinRouteProviderInterface
    public void acceptJavalinConfig(JavalinConfig config)
    {
       config.routes.get(BASE_PATH + "/inbox/summary", context -> respond(context, false, (api, body) -> api.inboxSummary()));
+      config.routes.get(BASE_PATH + "/inbox", context -> respond(context, false, (api, body) -> api.inbox(queryParams(context))));
       config.routes.post(BASE_PATH + "/inbox/read", context -> respond(context, true, AlertsApi::markRead));
+      config.routes.post(BASE_PATH + "/inbox/unread", context -> respond(context, true, AlertsApi::markUnread));
+      config.routes.post(BASE_PATH + "/inbox/dismiss", context -> respond(context, true, AlertsApi::dismiss));
       config.routes.get(BASE_PATH + "/record-panel", context -> respond(context, false, (api, body) -> api.recordPanel(context.queryParam("tableName"), context.queryParam("recordId"))));
       config.routes.post(BASE_PATH + "/record-panel/watch", context -> respond(context, true, AlertsApi::watchRecord));
       config.routes.post(BASE_PATH + "/ingest/alertmanager", this::ingestAlertmanager);
@@ -151,6 +159,18 @@ public class AlertsRouteProvider implements QJavalinRouteProviderInterface
       {
          QContext.clear();
       }
+   }
+
+
+
+   /*******************************************************************************
+    ** The first value of each query parameter.
+    *******************************************************************************/
+   private static Map<String, String> queryParams(Context context)
+   {
+      Map<String, String> params = new java.util.HashMap<>();
+      context.queryParamMap().forEach((name, values) -> params.put(name, values == null || values.isEmpty() ? null : values.get(0)));
+      return (params);
    }
 
 

@@ -32,6 +32,7 @@ import com.kingsrook.qbits.alerts.spi.AlertResolution;
 import com.kingsrook.qbits.alerts.spi.AlertSeverity;
 import com.kingsrook.qbits.alerts.spi.AlertSignal;
 import com.kingsrook.qbits.alerts.spi.AlertSinkInterface;
+import com.kingsrook.qbits.alerts.spi.NotificationSignal;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
 import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
@@ -128,6 +129,26 @@ public class QbitAlertsSink implements AlertSinkInterface
    {
       Instant when = at == null ? runtime.now() : at;
       submit(() -> runtime.getEngine().heartbeat(heartbeatKey, when));
+   }
+
+
+
+   /*******************************************************************************
+    ** Queue a notification (it is written and sent by the notification
+    ** service on the drain thread).
+    *******************************************************************************/
+   @Override
+   public void notify(NotificationSignal signal)
+   {
+      if(signal == null)
+      {
+         return;
+      }
+      if(signal.getOccurredAt() == null)
+      {
+         signal.setOccurredAt(runtime.now());
+      }
+      submit(() -> runtime.getNotifications().notify(signal));
    }
 
 

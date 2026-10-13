@@ -31,6 +31,23 @@ Any qbit or app reports exceptional conditions ("a person should do something").
 
 All data is in standard QQQ tables named `alerts_*`. People change alerts through record actions, never by editing rows.
 
+## User notifications
+
+The qbit also carries ordinary notifications for people (design: [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)):
+
+- **Admins** with `alerts.notification.admin` write notifications in the Notifications table (title, markdown body, severity, category, link, audience, publish and expire times, a sticky banner flag), then use the record actions Preview audience, Send now, Schedule and Retract. Edits after sending show at once; retracting hides it.
+- **Audiences** are resolved when sent: all users, roles or groups, holders of a permission, or named users. Each user gets one `alerts_notification_recipient` row, so read, unread and dismissed are per user. Roles need a user directory (`AlertsQBitConfig.withUserDirectory`, an `AlertsUserDirectoryInterface`); without one, "all users" means everyone who has used Alerts.
+- **Producers** send with `AlertsRuntime.get(qInstance).sink().notify(new NotificationSignal(...))` (core: `QAlerts.notify`). Alerts a user subscribes to arrive in the bell as ALERT notifications.
+- **Ready-made notices** in `AlertsNotices`: `newSignIn`, `apiKeyCreated`, `apiKeyExpiring`, `permissionChanged` (SECURITY), `shared` (SHARE) and `release` (RELEASE, all users). Core has no sign-in or API key events yet, so hosts call these from their authentication customizer and API key screens.
+- **Email** is opt-in per user and category (IMMEDIATE, or DAILY_DIGEST at the digest hour in My Alert Settings), through the configured messaging provider; without one it is off. ALERT notifications are not emailed here (alert subscriptions already do), and SECURITY emails carry only the title and link.
+- **Failed and partial jobs** notify the person who started them (`notifyFailedJobs`, `jobRunLinkPattern`).
+- **Links** must be app paths with one leading slash, or https URLs; backslashes, whitespace and control characters are refused.
+- **People** see them in the Next UI bell and notifications page, and choose per-category settings in My Notification Settings (security notices can't be muted).
+
+Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions include their own recipient rows and settings.
+
+**Upgrading from 0.1.0-RC.1:** changeset 16 renames the delivery log `alerts_notification` to `alerts_delivery`, and changeset 17 drops `alerts_inbox_item` (bell state only). Both are guarded, so a fresh schema and an RC.1 schema both end up the same.
+
 ## Requirements
 
 - Java 21.
@@ -82,8 +99,11 @@ Once the RC ships, producers call `QAlerts.raise(...)` from core and need no dep
 
 | Method | Path | What |
 |---|---|---|
-| GET | `/qqq/v1/alerts/inbox/summary` | Unread count, highest unread severity and the latest 10 items (the bell) |
-| POST | `/qqq/v1/alerts/inbox/read` | `{"alertId": n}` or `{"all": true}` |
+| GET | `/qqq/v1/alerts/inbox/summary` | Unread count, highest unread severity, the latest 10 notifications and sticky banners (the bell) |
+| GET | `/qqq/v1/alerts/inbox` | The notifications page: `status` (all, unread), `category`, `severity`, `offset`, `limit` |
+| POST | `/qqq/v1/alerts/inbox/read` | `{"id": n}`, `{"ids": [..]}`, `{"all": true}`, or `{"alertId": n}` |
+| POST | `/qqq/v1/alerts/inbox/unread` | `{"id": n}` or `{"ids": [..]}` |
+| POST | `/qqq/v1/alerts/inbox/dismiss` | `{"id": n}`, `{"ids": [..]}` or `{"all": true}` |
 | GET | `/qqq/v1/alerts/record-panel?tableName=t&recordId=id` | The "Open alerts" panel for a record (`visible: false` when there is nothing to show) |
 | POST | `/qqq/v1/alerts/record-panel/watch` | `{"tableName": t, "recordId": id}`: a RECORD subscription for the user |
 | POST | `/qqq/v1/alerts/ingest/alertmanager` | Alertmanager's webhook receiver (version 4). It takes a bearer token whose reference is set by `withAlertmanagerIngestTokenSecretRef`, and is off without one. |
