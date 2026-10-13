@@ -39,6 +39,7 @@ import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
+import com.kingsrook.qbits.alerts.notifications.NotificationService;
 import com.kingsrook.qbits.alerts.spi.AlertDefaultMonitor;
 import com.kingsrook.qbits.alerts.spi.AlertLink;
 import com.kingsrook.qbits.alerts.spi.AlertMonitorKind;
@@ -46,6 +47,10 @@ import com.kingsrook.qbits.alerts.spi.AlertRecordRef;
 import com.kingsrook.qbits.alerts.spi.AlertSeverity;
 import com.kingsrook.qbits.alerts.spi.AlertSignal;
 import com.kingsrook.qbits.alerts.spi.AlertsInstanceMetaData;
+import com.kingsrook.qbits.alerts.spi.NotificationAudience;
+import com.kingsrook.qbits.alerts.spi.NotificationCategory;
+import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
+import com.kingsrook.qbits.alerts.spi.NotificationSignal;
 import com.kingsrook.qbits.alerts.spi.QAlertTypeMetaData;
 import com.kingsrook.qbits.alerts.spi.ResolveMode;
 import com.kingsrook.qqq.backend.core.context.QContext;
@@ -165,6 +170,55 @@ public class AlertsDemoServer extends AbstractQQQApplication
 
       seed(qInstance);
       return (qInstance);
+   }
+
+
+
+   /*******************************************************************************
+    ** User notifications for the bell, the page and the admin screens: an
+    ** announcement, a sticky security notice, a failed job, a share, a
+    ** marketing note, a draft and a scheduled one.
+    *******************************************************************************/
+   static void seedNotifications(AlertsRuntime runtime, BaseAlertsTest.MutableClock clock) throws QException
+   {
+      Instant now = Instant.now();
+      runtime.asSystem(() ->
+      {
+         AlertsDb.insert("alerts_user_preference", new QRecord().withValue("userId", "sam").withValue("userLabel", "Sam Rivera").withValue("inAppEnabled", true)
+            .withValue("emailEnabled", false).withValue("digestHour", 8));
+         return (null);
+      });
+      NotificationService service = runtime.getNotifications();
+      clock.set(now.minus(Duration.ofDays(3)));
+      service.notify(new NotificationSignal("Version 4.1 is out").withBody("**What's new:** a notification center in the top bar, record pickers with thumbnails, "
+            + "and dark mode for the SQL Workbench. " + "\n\n" + "See the release notes for everything else.")
+         .withSeverity(NotificationSeverity.SUCCESS).withCategory(NotificationCategory.RELEASE).withSourceName("admin")
+         .withLink(AlertLink.toUrl("https://github.com/QRun-IO/qqq/releases", "Release notes")).withAudience(NotificationAudience.allUsers()));
+      clock.set(now.minus(Duration.ofDays(1)));
+      service.notify(new NotificationSignal("Spring content review starts Monday").withBody("Editors: please review your top 10 posts' excerpts and images before the campaign.")
+         .withCategory(NotificationCategory.MARKETING).withSourceName("qbit-marketing").withAudience(NotificationAudience.allUsers()));
+      clock.set(now.minus(Duration.ofHours(5)));
+      service.notify(new NotificationSignal("Sam shared the notebook \"Q3 traffic\" with you").withCategory(NotificationCategory.SHARE).withSourceName("qbit-sql-workbench")
+         .withLink(AlertLink.toPath("/app/blog_post", "Open notebook")).withAudience(NotificationAudience.user(ADMIN)));
+      clock.set(now.minus(Duration.ofMinutes(40)));
+      service.notify(new NotificationSignal("Blog post import finished with errors").withBody("3 rows had errors: the publish date was not a date. The other 117 rows were imported.")
+         .withSeverity(NotificationSeverity.WARNING).withCategory(NotificationCategory.JOB).withSourceName("processes").withSourceKey("process:demo-import")
+         .withLink(AlertLink.toPath("/app/blog_post", "Open Blog Posts")).withAudience(NotificationAudience.user(ADMIN)));
+      clock.set(now.minus(Duration.ofMinutes(8)));
+      service.notify(new NotificationSignal("New sign-in to your account").withBody("A sign-in from Firefox on Windows near Columbus, OH. If this wasn't you, change your password now.")
+         .withSeverity(NotificationSeverity.CRITICAL).withCategory(NotificationCategory.SECURITY).withSourceName("security").withSticky(true)
+         .withAudience(NotificationAudience.user(ADMIN)));
+      clock.set(now);
+      runtime.asSystem(() ->
+      {
+         AlertsDb.insert("alerts_notification", new QRecord().withValue("title", "Planned maintenance Saturday 06:00 UTC").withValue("body", "The admin is read-only for about 15 minutes.")
+            .withValue("severity", "WARNING").withValue("category", "SYSTEM").withValue("status", "DRAFT").withValue("audienceType", "ALL_USERS").withValue("authorUserId", ADMIN)
+            .withValue("sourceName", "admin").withValue("sticky", false));
+         AlertsDb.insert("alerts_notification", new QRecord().withValue("title", "Holiday hours").withValue("body", "Support answers within one business day over the holidays.")
+            .withValue("severity", "INFO").withValue("category", "SYSTEM").withValue("status", "SCHEDULED").withValue("audienceType", "ROLES").withValue("audienceValue", "staff")
+            .withValue("publishAt", now.plus(Duration.ofDays(10))).withValue("authorUserId", ADMIN).withValue("sourceName", "admin").withValue("sticky", false));
+         return (null);
+      });
    }
 
 
@@ -292,6 +346,7 @@ public class AlertsDemoServer extends AbstractQQQApplication
          runtime.getEngine().comment(acked.getValueInteger("id"), ADMIN, "Asked the author for an excerpt.");
       }
       runtime.getDeliveryWorker().deliverDue();
+      seedNotifications(runtime, clock);
       runtime.setClock(Clock.systemUTC());
       QContext.clear();
    }
