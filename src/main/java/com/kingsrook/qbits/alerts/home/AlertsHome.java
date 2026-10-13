@@ -42,6 +42,7 @@ import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
+import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryStatus;
@@ -50,6 +51,7 @@ import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.HealthStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Status;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsType;
+import com.kingsrook.qbits.alerts.notifications.NotificationService;
 import com.kingsrook.qbits.alerts.spi.AlertSeverity;
 import com.kingsrook.qqq.backend.core.actions.permissions.PermissionsHelper;
 import com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType;
@@ -85,6 +87,7 @@ public final class AlertsHome
    public static final String KIND_TREND     = "trend";
    public static final String KIND_NOISY     = "noisy";
    public static final String KIND_DELIVERY  = "delivery";
+   public static final String KIND_NOTIFICATIONS = "notifications";
    public static final String KIND_RESOLVED  = "resolved";
 
    static final int ROWS       = 10;
@@ -125,6 +128,7 @@ public final class AlertsHome
          case KIND_TREND -> trend(now);
          case KIND_NOISY -> noisy(now);
          case KIND_DELIVERY -> delivery(now);
+         case KIND_NOTIFICATIONS -> notifications(now);
          case KIND_RESOLVED -> resolved(now);
          default -> new RawHTML(null, HomeHtml.emptyState("Unknown Alerts widget."));
       };
@@ -369,6 +373,28 @@ public final class AlertsHome
       }
       return (table(List.of(column("Alert Type", "type"), column("Opened", "opened"), column("Reopened", "reopened"), column("Flapping", "flapping")), rows,
          "Nothing was noisy in the last 7 days."));
+   }
+
+
+
+   /*******************************************************************************
+    ** Notifications, link-only (the Notifications table is the owner):
+    ** scheduled, sent this week, drafts.
+    *******************************************************************************/
+   static QWidgetData notifications(Instant now) throws QException
+   {
+      if(!canRead(AlertsNotification.TABLE_NAME))
+      {
+         return (new RawHTML(null, HomeHtml.emptyState("Notifications are shown to notification authors.")));
+      }
+      QQueryFilter scheduled = AlertsDb.eq("status", NotificationService.STATUS_SCHEDULED);
+      QQueryFilter drafts    = AlertsDb.eq("status", NotificationService.STATUS_DRAFT);
+      QQueryFilter sent      = AlertsDb.eq("status", NotificationService.STATUS_SENT).withCriteria("category", QCriteriaOperator.NOT_EQUALS, "ALERT")
+         .withCriteria("sentAt", QCriteriaOperator.GREATER_THAN_OR_EQUALS, now.minus(7, ChronoUnit.DAYS));
+      String line = HomeHtml.link(listUrl(AlertsNotification.TABLE_NAME, scheduled), HomeHtml.plural(AlertsDb.count(AlertsNotification.TABLE_NAME, scheduled), "scheduled notification"))
+         + " &middot; " + HomeHtml.link(listUrl(AlertsNotification.TABLE_NAME, sent), HomeHtml.number(AlertsDb.count(AlertsNotification.TABLE_NAME, sent)) + " sent this week")
+         + " &middot; " + HomeHtml.link(listUrl(AlertsNotification.TABLE_NAME, drafts), HomeHtml.plural(AlertsDb.count(AlertsNotification.TABLE_NAME, drafts), "draft"));
+      return (new RawHTML(null, "<p style=\"margin:0\">" + line + "</p>"));
    }
 
 

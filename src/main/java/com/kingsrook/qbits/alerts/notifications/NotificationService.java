@@ -431,7 +431,9 @@ public class NotificationService
 
 
    /*******************************************************************************
-    ** The link if it is a relative app path or an https URL, else null.
+    ** The link if it is a relative app path (one leading slash) or an https URL
+    ** with a host, else null. Backslashes, whitespace and control characters
+    ** are refused anywhere (browsers treat "/\evil.com" as "//evil.com").
     *******************************************************************************/
    public static String safeLink(String url)
    {
@@ -440,8 +442,26 @@ public class NotificationService
          return (null);
       }
       String trimmed = url.trim();
-      boolean relative = trimmed.startsWith("/") && !trimmed.startsWith("//");
-      return (relative || trimmed.toLowerCase().startsWith("https://") ? trimmed : null);
+      for(char c : trimmed.toCharArray())
+      {
+         if(c == '\\' || Character.isWhitespace(c) || Character.isISOControl(c))
+         {
+            return (null);
+         }
+      }
+      if(trimmed.startsWith("/"))
+      {
+         return (trimmed.length() > 1 && trimmed.charAt(1) == '/' ? null : trimmed);
+      }
+      try
+      {
+         java.net.URI uri = new java.net.URI(trimmed);
+         return ("https".equalsIgnoreCase(uri.getScheme()) && StringUtils.hasContent(uri.getHost()) ? trimmed : null);
+      }
+      catch(java.net.URISyntaxException e)
+      {
+         return (null);
+      }
    }
 
 
