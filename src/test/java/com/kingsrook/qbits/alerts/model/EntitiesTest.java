@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EntitiesTest
 {
    static final List<Class<? extends QRecordEntity>> ENTITIES = List.of(AlertsAlert.class, AlertsChannel.class, AlertsEvent.class, AlertsGroup.class, AlertsHeartbeat.class,
-      AlertsInboxItem.class, AlertsMonitor.class, AlertsMute.class, AlertsNotification.class, AlertsRecordRef.class, AlertsSubscription.class, AlertsTeam.class,
+      AlertsMonitor.class, AlertsNotification.class, AlertsNotificationRecipient.class, AlertsNotificationPreference.class, AlertsMute.class, AlertsDelivery.class, AlertsRecordRef.class, AlertsSubscription.class, AlertsTeam.class,
       AlertsTeamMember.class, AlertsType.class, AlertsUserPreference.class);
 
 

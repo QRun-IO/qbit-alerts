@@ -34,18 +34,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
+import com.kingsrook.qbits.alerts.api.AlertsApi;
 import com.kingsrook.qbits.alerts.delivery.AlertMessageRenderer;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
-import com.kingsrook.qbits.alerts.model.AlertsInboxItem;
-import com.kingsrook.qbits.alerts.model.AlertsNotification;
+import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EventType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.HealthStatus;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Status;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsType;
@@ -160,7 +161,7 @@ public final class AlertsHome
 
 
    /*******************************************************************************
-    ** My alerts: assigned to me, or in my inbox; unacknowledged first.
+    ** My alerts: assigned to me, or in my bell (not dismissed); unacknowledged first.
     *******************************************************************************/
    static QWidgetData mine(Instant now) throws QException
    {
@@ -176,13 +177,9 @@ public final class AlertsHome
       {
          mine.put(alert.getValueInteger("id"), alert);
       }
-      if(canRead(AlertsInboxItem.TABLE_NAME))
+      if(canRead(AlertsNotificationRecipient.TABLE_NAME))
       {
-         List<Integer> ids = new ArrayList<>();
-         for(QRecord item : AlertsDb.query(AlertsInboxItem.TABLE_NAME, AlertsDb.eq("userId", userId).withCriteria("archivedAt", QCriteriaOperator.IS_BLANK).withLimit(SCAN_LIMIT)))
-         {
-            ids.add(item.getValueInteger("alertId"));
-         }
+         List<Integer> ids = AlertsApi.myAlertIds(userId, SCAN_LIMIT);
          if(!ids.isEmpty())
          {
             for(QRecord alert : AlertsDb.query(AlertsAlert.TABLE_NAME, new QQueryFilter().withCriteria("id", QCriteriaOperator.IN, ids).withCriteria("status", QCriteriaOperator.IN, Status.openNames())))
@@ -382,7 +379,7 @@ public final class AlertsHome
     *******************************************************************************/
    static QWidgetData delivery(Instant now) throws QException
    {
-      if(!canRead(AlertsChannel.TABLE_NAME) || !canRead(AlertsNotification.TABLE_NAME))
+      if(!canRead(AlertsChannel.TABLE_NAME) || !canRead(AlertsDelivery.TABLE_NAME))
       {
          return (new RawHTML(null, HomeHtml.emptyState("Delivery health is shown to alerts admins.")));
       }
@@ -391,8 +388,8 @@ public final class AlertsHome
       List<Map<String, Object>> rows     = new ArrayList<>();
       for(QRecord channel : channels)
       {
-         int failed = AlertsDb.count(AlertsNotification.TABLE_NAME, AlertsDb.eq("channelId", channel.getValue("id"))
-            .withCriteria("status", QCriteriaOperator.IN, List.of(NotificationStatus.FAILED.name(), NotificationStatus.DEAD.name()))
+         int failed = AlertsDb.count(AlertsDelivery.TABLE_NAME, AlertsDb.eq("channelId", channel.getValue("id"))
+            .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.FAILED.name(), DeliveryStatus.DEAD.name()))
             .withCriteria("createDate", QCriteriaOperator.GREATER_THAN_OR_EQUALS, since));
          String health = channel.getValueString("healthStatus");
          if(failed == 0 && (health == null || HealthStatus.HEALTHY.name().equals(health)))
@@ -402,8 +399,8 @@ public final class AlertsHome
          Map<String, Object> row = new HashMap<>();
          row.put("channel", HomeHtml.link("/app/" + AlertsChannel.TABLE_NAME + "/" + channel.getValue("id"), channel.getValueString("label")));
          row.put("health", HomeHtml.badge(AlertsPossibleValues.label(health == null ? "HEALTHY" : health), HealthStatus.UNHEALTHY.name().equals(health) ? HomeHtml.BAD_COLOR : HomeHtml.WARN_COLOR));
-         row.put("failed", HomeHtml.link(listUrl(AlertsNotification.TABLE_NAME, AlertsDb.eq("channelId", channel.getValue("id"))
-            .withCriteria("status", QCriteriaOperator.IN, List.of(NotificationStatus.FAILED.name(), NotificationStatus.DEAD.name()))), HomeHtml.number(failed)));
+         row.put("failed", HomeHtml.link(listUrl(AlertsDelivery.TABLE_NAME, AlertsDb.eq("channelId", channel.getValue("id"))
+            .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.FAILED.name(), DeliveryStatus.DEAD.name()))), HomeHtml.number(failed)));
          row.put("error", HomeHtml.escape(StringUtils.hasContent(channel.getValueString("lastError")) ? StringUtils.safeTruncate(channel.getValueString("lastError"), 120, "…") : ""));
          rows.add(row);
       }

@@ -23,10 +23,12 @@ import com.kingsrook.qbits.alerts.AlertsPermissionChecker;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
+import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsTeam;
 import com.kingsrook.qbits.alerts.model.AlertsType;
@@ -44,7 +46,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 /*******************************************************************************
  ** The top-level Alerts app (design section 6.1). Its home is the Alerts
  ** dashboard; its nav lists the main tables in the design's order. The
- ** timeline, alert records, team members and inbox items are not in the nav:
+ ** timeline, alert records, team members and notification recipients are not in the nav:
  ** they are child lists and relations on their parents, and stay standard
  ** tables reachable by URL and the API. Tables a user can't read are hidden
  ** by permission. No processes in the nav.
@@ -52,8 +54,8 @@ import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 public class AlertsAppMetaDataProducer extends QBitComponentMetaDataProducer<QAppMetaData, AlertsQBitConfig>
 {
    /** the main tables, in nav order. */
-   public static final List<String> MAIN_TABLES = List.of(AlertsAlert.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME,
-      AlertsSubscription.TABLE_NAME, AlertsUserPreference.TABLE_NAME, AlertsTeam.TABLE_NAME, AlertsChannel.TABLE_NAME, AlertsMute.TABLE_NAME, AlertsNotification.TABLE_NAME);
+   public static final List<String> MAIN_TABLES = List.of(AlertsAlert.TABLE_NAME, AlertsNotification.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME,
+      AlertsSubscription.TABLE_NAME, AlertsUserPreference.TABLE_NAME, AlertsNotificationPreference.TABLE_NAME, AlertsTeam.TABLE_NAME, AlertsChannel.TABLE_NAME, AlertsMute.TABLE_NAME, AlertsDelivery.TABLE_NAME);
 
 
 

@@ -73,6 +73,8 @@ public final class AlertsScheduledSteps
       {
          AlertsRuntime runtime = AlertsRuntime.get();
          runtime.sink().flush();
+         runtime.getNotifications().sendDue();
+         runtime.getNotifications().purge();
          output.addValue(OUTPUT_COUNT, runtime.getDeliveryWorker().deliverDue());
       }
    }

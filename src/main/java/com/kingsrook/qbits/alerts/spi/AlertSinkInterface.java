@@ -52,4 +52,15 @@ public interface AlertSinkInterface
     ***************************************************************************/
    void heartbeat(String heartbeatKey, Instant at);
 
+   /***************************************************************************
+    ** Send a notification to people (an audience).  The default does nothing,
+    ** so sinks written before notifications keep working.
+    ***************************************************************************/
+   default void notify(NotificationSignal signal)
+   {
+      //////////////////////////////////////////////////////////////
+      // noop - sinks that don't carry notifications ignore them //
+      //////////////////////////////////////////////////////////////
+   }
+
 }

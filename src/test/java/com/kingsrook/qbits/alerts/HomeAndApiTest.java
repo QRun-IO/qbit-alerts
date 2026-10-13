@@ -185,7 +185,7 @@ class HomeAndApiTest extends BaseAlertsTest
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> items = (List<Map<String, Object>>) summary.get("items");
       assertThat(items).hasSize(2);
-      assertThat(items.get(0)).containsKeys("title", "href", "group", "age", "unread");
+      assertThat(items.get(0)).containsKeys("id", "title", "href", "source", "category", "age", "unread", "alertId");
 
       api.markRead(Map.of("alertId", items.get(0).get("alertId")));
       assertThat(api.inboxSummary().get("unreadCount")).isEqualTo(1);

@@ -25,26 +25,23 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.ValueTooLongBehavior
 
 
 /*******************************************************************************
- ** One alert in one user's bell.
+ ** One notification for one user: when it reached them, and whether they read it, dismissed it, or were emailed.
  **
  ** Generated from the qbit-alerts schema (one definition for the entity,
  ** the Liquibase changelog and the test DDL).
  *******************************************************************************/
-public class AlertsInboxItem extends QRecordEntity
+public class AlertsNotificationRecipient extends QRecordEntity
 {
-   public static final String TABLE_NAME = "alerts_inbox_item";
+   public static final String TABLE_NAME = "alerts_notification_recipient";
 
    @QField(isEditable = false, isPrimaryKey = true)
    private Integer id;
 
+   @QField(isRequired = true, isEditable = false, possibleValueSourceName = "alerts_notification", label = "Notification")
+   private Integer notificationId;
+
    @QField(isRequired = true, isEditable = false, maxLength = 100, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "User")
    private String userId;
-
-   @QField(isRequired = true, isEditable = false, possibleValueSourceName = "alerts_alert", label = "Alert")
-   private Integer alertId;
-
-   @QField(isEditable = false, label = "Notification")
-   private Integer notificationId;
 
    @QField(isEditable = false)
    private Instant deliveredAt;
@@ -53,7 +50,13 @@ public class AlertsInboxItem extends QRecordEntity
    private Instant readAt;
 
    @QField()
-   private Instant archivedAt;
+   private Instant dismissedAt;
+
+   @QField(isEditable = false)
+   private Instant emailedAt;
+
+   @QField(isEditable = false, maxLength = 16, possibleValueSourceName = "alerts_email_status")
+   private String emailStatus;
 
    @QField(isEditable = false)
    private Instant createDate;
@@ -66,20 +69,18 @@ public class AlertsInboxItem extends QRecordEntity
    /*******************************************************************************
     ** Default constructor.
     *******************************************************************************/
-   public AlertsInboxItem()
+   public AlertsNotificationRecipient()
    {
    }
-
 
 
    /*******************************************************************************
     ** Constructor that populates from a QRecord.
     *******************************************************************************/
-   public AlertsInboxItem(QRecord record)
+   public AlertsNotificationRecipient(QRecord record)
    {
       populateFromQRecord(record);
    }
-
 
 
    /*******************************************************************************
@@ -91,7 +92,6 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for id
     *******************************************************************************/
@@ -101,78 +101,14 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Fluent setter for id
     *******************************************************************************/
-   public AlertsInboxItem withId(Integer id)
+   public AlertsNotificationRecipient withId(Integer id)
    {
       this.id = id;
       return (this);
    }
-
-
-
-   /*******************************************************************************
-    ** Getter for userId
-    *******************************************************************************/
-   public String getUserId()
-   {
-      return (this.userId);
-   }
-
-
-
-   /*******************************************************************************
-    ** Setter for userId
-    *******************************************************************************/
-   public void setUserId(String userId)
-   {
-      this.userId = userId;
-   }
-
-
-
-   /*******************************************************************************
-    ** Fluent setter for userId
-    *******************************************************************************/
-   public AlertsInboxItem withUserId(String userId)
-   {
-      this.userId = userId;
-      return (this);
-   }
-
-
-
-   /*******************************************************************************
-    ** Getter for alertId
-    *******************************************************************************/
-   public Integer getAlertId()
-   {
-      return (this.alertId);
-   }
-
-
-
-   /*******************************************************************************
-    ** Setter for alertId
-    *******************************************************************************/
-   public void setAlertId(Integer alertId)
-   {
-      this.alertId = alertId;
-   }
-
-
-
-   /*******************************************************************************
-    ** Fluent setter for alertId
-    *******************************************************************************/
-   public AlertsInboxItem withAlertId(Integer alertId)
-   {
-      this.alertId = alertId;
-      return (this);
-   }
-
 
 
    /*******************************************************************************
@@ -184,7 +120,6 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for notificationId
     *******************************************************************************/
@@ -194,16 +129,42 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Fluent setter for notificationId
     *******************************************************************************/
-   public AlertsInboxItem withNotificationId(Integer notificationId)
+   public AlertsNotificationRecipient withNotificationId(Integer notificationId)
    {
       this.notificationId = notificationId;
       return (this);
    }
 
+
+   /*******************************************************************************
+    ** Getter for userId
+    *******************************************************************************/
+   public String getUserId()
+   {
+      return (this.userId);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for userId
+    *******************************************************************************/
+   public void setUserId(String userId)
+   {
+      this.userId = userId;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for userId
+    *******************************************************************************/
+   public AlertsNotificationRecipient withUserId(String userId)
+   {
+      this.userId = userId;
+      return (this);
+   }
 
 
    /*******************************************************************************
@@ -215,7 +176,6 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for deliveredAt
     *******************************************************************************/
@@ -225,16 +185,14 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Fluent setter for deliveredAt
     *******************************************************************************/
-   public AlertsInboxItem withDeliveredAt(Instant deliveredAt)
+   public AlertsNotificationRecipient withDeliveredAt(Instant deliveredAt)
    {
       this.deliveredAt = deliveredAt;
       return (this);
    }
-
 
 
    /*******************************************************************************
@@ -246,7 +204,6 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for readAt
     *******************************************************************************/
@@ -256,47 +213,98 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Fluent setter for readAt
     *******************************************************************************/
-   public AlertsInboxItem withReadAt(Instant readAt)
+   public AlertsNotificationRecipient withReadAt(Instant readAt)
    {
       this.readAt = readAt;
       return (this);
    }
 
 
-
    /*******************************************************************************
-    ** Getter for archivedAt
+    ** Getter for dismissedAt
     *******************************************************************************/
-   public Instant getArchivedAt()
+   public Instant getDismissedAt()
    {
-      return (this.archivedAt);
+      return (this.dismissedAt);
    }
 
 
-
    /*******************************************************************************
-    ** Setter for archivedAt
+    ** Setter for dismissedAt
     *******************************************************************************/
-   public void setArchivedAt(Instant archivedAt)
+   public void setDismissedAt(Instant dismissedAt)
    {
-      this.archivedAt = archivedAt;
+      this.dismissedAt = dismissedAt;
    }
 
 
-
    /*******************************************************************************
-    ** Fluent setter for archivedAt
+    ** Fluent setter for dismissedAt
     *******************************************************************************/
-   public AlertsInboxItem withArchivedAt(Instant archivedAt)
+   public AlertsNotificationRecipient withDismissedAt(Instant dismissedAt)
    {
-      this.archivedAt = archivedAt;
+      this.dismissedAt = dismissedAt;
       return (this);
    }
 
+
+   /*******************************************************************************
+    ** Getter for emailedAt
+    *******************************************************************************/
+   public Instant getEmailedAt()
+   {
+      return (this.emailedAt);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for emailedAt
+    *******************************************************************************/
+   public void setEmailedAt(Instant emailedAt)
+   {
+      this.emailedAt = emailedAt;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for emailedAt
+    *******************************************************************************/
+   public AlertsNotificationRecipient withEmailedAt(Instant emailedAt)
+   {
+      this.emailedAt = emailedAt;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for emailStatus
+    *******************************************************************************/
+   public String getEmailStatus()
+   {
+      return (this.emailStatus);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for emailStatus
+    *******************************************************************************/
+   public void setEmailStatus(String emailStatus)
+   {
+      this.emailStatus = emailStatus;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for emailStatus
+    *******************************************************************************/
+   public AlertsNotificationRecipient withEmailStatus(String emailStatus)
+   {
+      this.emailStatus = emailStatus;
+      return (this);
+   }
 
 
    /*******************************************************************************
@@ -308,7 +316,6 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for createDate
     *******************************************************************************/
@@ -318,16 +325,14 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Fluent setter for createDate
     *******************************************************************************/
-   public AlertsInboxItem withCreateDate(Instant createDate)
+   public AlertsNotificationRecipient withCreateDate(Instant createDate)
    {
       this.createDate = createDate;
       return (this);
    }
-
 
 
    /*******************************************************************************
@@ -339,7 +344,6 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Setter for modifyDate
     *******************************************************************************/
@@ -349,11 +353,10 @@ public class AlertsInboxItem extends QRecordEntity
    }
 
 
-
    /*******************************************************************************
     ** Fluent setter for modifyDate
     *******************************************************************************/
-   public AlertsInboxItem withModifyDate(Instant modifyDate)
+   public AlertsNotificationRecipient withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
       return (this);

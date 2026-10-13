@@ -28,9 +28,10 @@ import com.kingsrook.qbits.alerts.delivery.DeliveryResult;
 import com.kingsrook.qbits.alerts.delivery.DeliveryWorker;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
-import com.kingsrook.qbits.alerts.model.AlertsInboxItem;
-import com.kingsrook.qbits.alerts.model.AlertsMute;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
+import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
+import com.kingsrook.qbits.alerts.model.AlertsMute;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsTeam;
 import com.kingsrook.qbits.alerts.model.AlertsTeamMember;
@@ -128,7 +129,7 @@ class RoutingAndDeliveryTest extends BaseAlertsTest
     *******************************************************************************/
    private List<QRecord> notifications() throws QException
    {
-      return (all(AlertsNotification.TABLE_NAME));
+      return (all(AlertsDelivery.TABLE_NAME));
    }
 
 
@@ -155,7 +156,8 @@ class RoutingAndDeliveryTest extends BaseAlertsTest
       assertThat(sent).hasSize(1);
       assertThat(sent.get(0).getValueString("status")).isEqualTo("SENT");
       assertThat(sent.get(0).getValueString("recipientLabel")).isEqualTo("Name of admin-1 (in app)");
-      assertThat(all(AlertsInboxItem.TABLE_NAME)).hasSize(1);
+      assertThat(all(AlertsNotificationRecipient.TABLE_NAME)).hasSize(1);
+      assertThat(all(AlertsNotification.TABLE_NAME)).singleElement().matches(n -> "ALERT".equals(n.getValueString("category")));
 
       ////////////////////////////////////////////////////////////////
       // a viewer gets settings but no bootstrap subscription       //
@@ -312,7 +314,7 @@ class RoutingAndDeliveryTest extends BaseAlertsTest
       List<QRecord> rows = notifications();
       assertThat(rows).anyMatch(r -> "viewer-2".equals(r.getValueString("recipientUserId")) && "SENT".equals(r.getValueString("status")));
       assertThat(rows).anyMatch(r -> "outsider-2".equals(r.getValueString("recipientUserId")) && "NOT_VISIBLE".equals(r.getValueString("suppressedReason")));
-      assertThat(where(AlertsInboxItem.TABLE_NAME, AlertsDb.eq("userId", "outsider-2"))).isEmpty();
+      assertThat(where(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("userId", "outsider-2"))).isEmpty();
    }
 
 
@@ -350,7 +352,7 @@ class RoutingAndDeliveryTest extends BaseAlertsTest
          clock.advance(wait);
          runtime.getDeliveryWorker().deliverDue();
       }
-      QRecord dead = runtime.asSystem(() -> AlertsDb.byId(AlertsNotification.TABLE_NAME, retrying.getValue("id")));
+      QRecord dead = runtime.asSystem(() -> AlertsDb.byId(AlertsDelivery.TABLE_NAME, retrying.getValue("id")));
       assertThat(dead.getValueString("status")).isEqualTo("DEAD");
       QRecord unhealthy = runtime.asSystem(() -> AlertsDb.byId(AlertsChannel.TABLE_NAME, channel.getValue("id")));
       assertThat(unhealthy.getValueString("healthStatus")).isEqualTo("UNHEALTHY");
@@ -358,7 +360,7 @@ class RoutingAndDeliveryTest extends BaseAlertsTest
       QRecord failing = runtime.asSystem(() -> AlertsDb.first(AlertsAlert.TABLE_NAME, AlertsDb.eq("alertTypeName", DeliveryWorker.CHANNEL_FAILING_TYPE)));
       assertThat(failing).isNotNull();
       assertThat(failing.getValueString("status")).isEqualTo("OPEN");
-      assertThat(where(AlertsNotification.TABLE_NAME, AlertsDb.eq("alertId", failing.getValue("id")))).allMatch(r -> r.getValue("recipientUserId") != null);
+      assertThat(where(AlertsDelivery.TABLE_NAME, AlertsDb.eq("alertId", failing.getValue("id")))).allMatch(r -> r.getValue("recipientUserId") != null);
 
       /////////////////////////////////////////////////////
       // retry, and a success heals the channel          //

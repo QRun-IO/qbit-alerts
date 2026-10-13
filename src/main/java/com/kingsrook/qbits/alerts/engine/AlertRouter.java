@@ -30,15 +30,14 @@ import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.engine.AlertsEngine.AlertTarget;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
-import com.kingsrook.qbits.alerts.model.AlertsInboxItem;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
-import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryKind;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EventType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.MuteEffect;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationKind;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ScopeType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.SubscriberType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.SuppressedReason;
@@ -71,10 +70,10 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  ** 4. apply, in order: the type's notify switch, mutes, flapping, the user's
  **    pause, channel enabled / minimum severity / address / rate limit, and a
  **    10-minute duplicate check;
- ** 5. write an alerts_notification row per destination (SUPPRESSED rows keep
+ ** 5. write an alerts_delivery row per destination (SUPPRESSED rows keep
  **    their reason, so "why didn't I get it?" is answered by a table), and an
- **    inbox item per in-app recipient.
- ** In-app deliveries are complete when the inbox item is written; other
+ **    ALERT notification recipient row per in-app recipient.
+ ** In-app deliveries are complete when the recipient row is written; other
  ** channels are left PENDING for the delivery worker.
  *******************************************************************************/
 public class AlertRouter
@@ -109,13 +108,13 @@ public class AlertRouter
    /*******************************************************************************
     ** The notification kind for a timeline event (null: not notifiable).
     *******************************************************************************/
-   public static NotificationKind kindFor(EventType eventType)
+   public static DeliveryKind kindFor(EventType eventType)
    {
       return switch(eventType)
       {
-         case RAISED, REOPENED, SEVERITY_CHANGED, FLAPPING_STARTED -> NotificationKind.RAISED;
-         case RESOLVED -> NotificationKind.RESOLVED;
-         case ESCALATED -> NotificationKind.ESCALATED;
+         case RAISED, REOPENED, SEVERITY_CHANGED, FLAPPING_STARTED -> DeliveryKind.RAISED;
+         case RESOLVED -> DeliveryKind.RESOLVED;
+         case ESCALATED -> DeliveryKind.ESCALATED;
          default -> null;
       };
    }
@@ -128,7 +127,7 @@ public class AlertRouter
     *******************************************************************************/
    public void route(QRecord alert, EventType eventType, Integer eventId)
    {
-      NotificationKind kind = kindFor(eventType);
+      DeliveryKind kind = kindFor(eventType);
       if(alert == null || kind == null)
       {
          return;
@@ -231,23 +230,24 @@ public class AlertRouter
 
             if(reason != null)
             {
-               notification.setValue("status", NotificationStatus.SUPPRESSED.name());
+               notification.setValue("status", DeliveryStatus.SUPPRESSED.name());
                notification.setValue("suppressedReason", reason.name());
-               AlertsDb.insert(AlertsNotification.TABLE_NAME, notification);
+               AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
             }
             else if(inApp)
             {
-               notification.setValue("status", NotificationStatus.SENT.name());
+               notification.setValue("status", DeliveryStatus.SENT.name());
                notification.setValue("sentAt", now);
-               QRecord inserted = AlertsDb.insert(AlertsNotification.TABLE_NAME, notification);
-               deliverToInbox(destination.userId(), alert.getValueInteger("id"), inserted.getValueInteger("id"), now);
+               QRecord inserted = AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
+               runtime.getNotifications().deliverAlert(destination.userId(), alert, now);
+               LOG.debug("In-app alert delivered", logPair("deliveryId", inserted.getValue("id")));
                queued++;
             }
             else
             {
-               notification.setValue("status", NotificationStatus.PENDING.name());
+               notification.setValue("status", DeliveryStatus.PENDING.name());
                notification.setValue("nextAttemptAt", now);
-               AlertsDb.insert(AlertsNotification.TABLE_NAME, notification);
+               AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
                queued++;
             }
          }
@@ -305,7 +305,7 @@ public class AlertRouter
     ** team) with their in-app and email channels (or the subscription's
     ** chosen channels), and subscribed channels.
     *******************************************************************************/
-   List<Destination> destinations(AlertTarget target, AlertSeverity severity, NotificationKind kind) throws QException
+   List<Destination> destinations(AlertTarget target, AlertSeverity severity, DeliveryKind kind) throws QException
    {
       Map<Integer, List<String>> groupNames   = new HashMap<>();
       Map<String, Destination>   destinations = new LinkedHashMap<>();
@@ -463,7 +463,7 @@ public class AlertRouter
    /*******************************************************************************
     ** Whether a subscription's events list includes this kind (empty: all).
     *******************************************************************************/
-   private static boolean includesKind(String events, NotificationKind kind)
+   private static boolean includesKind(String events, DeliveryKind kind)
    {
       if(!StringUtils.hasContent(events))
       {
@@ -486,7 +486,7 @@ public class AlertRouter
     ** with a host whose authentication module builds sessions with permissions
     ** for a user id, the alert is read through that session's record locks.
     ** Otherwise (empty) the user's permissions are unknown, and the caller
-    ** allows in-app (the inbox is filtered by the same locks when it is read)
+    ** allows in-app (the bell re-checks the alert under the reader's session)
     ** but sends externally only alerts with no visibility permission and no
     ** subject table.
     *******************************************************************************/
@@ -553,8 +553,8 @@ public class AlertRouter
       {
          return (false);
       }
-      int lastHour = AlertsDb.count(AlertsNotification.TABLE_NAME, AlertsDb.eq("channelId", channel.getValue("id"))
-         .withCriteria("status", QCriteriaOperator.IN, List.of(NotificationStatus.PENDING.name(), NotificationStatus.SENDING.name(), NotificationStatus.SENT.name(), NotificationStatus.RETRYING.name()))
+      int lastHour = AlertsDb.count(AlertsDelivery.TABLE_NAME, AlertsDb.eq("channelId", channel.getValue("id"))
+         .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.PENDING.name(), DeliveryStatus.SENDING.name(), DeliveryStatus.SENT.name(), DeliveryStatus.RETRYING.name()))
          .withCriteria("createDate", QCriteriaOperator.GREATER_THAN, now.minus(1, ChronoUnit.HOURS)));
       return (lastHour >= limit);
    }
@@ -564,37 +564,18 @@ public class AlertRouter
    /*******************************************************************************
     ** The same alert, channel, recipient and kind within 10 minutes.
     *******************************************************************************/
-   private boolean isDuplicate(QRecord alert, Destination destination, NotificationKind kind, Instant now) throws QException
+   private boolean isDuplicate(QRecord alert, Destination destination, DeliveryKind kind, Instant now) throws QException
    {
       var filter = AlertsDb.eq("alertId", alert.getValue("id"))
          .withCriteria("channelId", QCriteriaOperator.EQUALS, destination.channel().getValue("id"))
          .withCriteria("kind", QCriteriaOperator.EQUALS, kind.name())
-         .withCriteria("status", QCriteriaOperator.IN, List.of(NotificationStatus.PENDING.name(), NotificationStatus.SENDING.name(), NotificationStatus.SENT.name(), NotificationStatus.RETRYING.name()))
+         .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.PENDING.name(), DeliveryStatus.SENDING.name(), DeliveryStatus.SENT.name(), DeliveryStatus.RETRYING.name()))
          .withCriteria("createDate", QCriteriaOperator.GREATER_THAN, now.minus(DUPLICATE_WINDOW_MINUTES, ChronoUnit.MINUTES));
       if(destination.userId() != null)
       {
          filter.withCriteria("recipientUserId", QCriteriaOperator.EQUALS, destination.userId());
       }
-      return (AlertsDb.count(AlertsNotification.TABLE_NAME, filter) > 0);
-   }
-
-
-
-   /*******************************************************************************
-    ** Put (or bring back to unread) the alert in the user's bell.
-    *******************************************************************************/
-   void deliverToInbox(String userId, Integer alertId, Integer notificationId, Instant now) throws QException
-   {
-      QRecord existing = AlertsDb.first(AlertsInboxItem.TABLE_NAME, AlertsDb.eq("userId", userId).withCriteria("alertId", QCriteriaOperator.EQUALS, alertId));
-      if(existing == null)
-      {
-         AlertsDb.insert(AlertsInboxItem.TABLE_NAME, new QRecord().withValue("userId", userId).withValue("alertId", alertId).withValue("notificationId", notificationId).withValue("deliveredAt", now));
-      }
-      else
-      {
-         AlertsDb.update(AlertsInboxItem.TABLE_NAME, new QRecord().withValue("id", existing.getValue("id")).withValue("notificationId", notificationId)
-            .withValue("deliveredAt", now).withValue("readAt", null).withValue("archivedAt", null));
-      }
+      return (AlertsDb.count(AlertsDelivery.TABLE_NAME, filter) > 0);
    }
 
 

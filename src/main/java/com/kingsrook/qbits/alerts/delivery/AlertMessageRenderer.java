@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import com.kingsrook.qbits.alerts.home.HomeHtml;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationKind;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryKind;
 import com.kingsrook.qbits.alerts.spi.AlertSeverity;
 import com.kingsrook.qbits.alerts.spi.DetailLevel;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
@@ -69,7 +69,7 @@ public final class AlertMessageRenderer
    /*******************************************************************************
     ** One message for one or more alerts.
     *******************************************************************************/
-   public static AlertMessage render(List<Item> items, NotificationKind kind, String publicBaseUrl, Instant now)
+   public static AlertMessage render(List<Item> items, DeliveryKind kind, String publicBaseUrl, Instant now)
    {
       AlertSeverity highest  = AlertSeverity.INFO;
       List<Integer> alertIds = new ArrayList<>();
@@ -84,26 +84,26 @@ public final class AlertMessageRenderer
       }
 
       String base   = StringUtils.hasContent(publicBaseUrl) ? publicBaseUrl.replaceAll("/+$", "") : "";
-      String prefix = kind == NotificationKind.TEST ? "TEST: " : "";
+      String prefix = kind == DeliveryKind.TEST ? "TEST: " : "";
       String subject;
       String link;
       if(items.size() == 1)
       {
          QRecord alert = items.get(0).alert();
-         String  state = kind == NotificationKind.RESOLVED ? "RESOLVED" : AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING).name();
+         String  state = kind == DeliveryKind.RESOLVED ? "RESOLVED" : AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING).name();
          subject = prefix + "[" + state + "] " + AlertRedactor.redact(alert.getValueString("title"));
          link = base + "/app/" + AlertsAlert.TABLE_NAME + "/" + alert.getValue("id");
       }
       else
       {
          String group = commonGroup(items);
-         subject = prefix + items.size() + (kind == NotificationKind.RESOLVED ? " alerts resolved" : " new alerts") + (group == null ? "" : " in " + group);
+         subject = prefix + items.size() + (kind == DeliveryKind.RESOLVED ? " alerts resolved" : " new alerts") + (group == null ? "" : " in " + group);
          link = base + "/app/" + AlertsAlert.TABLE_NAME;
       }
 
       StringBuilder text = new StringBuilder();
       StringBuilder html = new StringBuilder("<div style=\"font-family:sans-serif;font-size:14px;line-height:1.5\">");
-      if(kind == NotificationKind.TEST)
+      if(kind == DeliveryKind.TEST)
       {
          text.append("This is a test notification from Alerts.\n\n");
          html.append("<p><strong>This is a test notification from Alerts.</strong></p>");
@@ -156,7 +156,7 @@ public final class AlertMessageRenderer
          Integer     id       = alert.getValueInteger("id");
          entries.add(new AlertMessage.Entry(id, alert.getValueString("alertTypeName"), safe(item.typeLabel()), alert.getValueString("dedupKey"),
             AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING).name(),
-            kind == NotificationKind.RESOLVED ? "RESOLVED" : (alert.getValueString("status") == null ? "OPEN" : alert.getValueString("status")),
+            kind == DeliveryKind.RESOLVED ? "RESOLVED" : (alert.getValueString("status") == null ? "OPEN" : alert.getValueString("status")),
             safe(alert.getValueString("title")), standard ? AlertRedactor.redact(alert.getValueString("summary")) : null, item.groupLabel(),
             standard ? alert.getValueInteger("itemCount") : null, id == null ? base + "/app/" + AlertsAlert.TABLE_NAME : base + "/app/" + AlertsAlert.TABLE_NAME + "/" + id,
             alert.getValueInstant("firstRaisedAt") == null ? null : alert.getValueInstant("firstRaisedAt").toString(),

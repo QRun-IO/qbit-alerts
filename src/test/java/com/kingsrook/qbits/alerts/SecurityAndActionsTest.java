@@ -24,10 +24,10 @@ import java.util.Map;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
-import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
@@ -312,9 +312,9 @@ class SecurityAndActionsTest extends BaseAlertsTest
       QRecord email = runtime.asSystem(() -> AlertsDb.first(AlertsChannel.TABLE_NAME, AlertsDb.eq("name", "email")));
       List<String> test = run(AlertsAction.SEND_TEST, List.of(email.getValueInteger("id")), Map.of());
       assertThat(test).anyMatch(line -> line.startsWith("ERROR"));
-      QRecord failed = all(AlertsNotification.TABLE_NAME).stream().filter(n -> "TEST".equals(n.getValueString("kind"))).findFirst().orElseThrow();
+      QRecord failed = all(AlertsDelivery.TABLE_NAME).stream().filter(n -> "TEST".equals(n.getValueString("kind"))).findFirst().orElseThrow();
       assertThat(failed.getValueString("status")).isEqualTo("FAILED");
       assertThat(run(AlertsAction.RETRY_DELIVERY, List.of(failed.getValueInteger("id")), Map.of())).anyMatch(line -> line.startsWith("OK: 1"));
-      assertThat(runtime.asSystem(() -> AlertsDb.byId(AlertsNotification.TABLE_NAME, failed.getValue("id"))).getValueString("status")).isEqualTo("PENDING");
+      assertThat(runtime.asSystem(() -> AlertsDb.byId(AlertsDelivery.TABLE_NAME, failed.getValue("id"))).getValueString("status")).isEqualTo("PENDING");
    }
 }

@@ -23,6 +23,9 @@ import java.util.Locale;
 import com.kingsrook.qbits.alerts.spi.AlertMonitorKind;
 import com.kingsrook.qbits.alerts.spi.AlertSeverity;
 import com.kingsrook.qbits.alerts.spi.DetailLevel;
+import com.kingsrook.qbits.alerts.spi.NotificationAudience;
+import com.kingsrook.qbits.alerts.spi.NotificationCategory;
+import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qbits.alerts.spi.ResolveMode;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValue;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSource;
@@ -51,9 +54,15 @@ public final class AlertsPossibleValues
    public static final String CHANNEL_TYPE        = "alerts_channel_type";
    public static final String HEALTH_STATUS       = "alerts_health_status";
    public static final String MUTE_EFFECT         = "alerts_mute_effect";
-   public static final String NOTIFICATION_KIND   = "alerts_notification_kind";
-   public static final String NOTIFICATION_STATUS = "alerts_notification_status";
+   public static final String DELIVERY_KIND       = "alerts_delivery_kind";
+   public static final String DELIVERY_STATUS     = "alerts_delivery_status";
    public static final String SUPPRESSED_REASON   = "alerts_suppressed_reason";
+   public static final String NOTIFICATION_SEVERITY = "alerts_notification_severity";
+   public static final String NOTIFICATION_CATEGORY = "alerts_notification_category";
+   public static final String NOTIFICATION_STATUS   = "alerts_notification_status";
+   public static final String AUDIENCE_TYPE         = "alerts_audience_type";
+   public static final String EMAIL_STATUS          = "alerts_email_status";
+   public static final String EMAIL_MODE            = "alerts_email_mode";
 
 
 
@@ -192,7 +201,7 @@ public final class AlertsPossibleValues
    /*******************************************************************************
     ** Why a notification was sent.
     *******************************************************************************/
-   public enum NotificationKind
+   public enum DeliveryKind
    {
       RAISED, ESCALATED, REMINDER, RESOLVED, DIGEST, TEST
    }
@@ -202,7 +211,7 @@ public final class AlertsPossibleValues
    /*******************************************************************************
     ** A notification's delivery state.
     *******************************************************************************/
-   public enum NotificationStatus
+   public enum DeliveryStatus
    {
       PENDING, SENDING, SENT, RETRYING, FAILED, DEAD, SUPPRESSED
    }
@@ -251,9 +260,45 @@ public final class AlertsPossibleValues
          enumSource(CHANNEL_TYPE, ChannelType.values()),
          enumSource(HEALTH_STATUS, HealthStatus.values()),
          enumSource(MUTE_EFFECT, MuteEffect.values()),
-         enumSource(NOTIFICATION_KIND, NotificationKind.values()),
+         enumSource(DELIVERY_KIND, DeliveryKind.values()),
+         enumSource(DELIVERY_STATUS, DeliveryStatus.values()),
+         enumSource(SUPPRESSED_REASON, SuppressedReason.values()),
+         enumSource(NOTIFICATION_SEVERITY, NotificationSeverity.values()),
+         enumSource(NOTIFICATION_CATEGORY, NotificationCategory.values()),
          enumSource(NOTIFICATION_STATUS, NotificationStatus.values()),
-         enumSource(SUPPRESSED_REASON, SuppressedReason.values())));
+         enumSource(AUDIENCE_TYPE, NotificationAudience.Type.values()),
+         enumSource(EMAIL_STATUS, EmailStatus.values()),
+         enumSource(EMAIL_MODE, EmailMode.values())));
+   }
+
+
+
+   /*******************************************************************************
+    ** A user notification's state.
+    *******************************************************************************/
+   public enum NotificationStatus
+   {
+      DRAFT, SCHEDULED, SENT, RETRACTED
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether (and how) a recipient was emailed.
+    *******************************************************************************/
+   public enum EmailStatus
+   {
+      NONE, PENDING, SENT, DIGESTED, SKIPPED, FAILED
+   }
+
+
+
+   /*******************************************************************************
+    ** How a user wants a category by email.
+    *******************************************************************************/
+   public enum EmailMode
+   {
+      OFF, IMMEDIATE, DAILY_DIGEST
    }
 
 

@@ -24,7 +24,7 @@ import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.engine.AlertRouter;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationKind;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryKind;
 import com.kingsrook.qbits.alerts.spi.DetailLevel;
 import com.kingsrook.qqq.backend.core.instances.QMetaDataVariableInterpreter;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
@@ -86,21 +86,21 @@ class RenderingTest
          .withValue("summary", "The nightly job stopped.").withValue("details", "password=hunter2 in the log <script>x</script>").withValue("itemCount", 3)
          .withValue("firstRaisedAt", now.minusSeconds(3 * 3600));
 
-      AlertMessage minimal = AlertMessageRenderer.render(List.of(new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.MINIMAL)), NotificationKind.RAISED, "https://x.example/", now);
+      AlertMessage minimal = AlertMessageRenderer.render(List.of(new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.MINIMAL)), DeliveryKind.RAISED, "https://x.example/", now);
       assertThat(minimal.subject()).isEqualTo("[ERROR] Backups failed for [redacted]");
       assertThat(minimal.text()).contains("3 h").doesNotContain("nightly job").doesNotContain("hunter2");
       assertThat(minimal.link()).isEqualTo("https://x.example/app/alerts_alert/7");
 
-      AlertMessage standard = AlertMessageRenderer.render(List.of(new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.STANDARD)), NotificationKind.RAISED, null, now);
+      AlertMessage standard = AlertMessageRenderer.render(List.of(new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.STANDARD)), DeliveryKind.RAISED, null, now);
       assertThat(standard.text()).contains("nightly job").contains("3 records").doesNotContain("hunter2");
 
-      AlertMessage full = AlertMessageRenderer.render(List.of(new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.FULL)), NotificationKind.RESOLVED, null, now);
+      AlertMessage full = AlertMessageRenderer.render(List.of(new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.FULL)), DeliveryKind.RESOLVED, null, now);
       assertThat(full.subject()).startsWith("[RESOLVED]");
       assertThat(full.text()).contains("[redacted] in the log").doesNotContain("hunter2");
       assertThat(full.html()).contains("&lt;").doesNotContain("<script");
 
       AlertMessage test = AlertMessageRenderer.render(List.of(new AlertMessageRenderer.Item(alert, "Backup failed", null, DetailLevel.MINIMAL),
-         new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.MINIMAL)), NotificationKind.TEST, null, now);
+         new AlertMessageRenderer.Item(alert, "Backup failed", "Backups", DetailLevel.MINIMAL)), DeliveryKind.TEST, null, now);
       assertThat(test.subject()).isEqualTo("TEST: 2 new alerts");
       assertThat(DetailLevel.lowerOf(DetailLevel.FULL, DetailLevel.MINIMAL)).isEqualTo(DetailLevel.MINIMAL);
       assertThat(AlertMessageRenderer.age(null, now)).isEqualTo("now");
@@ -160,6 +160,6 @@ class RenderingTest
       assertThat(AlertsPossibleValues.label("IDP_GROUP")).isEqualTo("IdP Group");
       assertThat(AlertsPossibleValues.label("IN_APP")).isEqualTo("In App");
       assertThat(AlertsPossibleValues.label(null)).isNull();
-      assertThat(AlertsPossibleValues.buildEnumSources()).hasSize(19);
+      assertThat(AlertsPossibleValues.buildEnumSources()).hasSize(25);
    }
 }
