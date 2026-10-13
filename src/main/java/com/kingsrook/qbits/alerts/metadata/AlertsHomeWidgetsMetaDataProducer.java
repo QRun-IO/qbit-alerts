@@ -46,6 +46,7 @@ public class AlertsHomeWidgetsMetaDataProducer extends QBitComponentMetaDataProd
    public static final String NOISY    = "alertsHomeNoisy";
    public static final String DELIVERY = "alertsHomeDeliveryHealth";
    public static final String RESOLVED = "alertsHomeRecentlyResolved";
+   public static final String NOTICES  = "alertsHomeNotifications";
 
 
 
@@ -54,7 +55,7 @@ public class AlertsHomeWidgetsMetaDataProducer extends QBitComponentMetaDataProd
     *******************************************************************************/
    public static List<String> homeWidgetNames()
    {
-      return (List.of(SEVERITY, MINE, ACTION, BY_GROUP, TREND, NOISY, DELIVERY, RESOLVED));
+      return (List.of(SEVERITY, MINE, ACTION, BY_GROUP, TREND, NOISY, DELIVERY, NOTICES, RESOLVED));
    }
 
 
@@ -76,6 +77,7 @@ public class AlertsHomeWidgetsMetaDataProducer extends QBitComponentMetaDataProd
       output.add(widget(TREND, "Opened and Resolved, 30 Days", WidgetType.LINE_CHART.getType(), AlertsHome.KIND_TREND, AlertsQBitConfig.PERMISSION_VIEW));
       output.add(widget(NOISY, "Noisiest Alert Types, 7 Days", table, AlertsHome.KIND_NOISY, AlertsQBitConfig.PERMISSION_VIEW));
       output.add(widget(DELIVERY, "Delivery Health", html, AlertsHome.KIND_DELIVERY, AlertsQBitConfig.PERMISSION_ADMIN));
+      output.add(widget(NOTICES, "Notifications", html, AlertsHome.KIND_NOTIFICATIONS, AlertsQBitConfig.PERMISSION_NOTIFICATION_ADMIN));
       output.add(widget(RESOLVED, "Recently Resolved", table, AlertsHome.KIND_RESOLVED, AlertsQBitConfig.PERMISSION_VIEW));
       return (output);
    }

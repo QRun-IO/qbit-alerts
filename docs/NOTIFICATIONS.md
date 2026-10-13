@@ -188,7 +188,7 @@ Gating is unchanged from #85: no bell and zero requests unless `metaData.apps.al
   is hidden. QQQ has no SSE today.
 - **Popover** (lazy chunk): newest first, a severity icon, the title, the source, a relative time, and a
   link. You can mark one read or unread, or dismiss it, and the footer has "Mark all read" and "View all".
-- **Page** `/notifications` (lazy route): filters (All or Unread, category, severity), paging, a markdown
+- **Page** `/app/notifications` (lazy route): filters (All or Unread, category, severity), paging, a markdown
   body, and the same actions.
 - **Banner:** sticky, undismissed, unexpired items show above the page content until dismissed.
 - **Budget:** total JS 1100 KB. The badge adds well under 1 KB to first load; the popover and the page are

@@ -38,6 +38,10 @@ The qbit also carries ordinary notifications for people (design: [docs/NOTIFICAT
 - **Admins** with `alerts.notification.admin` write notifications in the Notifications table (title, markdown body, severity, category, link, audience, publish and expire times, a sticky banner flag), then use the record actions Preview audience, Send now, Schedule and Retract. Edits after sending show at once; retracting hides it.
 - **Audiences** are resolved when sent: all users, roles or groups, holders of a permission, or named users. Each user gets one `alerts_notification_recipient` row, so read, unread and dismissed are per user. Roles need a user directory (`AlertsQBitConfig.withUserDirectory`, an `AlertsUserDirectoryInterface`); without one, "all users" means everyone who has used Alerts.
 - **Producers** send with `AlertsRuntime.get(qInstance).sink().notify(new NotificationSignal(...))` (core: `QAlerts.notify`). Alerts a user subscribes to arrive in the bell as ALERT notifications.
+- **Ready-made notices** in `AlertsNotices`: `newSignIn`, `apiKeyCreated`, `apiKeyExpiring`, `permissionChanged` (SECURITY), `shared` (SHARE) and `release` (RELEASE, all users). Core has no sign-in or API key events yet, so hosts call these from their authentication customizer and API key screens.
+- **Email** is opt-in per user and category (IMMEDIATE, or DAILY_DIGEST at the digest hour in My Alert Settings), through the configured messaging provider; without one it is off. ALERT notifications are not emailed here (alert subscriptions already do), and SECURITY emails carry only the title and link.
+- **Failed and partial jobs** notify the person who started them (`notifyFailedJobs`, `jobRunLinkPattern`).
+- **Links** must be app paths with one leading slash, or https URLs; backslashes, whitespace and control characters are refused.
 - **People** see them in the Next UI bell and notifications page, and choose per-category settings in My Notification Settings (security notices can't be muted).
 
 Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions include their own recipient rows and settings.
