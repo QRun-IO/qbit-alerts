@@ -21,6 +21,7 @@ import java.util.List;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
@@ -56,7 +57,11 @@ public enum AlertsAction
    ENABLE_MONITOR("alertsEnableMonitor", "Enable monitor", "toggle_on", AlertsMonitor.TABLE_NAME, AlertsQBitConfig.PERMISSION_ADMIN, null),
    DISABLE_MONITOR("alertsDisableMonitor", "Disable monitor", "toggle_off", AlertsMonitor.TABLE_NAME, AlertsQBitConfig.PERMISSION_ADMIN, null),
    SEND_TEST("alertsSendTestNotification", "Send test notification", "send", AlertsChannel.TABLE_NAME, AlertsQBitConfig.PERMISSION_ADMIN, 1),
-   RETRY_DELIVERY("alertsRetryDelivery", "Retry delivery", "replay", AlertsNotification.TABLE_NAME, AlertsQBitConfig.PERMISSION_ADMIN, null);
+   RETRY_DELIVERY("alertsRetryDelivery", "Retry delivery", "replay", AlertsDelivery.TABLE_NAME, AlertsQBitConfig.PERMISSION_ADMIN, null),
+   PREVIEW_AUDIENCE("alertsPreviewAudience", "Preview audience", "groups", AlertsNotification.TABLE_NAME, AlertsQBitConfig.PERMISSION_NOTIFICATION_ADMIN, 1),
+   SEND_NOTIFICATION("alertsSendNotification", "Send now", "send", AlertsNotification.TABLE_NAME, AlertsQBitConfig.PERMISSION_NOTIFICATION_ADMIN, null),
+   SCHEDULE_NOTIFICATION("alertsScheduleNotification", "Schedule", "schedule_send", AlertsNotification.TABLE_NAME, AlertsQBitConfig.PERMISSION_NOTIFICATION_ADMIN, null),
+   RETRACT_NOTIFICATION("alertsRetractNotification", "Retract", "unpublished", AlertsNotification.TABLE_NAME, AlertsQBitConfig.PERMISSION_NOTIFICATION_ADMIN, null);
 
    public static final String FIELD_NOTE          = "alertsNote";
    public static final String FIELD_SNOOZE_HOURS  = "alertsSnoozeHours";

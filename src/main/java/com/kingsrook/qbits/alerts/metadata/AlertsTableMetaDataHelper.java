@@ -23,17 +23,20 @@ import java.util.List;
 import java.util.Map;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.AlertsSecurity;
+import com.kingsrook.qbits.alerts.customizers.AlertsNotificationCustomizer;
 import com.kingsrook.qbits.alerts.customizers.AlertsSubscriptionCustomizer;
 import com.kingsrook.qbits.alerts.customizers.AlertsWriteGuardCustomizer;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsHeartbeat;
-import com.kingsrook.qbits.alerts.model.AlertsInboxItem;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
+import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
+import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
 import com.kingsrook.qbits.alerts.model.AlertsRecordRef;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
@@ -41,6 +44,10 @@ import com.kingsrook.qbits.alerts.model.AlertsTeam;
 import com.kingsrook.qbits.alerts.model.AlertsTeamMember;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
+import com.kingsrook.qbits.alerts.notifications.NotificationService;
+import com.kingsrook.qbits.alerts.spi.NotificationAudience;
+import com.kingsrook.qbits.alerts.spi.NotificationCategory;
+import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.actions.customizers.TableCustomizers;
 import com.kingsrook.qqq.backend.core.actions.dashboard.widgets.ChildRecordListRenderer;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -76,27 +83,27 @@ import com.kingsrook.qqq.backend.core.model.metadata.tables.UniqueKey;
  ** audit, API) secured by QQQ mechanisms rather than by hiding it:
  ** - Permissions: QQQ's per-table read / insert / edit / delete permissions
  **   (AlertsQBitConfig lists them per role).
- ** - Record security locks (AlertsSecurity): an alert, its timeline, records
- **   and inbox items are visible only when the session holds the type's
+ ** - Record security locks (AlertsSecurity): an alert, its timeline and records
+ **   are visible only when the session holds the type's
  **   visibility permission (if any) and can read its subject table (if any).
- **   Subscriptions, settings and inbox items are the user's own (admins hold
+ **   Subscriptions, settings and notification recipient rows are the user's own (admins hold
  **   the all-access key).
- ** - Tables the qbit writes (alerts, timeline, records, notifications, inbox
- **   items, heartbeats) have no insert or delete capability; people change
+ ** - Tables the qbit writes (alerts, timeline, records, the delivery log,
+ **   heartbeats) have no insert or delete capability; people change
  **   alerts through record actions, never by editing rows.
  *******************************************************************************/
 public final class AlertsTableMetaDataHelper
 {
    public static final String JOIN_ALERT_EVENT        = "alerts_alert_join_alerts_event";
    public static final String JOIN_ALERT_RECORD_REF   = "alerts_alert_join_alerts_record_ref";
-   public static final String JOIN_ALERT_NOTIFICATION = "alerts_alert_join_alerts_notification";
-   public static final String JOIN_ALERT_INBOX_ITEM   = "alerts_alert_join_alerts_inbox_item";
+   public static final String JOIN_ALERT_DELIVERY = "alerts_alert_join_alerts_delivery";
    public static final String JOIN_TYPE_ALERT         = "alerts_type_join_alerts_alert";
    public static final String JOIN_TYPE_MONITOR       = "alerts_type_join_alerts_monitor";
    public static final String JOIN_GROUP_TYPE         = "alerts_group_join_alerts_type";
    public static final String JOIN_MONITOR_ALERT      = "alerts_monitor_join_alerts_alert";
    public static final String JOIN_TEAM_MEMBER        = "alerts_team_join_alerts_team_member";
-   public static final String JOIN_CHANNEL_NOTIFICATION = "alerts_channel_join_alerts_notification";
+   public static final String JOIN_NOTIFICATION_RECIPIENT = "alerts_notification_join_alerts_notification_recipient";
+   public static final String JOIN_CHANNEL_DELIVERY = "alerts_channel_join_alerts_delivery";
 
 
 
@@ -125,7 +132,7 @@ public final class AlertsTableMetaDataHelper
             "snoozedUntil", "muted", "resolvedAt", "resolvedByUserId", "resolution", "resolutionNote")))
          .withSection(widgetSection(JOIN_ALERT_EVENT, "Timeline", "history"))
          .withSection(widgetSection(JOIN_ALERT_RECORD_REF, "Records", "link"))
-         .withSection(widgetSection(JOIN_ALERT_NOTIFICATION, "Notifications", "send"))
+         .withSection(widgetSection(JOIN_ALERT_DELIVERY, "Notifications", "send"))
          .withSection(new QFieldSection("occurrence", "Occurrences", new QIcon("repeat"), Tier.T3, List.of("firstRaisedAt", "lastRaisedAt", "occurrenceCount", "reopenCount", "flapping",
             "lastNotifiedAt", "monitorId", "dedupKey", "alertTypeName", "visibilityPermission", "openDedupKey", "escalationLevel", "links", "attributes", "createDate", "modifyDate")));
       return (readOnly(table));
@@ -334,7 +341,7 @@ public final class AlertsTableMetaDataHelper
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "label", "name", "channelType", "enabled", "healthStatus")))
          .withSection(new QFieldSection("settings", "Settings", new QIcon("tune"), Tier.T2, List.of("settings", "secretRef", "detailLevel", "minSeverity", "rateLimitPerHour")))
          .withSection(new QFieldSection("health", "Health", new QIcon("monitor_heart"), Tier.T2, List.of("lastSuccessAt", "lastFailureAt", "consecutiveFailures", "lastError")))
-         .withSection(widgetSection(JOIN_CHANNEL_NOTIFICATION, "Notifications", "send"))
+         .withSection(widgetSection(JOIN_CHANNEL_DELIVERY, "Notifications", "send"))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
       table.getField("settings").withFieldAdornment(new FieldAdornment(AdornmentType.CODE_EDITOR).withValue(AdornmentType.CodeEditorValues.languageMode("json")));
       table.getField("enabled").setDefaultValue(true);
@@ -368,11 +375,11 @@ public final class AlertsTableMetaDataHelper
 
 
    /*******************************************************************************
-    ** alerts_notification
+    ** alerts_delivery
     *******************************************************************************/
-   public static QTableMetaData buildNotificationTable(AlertsQBitConfig config) throws QException
+   public static QTableMetaData buildDeliveryTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsNotification.TABLE_NAME, "Notification Log", "send", AlertsNotification.class)
+      QTableMetaData table = base(config, AlertsDelivery.TABLE_NAME, "Delivery Log", "send", AlertsDelivery.class)
          .withRecordLabelFormat("%s %s")
          .withRecordLabelFields("kind", "recipientLabel")
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "alertId", "kind", "status", "channelId", "recipientLabel")))
@@ -384,19 +391,92 @@ public final class AlertsTableMetaDataHelper
 
 
    /*******************************************************************************
-    ** alerts_inbox_item
+    ** alerts_notification (user notifications, docs/NOTIFICATIONS.md 3.1)
     *******************************************************************************/
-   public static QTableMetaData buildInboxItemTable(AlertsQBitConfig config) throws QException
+   public static QTableMetaData buildNotificationTable(AlertsQBitConfig config) throws QException
    {
-      QTableMetaData table = base(config, AlertsInboxItem.TABLE_NAME, "My Alerts Inbox", "inbox", AlertsInboxItem.class)
+      QTableMetaData table = text(base(config, AlertsNotification.TABLE_NAME, "Notifications", "campaign", AlertsNotification.class), "body", "audienceValue")
          .withRecordLabelFormat("%s")
-         .withRecordLabelFields("alertId")
+         .withRecordLabelFields("title")
+         .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
+         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "title", "severity", "category", "status")))
+         .withSection(new QFieldSection("message", "Message", new QIcon("article"), Tier.T2, List.of("body", "linkUrl", "linkLabel", "sticky")))
+         .withSection(new QFieldSection("audience", "Audience", new QIcon("groups"), Tier.T2, List.of("audienceType", "audienceValue", "recipientCount", "readCount")))
+         .withSection(new QFieldSection("schedule", "Schedule", new QIcon("schedule"), Tier.T2, List.of("publishAt", "expireAt", "sentAt", "retractedAt")))
+         .withSection(widgetSection(JOIN_NOTIFICATION_RECIPIENT, "Recipients", "person"))
+         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("authorUserId", "sourceName", "sourceKey", "sourceTableName", "sourceRecordId",
+            "createDate", "modifyDate")));
+      table.getField("severity").setDefaultValue(NotificationSeverity.INFO.name());
+      table.getField("category").setDefaultValue(NotificationCategory.SYSTEM.name());
+      table.getField("audienceType").setDefaultValue(NotificationAudience.Type.ALL_USERS.name());
+      table.getField("status").setDefaultValue(NotificationService.STATUS_DRAFT);
+      table.getField("sticky").setDefaultValue(false);
+      table.getField("body").withFieldAdornment(new FieldAdornment(AdornmentType.CODE_EDITOR).withValue(AdornmentType.CodeEditorValues.languageMode("markdown")));
+      return (notificationCustomizer(table, true));
+   }
+
+
+
+   /*******************************************************************************
+    ** alerts_notification_recipient (one notification for one user). Users
+    ** see and edit (read, dismissed) only their own rows; the qbit inserts
+    ** and deletes them.
+    *******************************************************************************/
+   public static QTableMetaData buildNotificationRecipientTable(AlertsQBitConfig config) throws QException
+   {
+      QTableMetaData table = base(config, AlertsNotificationRecipient.TABLE_NAME, "Notification Recipients", "mark_email_read", AlertsNotificationRecipient.class)
+         .withRecordLabelFormat("%s %s")
+         .withRecordLabelFields("notificationId", "userId")
+         .withUniqueKey(new UniqueKey("notificationId", "userId"))
+         .withRecordSecurityLock(AlertsSecurity.recipientLock("userId"))
+         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "notificationId", "userId", "deliveredAt", "readAt", "dismissedAt")))
+         .withSection(new QFieldSection("email", "Email", new QIcon("mail"), Tier.T2, List.of("emailStatus", "emailedAt")))
+         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
+      table.withoutCapabilities(Capability.TABLE_INSERT, Capability.TABLE_DELETE);
+      return (notificationCustomizer(table, true));
+   }
+
+
+
+   /*******************************************************************************
+    ** alerts_notification_preference (a user's settings for one category)
+    *******************************************************************************/
+   public static QTableMetaData buildNotificationPreferenceTable(AlertsQBitConfig config) throws QException
+   {
+      QTableMetaData table = base(config, AlertsNotificationPreference.TABLE_NAME, "My Notification Settings", "tune", AlertsNotificationPreference.class)
+         .withRecordLabelFormat("%s %s")
+         .withRecordLabelFields("userId", "category")
+         .withUniqueKey(new UniqueKey("userId", "category"))
          .withRecordSecurityLock(AlertsSecurity.ownerLock("userId"))
-         .withRecordSecurityLock(AlertsSecurity.visibilityLock(JOIN_ALERT_INBOX_ITEM))
-         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "alertId", "deliveredAt", "readAt", "archivedAt")))
-         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("userId", "notificationId", "createDate", "modifyDate")));
-      table.withoutCapabilities(Capability.TABLE_INSERT);
-      return (guard(table));
+         .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
+         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "category", "inAppMuted", "emailMode", "emailMinSeverity")))
+         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("userId", "createDate", "modifyDate")));
+      table.getField("category").setDefaultValue(NotificationCategory.SYSTEM.name());
+      table.getField("inAppMuted").setDefaultValue(false);
+      table.getField("emailMode").setDefaultValue(AlertsPossibleValues.EmailMode.OFF.name());
+      table.getField("emailMinSeverity").setDefaultValue(NotificationSeverity.WARNING.name());
+      return (notificationCustomizer(table, false));
+   }
+
+
+
+   /*******************************************************************************
+    ** The notification tables' customizer (insert, update and, optionally,
+    ** delete).
+    *******************************************************************************/
+   private static QTableMetaData notificationCustomizer(QTableMetaData table, boolean onDelete)
+   {
+      QCodeReference reference = new QCodeReference(AlertsNotificationCustomizer.class);
+      List<TableCustomizers> roles = new ArrayList<>(List.of(TableCustomizers.PRE_INSERT_RECORD, TableCustomizers.PRE_UPDATE_RECORD));
+      if(onDelete)
+      {
+         roles.add(TableCustomizers.PRE_DELETE_RECORD);
+      }
+      for(TableCustomizers role : roles)
+      {
+         table.withCustomizer(role, reference);
+      }
+      return (table);
    }
 
 
@@ -424,7 +504,8 @@ public final class AlertsTableMetaDataHelper
    {
       return (List.of(buildAlertTable(config), buildMonitorTable(config), buildTypeTable(config), buildGroupTable(config), buildSubscriptionTable(config),
          buildUserPreferenceTable(config), buildTeamTable(config), buildTeamMemberTable(config), buildChannelTable(config), buildMuteTable(config),
-         buildNotificationTable(config), buildEventTable(config), buildRecordRefTable(config), buildInboxItemTable(config), buildHeartbeatTable(config)));
+         buildDeliveryTable(config), buildEventTable(config), buildRecordRefTable(config), buildHeartbeatTable(config), buildNotificationTable(config),
+         buildNotificationRecipientTable(config), buildNotificationPreferenceTable(config)));
    }
 
 
@@ -436,7 +517,7 @@ public final class AlertsTableMetaDataHelper
    {
       List<QPossibleValueSource> sources = new ArrayList<>(AlertsPossibleValues.buildEnumSources());
       for(String table : List.of(AlertsAlert.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsTeam.TABLE_NAME,
-         AlertsChannel.TABLE_NAME, AlertsSubscription.TABLE_NAME))
+         AlertsChannel.TABLE_NAME, AlertsSubscription.TABLE_NAME, AlertsNotification.TABLE_NAME))
       {
          sources.add(QPossibleValueSource.newForTable(table));
       }
@@ -453,14 +534,14 @@ public final class AlertsTableMetaDataHelper
       List<QJoinMetaData> joins = new ArrayList<>();
       joins.add(oneToMany(JOIN_ALERT_EVENT, AlertsAlert.TABLE_NAME, AlertsEvent.TABLE_NAME, "alertId"));
       joins.add(oneToMany(JOIN_ALERT_RECORD_REF, AlertsAlert.TABLE_NAME, AlertsRecordRef.TABLE_NAME, "alertId"));
-      joins.add(oneToMany(JOIN_ALERT_NOTIFICATION, AlertsAlert.TABLE_NAME, AlertsNotification.TABLE_NAME, "alertId"));
-      joins.add(oneToMany(JOIN_ALERT_INBOX_ITEM, AlertsAlert.TABLE_NAME, AlertsInboxItem.TABLE_NAME, "alertId"));
+      joins.add(oneToMany(JOIN_ALERT_DELIVERY, AlertsAlert.TABLE_NAME, AlertsDelivery.TABLE_NAME, "alertId"));
       joins.add(oneToMany(JOIN_TYPE_ALERT, AlertsType.TABLE_NAME, AlertsAlert.TABLE_NAME, "alertTypeId"));
       joins.add(oneToMany(JOIN_TYPE_MONITOR, AlertsType.TABLE_NAME, AlertsMonitor.TABLE_NAME, "alertTypeId"));
       joins.add(oneToMany(JOIN_GROUP_TYPE, AlertsGroup.TABLE_NAME, AlertsType.TABLE_NAME, "groupId"));
       joins.add(oneToMany(JOIN_MONITOR_ALERT, AlertsMonitor.TABLE_NAME, AlertsAlert.TABLE_NAME, "monitorId"));
       joins.add(oneToMany(JOIN_TEAM_MEMBER, AlertsTeam.TABLE_NAME, AlertsTeamMember.TABLE_NAME, "teamId"));
-      joins.add(oneToMany(JOIN_CHANNEL_NOTIFICATION, AlertsChannel.TABLE_NAME, AlertsNotification.TABLE_NAME, "channelId"));
+      joins.add(oneToMany(JOIN_CHANNEL_DELIVERY, AlertsChannel.TABLE_NAME, AlertsDelivery.TABLE_NAME, "channelId"));
+      joins.add(oneToMany(JOIN_NOTIFICATION_RECIPIENT, AlertsNotification.TABLE_NAME, AlertsNotificationRecipient.TABLE_NAME, "notificationId"));
       return (joins);
    }
 
@@ -481,14 +562,15 @@ public final class AlertsTableMetaDataHelper
       List<QWidgetMetaDataInterface> widgets = new ArrayList<>();
       widgets.add(childList(joins.get(JOIN_ALERT_EVENT), "Timeline", 50, new QFilterOrderBy("at", false), List.of("at", "eventType", "userId", "toValue", "note")));
       widgets.add(childList(joins.get(JOIN_ALERT_RECORD_REF), "Records", 25, new QFilterOrderBy("id", true), List.of("tableName", "recordId", "label", "active")));
-      widgets.add(childList(joins.get(JOIN_ALERT_NOTIFICATION), "Notifications", 25, new QFilterOrderBy("id", false), List.of("kind", "status", "recipientLabel", "sentAt")));
+      widgets.add(childList(joins.get(JOIN_ALERT_DELIVERY), "Notifications", 25, new QFilterOrderBy("id", false), List.of("kind", "status", "recipientLabel", "sentAt")));
       widgets.add(childList(joins.get(JOIN_TYPE_ALERT), "Alerts", 10, new QFilterOrderBy("lastRaisedAt", false), List.of("title", "severity", "status", "lastRaisedAt")));
       widgets.add(childList(joins.get(JOIN_TYPE_MONITOR), "Monitors", 10, new QFilterOrderBy("id", true), List.of("name", "kind", "enabled", "lastStatus")));
       widgets.add(childList(joins.get(JOIN_GROUP_TYPE), "Alert Types", 50, new QFilterOrderBy("label", true), List.of("label", "defaultSeverity", "enabled", "openCount")));
       widgets.add(childList(joins.get(JOIN_MONITOR_ALERT), "Alerts", 10, new QFilterOrderBy("lastRaisedAt", false), List.of("title", "severity", "status", "lastRaisedAt")));
       widgets.add(ChildRecordListRenderer.widgetMetaDataBuilder(joins.get(JOIN_TEAM_MEMBER)).withLabel("Members").withCanAddChildRecord(true).withMaxRows(100)
          .withOnlyIncludeFieldNames(List.of("userId", "role")).getWidgetMetaData());
-      widgets.add(childList(joins.get(JOIN_CHANNEL_NOTIFICATION), "Notifications", 25, new QFilterOrderBy("id", false), List.of("kind", "status", "recipientLabel", "sentAt")));
+      widgets.add(childList(joins.get(JOIN_CHANNEL_DELIVERY), "Notifications", 25, new QFilterOrderBy("id", false), List.of("kind", "status", "recipientLabel", "sentAt")));
+      widgets.add(childList(joins.get(JOIN_NOTIFICATION_RECIPIENT), "Recipients", 25, new QFilterOrderBy("id", true), List.of("userId", "deliveredAt", "readAt", "dismissedAt", "emailStatus")));
       return (widgets);
    }
 

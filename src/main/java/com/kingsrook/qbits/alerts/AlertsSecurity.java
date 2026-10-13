@@ -40,7 +40,7 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
 /*******************************************************************************
  ** The Alerts record-security keys (design section 7).
  **
- ** Three security key types guard the qbit's tables:
+ ** Four security key types guard the qbit's tables:
  ** - alerts_user: the session's user id. Personal rows (subscriptions,
  **   settings, inbox items) are locked to it. alerts.admin holders get its
  **   all-access key.
@@ -48,7 +48,10 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
  **   type sets a visibility permission is only readable with it.
  ** - alerts_readable_table: every table the session can read. An alert about
  **   a subject table is only readable by users who can read that table.
- ** The last two follow the logged-in user, so counts, lists, the bell and
+ ** - alerts_recipient: the session's user id, for notification recipient
+ **   rows. Notification authors (alerts.notification.admin) and alerts.admin
+ **   holders get its all-access key.
+ ** alerts_permission and alerts_readable_table follow the logged-in user, so counts, lists, the bell and
  ** the home are all filtered in the query. (The system user, which the
  ** engine runs as, holds every all-access key.)
  **
@@ -66,6 +69,8 @@ public final class AlertsSecurity
    public static final String KEY_PERMISSION_ALL       = "alerts_permission_all_access";
    public static final String KEY_READABLE_TABLE       = "alerts_readable_table";
    public static final String KEY_READABLE_TABLE_ALL   = "alerts_readable_table_all_access";
+   public static final String KEY_RECIPIENT            = "alerts_recipient";
+   public static final String KEY_RECIPIENT_ALL        = "alerts_recipient_all_access";
 
    private static final String ALERT_TABLE = "alerts_alert";
 
@@ -88,7 +93,8 @@ public final class AlertsSecurity
       return (List.of(
          new QSecurityKeyType().withName(KEY_USER).withAllAccessKeyName(KEY_USER_ALL_ACCESS),
          new QSecurityKeyType().withName(KEY_PERMISSION).withAllAccessKeyName(KEY_PERMISSION_ALL),
-         new QSecurityKeyType().withName(KEY_READABLE_TABLE).withAllAccessKeyName(KEY_READABLE_TABLE_ALL)));
+         new QSecurityKeyType().withName(KEY_READABLE_TABLE).withAllAccessKeyName(KEY_READABLE_TABLE_ALL),
+         new QSecurityKeyType().withName(KEY_RECIPIENT).withAllAccessKeyName(KEY_RECIPIENT_ALL)));
    }
 
 
@@ -100,6 +106,20 @@ public final class AlertsSecurity
    {
       return (new RecordSecurityLock()
          .withSecurityKeyType(KEY_USER)
+         .withFieldName(fieldName)
+         .withLockScope(RecordSecurityLock.LockScope.READ_AND_WRITE));
+   }
+
+
+
+   /*******************************************************************************
+    ** Recipient lock: a notification recipient row is its user's (notification
+    ** authors and alerts admins hold the all-access key).
+    *******************************************************************************/
+   public static RecordSecurityLock recipientLock(String fieldName)
+   {
+      return (new RecordSecurityLock()
+         .withSecurityKeyType(KEY_RECIPIENT)
          .withFieldName(fieldName)
          .withLockScope(RecordSecurityLock.LockScope.READ_AND_WRITE));
    }
@@ -154,7 +174,7 @@ public final class AlertsSecurity
       Map<String, List<Serializable>> keys = session.getSecurityKeyValues();
       if(keys != null)
       {
-         for(String key : List.of(KEY_USER, KEY_USER_ALL_ACCESS, KEY_PERMISSION, KEY_READABLE_TABLE))
+         for(String key : List.of(KEY_USER, KEY_USER_ALL_ACCESS, KEY_PERMISSION, KEY_READABLE_TABLE, KEY_RECIPIENT, KEY_RECIPIENT_ALL))
          {
             keys.remove(key);
          }
@@ -169,6 +189,11 @@ public final class AlertsSecurity
       if(StringUtils.hasContent(userId))
       {
          session.withSecurityKeyValue(KEY_USER, userId);
+         session.withSecurityKeyValue(KEY_RECIPIENT, userId);
+      }
+      if(session.hasPermission(AlertsQBitConfig.PERMISSION_ADMIN) || session.hasPermission(AlertsQBitConfig.PERMISSION_NOTIFICATION_ADMIN))
+      {
+         session.withSecurityKeyValue(KEY_RECIPIENT_ALL, true);
       }
       if(session.hasPermission(AlertsQBitConfig.PERMISSION_ADMIN))
       {
@@ -257,6 +282,7 @@ public final class AlertsSecurity
       session.withSecurityKeyValue(KEY_USER_ALL_ACCESS, true);
       session.withSecurityKeyValue(KEY_PERMISSION_ALL, true);
       session.withSecurityKeyValue(KEY_READABLE_TABLE_ALL, true);
+      session.withSecurityKeyValue(KEY_RECIPIENT_ALL, true);
       return (session);
    }
 

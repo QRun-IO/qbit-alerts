@@ -21,13 +21,15 @@ import java.util.ArrayList;
 import java.util.List;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
+import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsHeartbeat;
-import com.kingsrook.qbits.alerts.model.AlertsInboxItem;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
+import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
+import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsRecordRef;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsTeam;
@@ -51,7 +53,9 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
  **   see; comment; subscribe themselves; their own settings and inbox.
  ** - alerts.manage: acknowledge, snooze, resolve, reopen, assign, mute.
  ** - alerts.admin: monitors, types, groups, teams, channels, every
- **   subscription, the notification log, retries.
+ **   subscription, the delivery log, retries.
+ ** - alerts.notification.admin: write, send, schedule, retract and delete
+ **   user notifications (docs/NOTIFICATIONS.md).
  ** Each table also has QQQ's standard per-table permissions
  ** (alerts_alert.read, ...); getViewerPermissionNames,
  ** getManagerPermissionNames and getAdminPermissionNames list what to grant
@@ -65,6 +69,8 @@ public class AlertsQBitConfig implements QBitConfig
    public static final String PERMISSION_VIEW   = "alerts.view";
    public static final String PERMISSION_MANAGE = "alerts.manage";
    public static final String PERMISSION_ADMIN  = "alerts.admin";
+
+   public static final String PERMISSION_NOTIFICATION_ADMIN = "alerts.notification.admin";
 
    public static final String APP_NAME = "alerts";
 
@@ -92,6 +98,12 @@ public class AlertsQBitConfig implements QBitConfig
    private Boolean registerRoutes  = true;
    private Boolean synchronousSink = false;
 
+   private QCodeReference userDirectory;
+   private Integer        maxAudienceSize           = 50_000;
+   private Integer        notificationRetentionDays = 180;
+   private Boolean        notifyFailedJobs          = true;
+   private String         jobRunLinkPattern;
+
    private transient AlertsRuntime runtime;
 
 
@@ -114,7 +126,8 @@ public class AlertsQBitConfig implements QBitConfig
       {
          assertCondition(qInstance.getMessagingProvider(messagingProviderName) != null, "Alerts QBit messaging provider not found: " + messagingProviderName, errors);
       }
-      for(Integer value : new Integer[] {reopenWindowMinutes, flapThreshold, flapWindowMinutes, maxOpenPerMonitor, monitorTimeoutSeconds, evaluateEverySeconds, deliverEverySeconds})
+      for(Integer value : new Integer[] {reopenWindowMinutes, flapThreshold, flapWindowMinutes, maxOpenPerMonitor, monitorTimeoutSeconds, evaluateEverySeconds, deliverEverySeconds,
+         maxAudienceSize, notificationRetentionDays})
       {
          assertCondition(value != null && value > 0, "Alerts QBit timing and limit settings must be positive", errors);
       }
@@ -140,7 +153,8 @@ public class AlertsQBitConfig implements QBitConfig
    {
       return (List.of(AlertsAlert.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsSubscription.TABLE_NAME,
          AlertsUserPreference.TABLE_NAME, AlertsTeam.TABLE_NAME, AlertsTeamMember.TABLE_NAME, AlertsChannel.TABLE_NAME, AlertsMute.TABLE_NAME,
-         AlertsNotification.TABLE_NAME, AlertsEvent.TABLE_NAME, AlertsRecordRef.TABLE_NAME, AlertsInboxItem.TABLE_NAME, AlertsHeartbeat.TABLE_NAME));
+         AlertsDelivery.TABLE_NAME, AlertsEvent.TABLE_NAME, AlertsRecordRef.TABLE_NAME, AlertsHeartbeat.TABLE_NAME, AlertsNotification.TABLE_NAME,
+         AlertsNotificationRecipient.TABLE_NAME, AlertsNotificationPreference.TABLE_NAME));
    }
 
 
@@ -160,13 +174,15 @@ public class AlertsQBitConfig implements QBitConfig
       {
          names.add(table + ".read");
       }
-      for(String table : List.of(AlertsSubscription.TABLE_NAME, AlertsUserPreference.TABLE_NAME, AlertsInboxItem.TABLE_NAME))
+      for(String table : List.of(AlertsSubscription.TABLE_NAME, AlertsUserPreference.TABLE_NAME, AlertsNotificationPreference.TABLE_NAME))
       {
          names.add(table + ".read");
          names.add(table + ".insert");
          names.add(table + ".edit");
          names.add(table + ".delete");
       }
+      names.add(AlertsNotificationRecipient.TABLE_NAME + ".read");
+      names.add(AlertsNotificationRecipient.TABLE_NAME + ".edit");
       return (names);
    }
 
@@ -192,13 +208,31 @@ public class AlertsQBitConfig implements QBitConfig
     *******************************************************************************/
    public List<String> getAdminPermissionNames()
    {
-      List<String> names = new ArrayList<>(List.of(PERMISSION_VIEW, PERMISSION_MANAGE, PERMISSION_ADMIN));
+      List<String> names = new ArrayList<>(List.of(PERMISSION_VIEW, PERMISSION_MANAGE, PERMISSION_ADMIN, PERMISSION_NOTIFICATION_ADMIN));
       for(String table : allTableNames())
       {
          for(String suffix : List.of("read", "insert", "edit", "delete"))
          {
             names.add(table + "." + suffix);
          }
+      }
+      return (names);
+   }
+
+
+
+   /*******************************************************************************
+    ** What a notification author needs on top of a viewer's permissions:
+    ** alerts.notification.admin and full access to the notifications table
+    ** (they read every recipient row through the alerts_user all-access key).
+    *******************************************************************************/
+   public List<String> getNotificationAdminPermissionNames()
+   {
+      List<String> names = new ArrayList<>(getViewerPermissionNames());
+      names.add(PERMISSION_NOTIFICATION_ADMIN);
+      for(String suffix : List.of("read", "insert", "edit", "delete"))
+      {
+         names.add(AlertsNotification.TABLE_NAME + "." + suffix);
       }
       return (names);
    }
@@ -605,4 +639,158 @@ public class AlertsQBitConfig implements QBitConfig
       this.runtime = runtime;
    }
 
+
+
+   /*******************************************************************************
+    ** Getter for userDirectory
+    *******************************************************************************/
+   public QCodeReference getUserDirectory()
+   {
+      return (this.userDirectory);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for userDirectory
+    *******************************************************************************/
+   public void setUserDirectory(QCodeReference userDirectory)
+   {
+      this.userDirectory = userDirectory;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for userDirectory: the host's user directory (AlertsUserDirectoryInterface) for notification audiences; default: everyone who has used Alerts
+    *******************************************************************************/
+   public AlertsQBitConfig withUserDirectory(QCodeReference userDirectory)
+   {
+      this.userDirectory = userDirectory;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for maxAudienceSize
+    *******************************************************************************/
+   public Integer getMaxAudienceSize()
+   {
+      return (this.maxAudienceSize);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for maxAudienceSize
+    *******************************************************************************/
+   public void setMaxAudienceSize(Integer maxAudienceSize)
+   {
+      this.maxAudienceSize = maxAudienceSize;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for maxAudienceSize: the most users one notification reaches (default 50,000)
+    *******************************************************************************/
+   public AlertsQBitConfig withMaxAudienceSize(Integer maxAudienceSize)
+   {
+      this.maxAudienceSize = maxAudienceSize;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for notificationRetentionDays
+    *******************************************************************************/
+   public Integer getNotificationRetentionDays()
+   {
+      return (this.notificationRetentionDays);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for notificationRetentionDays
+    *******************************************************************************/
+   public void setNotificationRetentionDays(Integer notificationRetentionDays)
+   {
+      this.notificationRetentionDays = notificationRetentionDays;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for notificationRetentionDays: how long sent and retracted notifications are kept (default 180)
+    *******************************************************************************/
+   public AlertsQBitConfig withNotificationRetentionDays(Integer notificationRetentionDays)
+   {
+      this.notificationRetentionDays = notificationRetentionDays;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for notifyFailedJobs
+    *******************************************************************************/
+   public Boolean getNotifyFailedJobs()
+   {
+      return (this.notifyFailedJobs);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for notifyFailedJobs
+    *******************************************************************************/
+   public void setNotifyFailedJobs(Boolean notifyFailedJobs)
+   {
+      this.notifyFailedJobs = notifyFailedJobs;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for notifyFailedJobs: notify a user when a process they started fails or completes with errors (default true)
+    *******************************************************************************/
+   public AlertsQBitConfig withNotifyFailedJobs(Boolean notifyFailedJobs)
+   {
+      this.notifyFailedJobs = notifyFailedJobs;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for jobRunLinkPattern
+    *******************************************************************************/
+   public String getJobRunLinkPattern()
+   {
+      return (this.jobRunLinkPattern);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for jobRunLinkPattern
+    *******************************************************************************/
+   public void setJobRunLinkPattern(String jobRunLinkPattern)
+   {
+      this.jobRunLinkPattern = jobRunLinkPattern;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for jobRunLinkPattern: where a job notification links, with {processName} and {processUUID} (default: the process's table)
+    *******************************************************************************/
+   public AlertsQBitConfig withJobRunLinkPattern(String jobRunLinkPattern)
+   {
+      this.jobRunLinkPattern = jobRunLinkPattern;
+      return (this);
+   }
 }

@@ -29,14 +29,16 @@ import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.engine.MonitorEvaluator;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.MonitorStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.MuteEffect;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.NotificationStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Resolution;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ScopeType;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.SubscriberType;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
+import com.kingsrook.qbits.alerts.notifications.AlertsAudienceResolver;
+import com.kingsrook.qbits.alerts.notifications.NotificationService;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -66,6 +68,8 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
  *******************************************************************************/
 public final class AlertsActionSteps
 {
+   static final int AUDIENCE_SAMPLE = 10;
+
 
    /*******************************************************************************
     ** Steps only.
@@ -165,7 +169,11 @@ public final class AlertsActionSteps
        *******************************************************************************/
       private void review(AlertsAction action, QRecord record) throws QException
       {
-         if(action == AlertsAction.RUN_CHECK)
+         if(action == AlertsAction.PREVIEW_AUDIENCE || action == AlertsAction.SEND_NOTIFICATION)
+         {
+            extra.addAll(audienceLines(runtime().getNotifications().preview(record), action == AlertsAction.PREVIEW_AUDIENCE));
+         }
+         else if(action == AlertsAction.RUN_CHECK)
          {
             MonitorEvaluator.Plan plan = runtime().getEvaluator().preview(record.getValueInteger("id"));
             extra.addAll(planLines(plan, false));
@@ -311,7 +319,7 @@ public final class AlertsActionSteps
             {
                QRecord notification = runtime.getDeliveryWorker().sendTest(id, actor);
                String  status       = notification.getValueString("status");
-               if(!NotificationStatus.SENT.name().equals(status))
+               if(!DeliveryStatus.SENT.name().equals(status))
                {
                   extra.add(new ProcessSummaryLine(Status.ERROR, null, "The test did not send: " + Objects.toString(notification.getValueString("lastError"), status)));
                   yield (false);
@@ -320,6 +328,28 @@ public final class AlertsActionSteps
             }
             case RETRY_DELIVERY -> runtime.getDeliveryWorker().retry(List.of(id)) > 0;
             case CREATE_MONITOR -> createMonitor(record);
+            case PREVIEW_AUDIENCE ->
+            {
+               extra.addAll(audienceLines(runtime.getNotifications().preview(record), true));
+               yield (true);
+            }
+            case SEND_NOTIFICATION ->
+            {
+               NotificationService.SendResult result = runtime.getNotifications().send(id);
+               extra.add(new ProcessSummaryLine(Status.INFO, null, "\"" + record.getValueString("title") + "\" reached " + count(result.added(), "new recipient")
+                  + " (" + count(result.total(), "recipient") + " in all)."));
+               yield (true);
+            }
+            case SCHEDULE_NOTIFICATION ->
+            {
+               runtime.getNotifications().schedule(id);
+               yield (true);
+            }
+            case RETRACT_NOTIFICATION ->
+            {
+               runtime.getNotifications().retract(id);
+               yield (true);
+            }
          };
       }
    }
@@ -339,7 +369,10 @@ public final class AlertsActionSteps
          case REOPEN -> AlertsPossibleValues.Status.RESOLVED.name().equals(status) ? null : "Only resolved alerts can be reopened.";
          case ENABLE_MONITOR -> Boolean.TRUE.equals(record.getValueBoolean("enabled")) ? "Already enabled." : null;
          case DISABLE_MONITOR -> Boolean.FALSE.equals(record.getValueBoolean("enabled")) ? "Already disabled." : null;
-         case RETRY_DELIVERY -> List.of(NotificationStatus.FAILED.name(), NotificationStatus.DEAD.name()).contains(status) ? null : "Only failed or dead notifications can be retried.";
+         case RETRY_DELIVERY -> List.of(DeliveryStatus.FAILED.name(), DeliveryStatus.DEAD.name()).contains(status) ? null : "Only failed or dead notifications can be retried.";
+         case PREVIEW_AUDIENCE, SEND_NOTIFICATION -> NotificationService.STATUS_RETRACTED.equals(status) ? "Retracted notifications can't be sent." : null;
+         case SCHEDULE_NOTIFICATION -> NotificationService.STATUS_DRAFT.equals(status) ? null : "Only drafts can be scheduled.";
+         case RETRACT_NOTIFICATION -> NotificationService.STATUS_SENT.equals(status) || NotificationService.STATUS_SCHEDULED.equals(status) ? null : "Only sent or scheduled notifications can be retracted.";
          case SUBSCRIBE_TYPE -> alreadySubscribed(ScopeType.ALERT_TYPE, record.getValueString("name"));
          case SUBSCRIBE_GROUP -> alreadySubscribed(ScopeType.GROUP, record.getValueString("name"));
          case SUBSCRIBE_MONITOR -> alreadySubscribed(ScopeType.MONITOR, String.valueOf(record.getValue("id")));
@@ -473,6 +506,28 @@ public final class AlertsActionSteps
 
 
    /*******************************************************************************
+    ** Review lines for an audience: who it reaches, a sample, and warnings.
+    *******************************************************************************/
+   static List<ProcessSummaryLine> audienceLines(AlertsAudienceResolver.Resolved resolved, boolean preview)
+   {
+      List<ProcessSummaryLine> lines = new ArrayList<>();
+      int                      size  = resolved.userIds().size();
+      lines.add(new ProcessSummaryLine(size == 0 ? Status.WARNING : Status.INFO, null, (preview ? "Would reach " : "Will reach up to ") + count(size, "user") + "."));
+      if(size > 0)
+      {
+         List<String> sample = resolved.userIds().stream().limit(AUDIENCE_SAMPLE).map(userId -> resolved.labels().getOrDefault(userId, userId)).toList();
+         lines.add(new ProcessSummaryLine(Status.INFO, null, "For example: " + String.join(", ", sample) + (size > sample.size() ? ", and " + (size - sample.size()) + " more." : ".")));
+      }
+      for(String warning : resolved.warnings())
+      {
+         lines.add(new ProcessSummaryLine(Status.WARNING, null, warning));
+      }
+      return (lines);
+   }
+
+
+
+   /*******************************************************************************
     ** The action this process run is.
     *******************************************************************************/
    static AlertsAction action(RunBackendStepInput input) throws QException
@@ -509,6 +564,7 @@ public final class AlertsActionSteps
          case "alerts_group" -> "group";
          case "alerts_monitor" -> "monitor";
          case "alerts_channel" -> "channel";
+         case "alerts_delivery" -> "delivery";
          case "alerts_notification" -> "notification";
          default -> "record";
       };
@@ -537,6 +593,10 @@ public final class AlertsActionSteps
          case SEND_TEST -> "tested";
          case RETRY_DELIVERY -> "queued again";
          case CREATE_MONITOR -> "given a new (disabled) monitor";
+         case PREVIEW_AUDIENCE -> "previewed";
+         case SEND_NOTIFICATION -> "sent";
+         case SCHEDULE_NOTIFICATION -> "scheduled";
+         case RETRACT_NOTIFICATION -> "retracted";
       };
    }
 
