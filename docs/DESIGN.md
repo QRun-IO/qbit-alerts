@@ -8,3 +8,5 @@ Deviations from the design, and why:
 - **Heartbeats** are stored in an extra table, `alerts_heartbeat`.
 - **Claims** are leases, not atomic conditional updates (see README.md, Known limits).
 - **Email threading headers** wait for core messaging support.
+
+User notifications (announcements, job failures, shares, security notices, releases and marketing), the recipient model and the Next UI notification center are designed in [NOTIFICATIONS.md](NOTIFICATIONS.md), with the owner decisions of 2026-10-13.
