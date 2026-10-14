@@ -142,7 +142,7 @@ new AlertsQBitProducer()
 
 ## Starter defaults and setup
 
-After the schema, include the starter defaults. They are insert-only (a row is added only when its name is absent, so edits survive and nothing is ever updated), hold no secrets, and are guarded so a host without the tables skips them:
+After the schema, include the starter defaults. Include order: the schema first, then the defaults. They are insert-only (a row is added only when its name is absent, so edits survive and nothing is ever updated), hold no secrets, and are guarded so a host without the tables skips them:
 
 ```yaml
 - include: { file: db/liquibase/qbit-alerts/alerts-defaults.changelog.sql }

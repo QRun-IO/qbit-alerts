@@ -7,6 +7,7 @@
 --
 --   - include: { file: db/liquibase/qbit-alerts/alerts-defaults.changelog.sql }
 --
+-- Rollback is empty on purpose: a name-based delete would also remove rows the host already had.
 -- Rules for this file:
 --   * insert-only: every row is inserted only when its natural key (the name) is
 --     absent, so an administrator's edits always survive and nothing is updated;
@@ -28,7 +29,7 @@
 INSERT INTO alerts_channel (name, label, channel_type, enabled, detail_level, min_severity, rate_limit_per_hour, health_status, consecutive_failures, create_date, modify_date)
 SELECT 'in-app', 'In-App (Bell)', 'IN_APP', TRUE, 'FULL', 'INFO', 0, 'HEALTHY', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM alerts_channel WHERE name = 'in-app');
--- rollback DELETE FROM alerts_channel WHERE name = 'in-app';
+-- rollback empty
 
 -- changeset qbit-alerts:defaults-2
 -- preconditions onFail:MARK_RAN onError:MARK_RAN
@@ -37,7 +38,7 @@ WHERE NOT EXISTS (SELECT 1 FROM alerts_channel WHERE name = 'in-app');
 INSERT INTO alerts_channel (name, label, channel_type, enabled, detail_level, min_severity, rate_limit_per_hour, health_status, consecutive_failures, create_date, modify_date)
 SELECT 'email', 'Email (Personal Address)', 'EMAIL', TRUE, 'MINIMAL', 'INFO', 60, 'HEALTHY', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM alerts_channel WHERE name = 'email');
--- rollback DELETE FROM alerts_channel WHERE name = 'email';
+-- rollback empty
 
 -- changeset qbit-alerts:defaults-3
 -- preconditions onFail:MARK_RAN onError:MARK_RAN
@@ -46,7 +47,7 @@ WHERE NOT EXISTS (SELECT 1 FROM alerts_channel WHERE name = 'email');
 INSERT INTO alerts_group (name, label, create_date, modify_date)
 SELECT 'alerts', 'Alerts', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM alerts_group WHERE name = 'alerts');
--- rollback DELETE FROM alerts_group WHERE name = 'alerts';
+-- rollback empty
 
 -- changeset qbit-alerts:defaults-4
 -- preconditions onFail:MARK_RAN onError:MARK_RAN
@@ -55,4 +56,4 @@ WHERE NOT EXISTS (SELECT 1 FROM alerts_group WHERE name = 'alerts');
 INSERT INTO alerts_group (name, label, create_date, modify_date)
 SELECT 'other', 'Other', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM alerts_group WHERE name = 'other');
--- rollback DELETE FROM alerts_group WHERE name = 'other';
+-- rollback empty

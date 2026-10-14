@@ -100,6 +100,33 @@ class AlertsDefaultsChangelogTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** Rolling the seeds back (Liquibase also rolls back changesets it only marked
+    ** as ran) never deletes rows the host already had.
+    *******************************************************************************/
+   @Test
+   void rollbackKeepsHostOwnedRows() throws Exception
+   {
+      try(Connection connection = freshDatabase(true))
+      {
+         try(Statement statement = connection.createStatement())
+         {
+            statement.execute("INSERT INTO alerts_channel (name, label, channel_type) VALUES ('in-app', 'Mine', 'IN_APP')");
+            statement.execute("INSERT INTO alerts_group (name, label) VALUES ('other', 'Mine')");
+         }
+         connection.commit();
+         update(connection);
+         Database database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
+         new Liquibase(CHANGELOG, new ClassLoaderResourceAccessor(), database).rollback(4, "");
+         connection.commit();
+         assertThat(scalar(connection, "SELECT label FROM alerts_channel WHERE name = 'in-app'")).isEqualTo("Mine");
+         assertThat(scalar(connection, "SELECT label FROM alerts_group WHERE name = 'other'")).isEqualTo("Mine");
+         assertThat(scalar(connection, "SELECT COUNT(*) FROM alerts_channel")).isEqualTo("2");
+      }
+   }
+
+
+
+   /*******************************************************************************
     ** A host that has not created the tables yet skips every changeset (marked
     ** ran), rather than failing its deploy.
     *******************************************************************************/
