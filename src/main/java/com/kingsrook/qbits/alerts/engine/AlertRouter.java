@@ -22,9 +22,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import com.kingsrook.qbits.alerts.AlertAudienceResolver;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.engine.AlertsEngine.AlertTarget;
@@ -37,11 +40,13 @@ import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryKind;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EventType;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.MemberSource;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.MuteEffect;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ScopeType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.SubscriberType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.SuppressedReason;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
+import com.kingsrook.qbits.alerts.model.AlertsTeam;
 import com.kingsrook.qbits.alerts.model.AlertsTeamMember;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
@@ -297,7 +302,7 @@ public class AlertRouter
       Map<Integer, List<String>> groupNames = new HashMap<>();
       for(QRecord mute : mutes)
       {
-         if(scopeMatches(mute.getValueString("scopeType"), mute.getValueString("scopeValue"), null, target, groupNames))
+         if(scopeMatches(mute.getValueString("scopeType"), mute.getValueString("scopeValue"), mute.getValueString("scopeRecordId"), target, groupNames))
          {
             return (true);
          }
@@ -338,13 +343,10 @@ public class AlertRouter
             continue;
          }
 
-         List<String> userIds = new ArrayList<>();
+         Set<String> userIds = new LinkedHashSet<>();
          if(SubscriberType.TEAM.name().equals(subscriberType))
          {
-            for(QRecord member : AlertsDb.query(AlertsTeamMember.TABLE_NAME, AlertsDb.eq("teamId", subscription.getValue("teamId"))))
-            {
-               userIds.add(member.getValueString("userId"));
-            }
+            userIds.addAll(teamMembers(subscription.getValueInteger("teamId")));
          }
          else if(StringUtils.hasContent(subscription.getValueString("userId")))
          {
@@ -353,6 +355,10 @@ public class AlertRouter
 
          for(String userId : userIds)
          {
+            if(!StringUtils.hasContent(userId))
+            {
+               continue;
+            }
             QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
             for(QRecord channel : userChannels(subscription, preference))
             {
@@ -379,6 +385,61 @@ public class AlertRouter
          }
       }
       return (new ArrayList<>(destinations.values()));
+   }
+
+
+
+   /*******************************************************************************
+    ** Explicit members plus the team's optional host-managed source. Missing
+    ** or failed resolvers contribute nobody and leave an actionable log entry.
+    *******************************************************************************/
+   private Set<String> teamMembers(Integer teamId) throws QException
+   {
+      Set<String> userIds = new LinkedHashSet<>();
+      QRecord team = AlertsDb.byId(AlertsTeam.TABLE_NAME, teamId);
+      if(team == null)
+      {
+         return (userIds);
+      }
+      for(QRecord member : AlertsDb.query(AlertsTeamMember.TABLE_NAME, AlertsDb.eq("teamId", teamId).withLimit(Math.addExact(runtime.getConfig().getMaxAudienceSize(), 1))))
+      {
+         if(userIds.size() >= runtime.getConfig().getMaxAudienceSize())
+         {
+            LOG.warn("Team audience exceeds maxAudienceSize; extra members are not notified", logPair("teamId", teamId));
+            break;
+         }
+         userIds.add(member.getValueString("userId"));
+      }
+      String source = team.getValueString("memberSource");
+      if(MemberSource.ROLE.name().equals(source) || MemberSource.IDP_GROUP.name().equals(source))
+      {
+         AlertAudienceResolver resolver = runtime.getConfig().getAudienceResolver();
+         if(resolver == null)
+         {
+            LOG.warn("Team source resolves to nobody: no host audience resolver is configured", logPair("teamId", teamId), logPair("source", source));
+         }
+         else
+         {
+            try
+            {
+               Set<String> resolved = resolver.resolve(source, team.getValueString("memberSourceValue"));
+               if(resolved != null)
+               {
+                  if(resolved.size() > runtime.getConfig().getMaxAudienceSize()
+                     || resolved.stream().filter(userId -> !userIds.contains(userId)).count() > runtime.getConfig().getMaxAudienceSize() - userIds.size())
+                  {
+                     throw (new QException("Team audience exceeds maxAudienceSize"));
+                  }
+                  userIds.addAll(resolved);
+               }
+            }
+            catch(Exception e)
+            {
+               LOG.warn("Team source resolves to nobody: host audience resolver failed", logPair("teamId", teamId), logPair("source", source));
+            }
+         }
+      }
+      return (userIds);
    }
 
 
@@ -429,6 +490,7 @@ public class AlertRouter
       return switch(type)
       {
          case ALL -> true;
+         case ALERT -> scopeValue != null && scopeValue.equals(target.alertKey());
          case ALERT_TYPE -> scopeValue != null && scopeValue.equals(target.typeName());
          case MONITOR -> scopeValue != null && target.monitorId() != null && scopeValue.equals(String.valueOf(target.monitorId()));
          case TABLE -> scopeValue != null && (scopeValue.equals(target.subjectTableName()) || target.recordKeys().stream().anyMatch(key -> key.startsWith(scopeValue + ":")));

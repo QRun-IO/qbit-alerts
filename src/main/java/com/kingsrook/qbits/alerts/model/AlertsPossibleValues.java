@@ -132,7 +132,7 @@ public final class AlertsPossibleValues
     *******************************************************************************/
    public enum ScopeType
    {
-      ALL, GROUP, ALERT_TYPE, MONITOR, TABLE, RECORD, ATTRIBUTE
+      ALL, GROUP, ALERT_TYPE, MONITOR, TABLE, RECORD, ATTRIBUTE, ALERT
    }
 
 
