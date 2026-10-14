@@ -34,15 +34,16 @@ import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
 import com.kingsrook.qbits.alerts.notifications.NotificationEmailer;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
-import com.kingsrook.qbits.alerts.spi.NotificationSignal;
 import com.kingsrook.qbits.email.EmailQBitConfig;
 import com.kingsrook.qbits.email.EmailQBitProducer;
 import com.kingsrook.qbits.email.EmailRuntime;
 import com.kingsrook.qbits.email.metadata.EmailTables;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.QAlerts;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
@@ -286,9 +287,9 @@ class EmailQBitSendingTest extends BaseAlertsTest
       emailSettings("viewer-1", "JOB", "IMMEDIATE");
       emailSettings("viewer-2", "SECURITY", "IMMEDIATE");
       loginAs(ADMIN);
-      runtime.getNotifications().notify(new NotificationSignal("Export failed").withBody("Disk full").withSeverity(NotificationSeverity.WARNING)
+      QAlerts.notify(new NotificationSignal("Export failed").withBody("Disk full").withSeverity(NotificationSeverity.WARNING)
          .withCategory(NotificationCategory.JOB).withLink(AlertLink.toPath("/app/widget", "Widgets")).withAudience(NotificationAudience.users("viewer-1")));
-      runtime.getNotifications().notify(new NotificationSignal("New sign-in").withBody("Secret detail").withSeverity(NotificationSeverity.WARNING)
+      QAlerts.notify(new NotificationSignal("New sign-in").withBody("Secret detail").withSeverity(NotificationSeverity.WARNING)
          .withCategory(NotificationCategory.SECURITY).withAudience(NotificationAudience.users("viewer-2")));
 
       NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
@@ -323,7 +324,7 @@ class EmailQBitSendingTest extends BaseAlertsTest
    {
       emailSettings("viewer-1", "JOB", "IMMEDIATE");
       loginAs(ADMIN);
-      runtime.getNotifications().notify(new NotificationSignal("Export failed").withSeverity(NotificationSeverity.WARNING).withCategory(NotificationCategory.JOB)
+      QAlerts.notify(new NotificationSignal("Export failed").withSeverity(NotificationSeverity.WARNING).withCategory(NotificationCategory.JOB)
          .withAudience(NotificationAudience.users("viewer-1")));
       NotificationEmailer.Result refused = new NotificationEmailer(runtime).run();
       assertThat(refused.failed()).isEqualTo(1);
@@ -341,7 +342,7 @@ class EmailQBitSendingTest extends BaseAlertsTest
       addProvider();
       emailSettings("viewer-1", "JOB", "IMMEDIATE");
       loginAs(ADMIN);
-      runtime.getNotifications().notify(new NotificationSignal("Export failed").withSeverity(NotificationSeverity.WARNING).withCategory(NotificationCategory.JOB)
+      QAlerts.notify(new NotificationSignal("Export failed").withSeverity(NotificationSeverity.WARNING).withCategory(NotificationCategory.JOB)
          .withAudience(NotificationAudience.users("viewer-1")));
       runtime.asSystem(() -> AlertsDb.insert(EmailTables.SUPPRESSION, new QRecord().withValue("address", "viewer-1@example.com").withValue("scope", "ALL").withValue("reason", "HARD_BOUNCE")));
       NotificationEmailer.Result suppressed = new NotificationEmailer(runtime).run();
@@ -362,9 +363,9 @@ class EmailQBitSendingTest extends BaseAlertsTest
       clock.set(Instant.parse("2026-10-12T12:05:00Z"));
       emailSettings("viewer-1", "RELEASE", "DAILY_DIGEST");
       loginAs(ADMIN);
-      runtime.getNotifications().notify(new NotificationSignal("Version 2.5 is out").withBody("Dark mode").withCategory(NotificationCategory.RELEASE)
+      QAlerts.notify(new NotificationSignal("Version 2.5 is out").withBody("Dark mode").withCategory(NotificationCategory.RELEASE)
          .withAudience(NotificationAudience.user("viewer-1")));
-      runtime.getNotifications().notify(new NotificationSignal("Version 2.6 is out").withCategory(NotificationCategory.RELEASE).withAudience(NotificationAudience.user("viewer-1")));
+      QAlerts.notify(new NotificationSignal("Version 2.6 is out").withCategory(NotificationCategory.RELEASE).withAudience(NotificationAudience.user("viewer-1")));
 
       assertThat(new NotificationEmailer(runtime).run().digests()).isEqualTo(1);
       List<QRecord> messages = messages();

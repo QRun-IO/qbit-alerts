@@ -276,11 +276,10 @@ public class AlertsRuntime
 
 
    /*******************************************************************************
-    ** The runtime sink. Alert producers use core QAlerts; notification
-    ** producers keep calling sink().notify(spi.NotificationSignal) until RC.6.
-    ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
+    ** The runtime sink for adapter delegation and queue lifecycle management.
+    ** Producers use core QAlerts for both alerts and notifications.
     *******************************************************************************/
-   public QbitAlertsSink sink()
+   public QbitAlertsSink getSink()
    {
       return (this.sink);
    }

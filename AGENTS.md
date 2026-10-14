@@ -4,7 +4,7 @@ This file provides guidance to Codex when working with code in this repository.
 
 ## Project Overview
 
-**QBit Alerts**: QQQ QBit: alerts and manage-by-exception (monitors, alerts, subscriptions, channels and notifications as standard QQQ tables). Design: [QRun-IO/qqq#1090](https://github.com/QRun-IO/qqq/pull/1090). Phases P1 to P3 are implemented; see README.md for the remaining phases and the notification compatibility types in `spi/`.
+**QBit Alerts**: QQQ QBit: alerts and manage-by-exception (monitors, alerts, subscriptions, channels and notifications as standard QQQ tables). Design: [QRun-IO/qqq#1090](https://github.com/QRun-IO/qqq/pull/1090). Phases P1 to P3 are implemented; see README.md for the remaining phases and the core notification integration in `notifications/`.
 
 ## Build Commands
 
@@ -25,7 +25,7 @@ Packages:
 - `processes`: the record actions (`AlertsAction`, `AlertsActionSteps`) and the scheduled steps.
 - `home`: the Alerts home and `AlertSummaryLoader`.
 - `api`: the bell and record-panel routes.
-- `spi`: notification types and their AlertLink dependency retained for binary compatibility until core RC.6; alerts use core RC.5.
+- `notifications`: core RC.6 notification delivery, audience resolution and email; all producer types come from `com.kingsrook.qqq.backend.core.alerts`.
 
 ## Naming (owner rule)
 
@@ -44,7 +44,7 @@ Packages:
 ## Dependencies
 
 - Java 21.
-- Parent `com.kingsrook:qbit-build-parent:2.0.0` (qqq 4.0.0). The default-active `qqq-snapshot` profile imports `qqq-bom-pom:4.1.0-RC.5` ahead of it, as in qbit-quick-search (ADR-0007). Remove that activation when the parent moves to 4.1.
+- Parent `com.kingsrook:qbit-build-parent:2.1.0` (qqq 4.0.0), with architecture guardrails enforced and strict UI API route tests enabled. The default-active `qqq-snapshot` profile imports released `qqq-bom-pom:4.1.0-RC.6` ahead of it, as in qbit-quick-search (ADR-0007). Build normally without a version override. Remove that activation when the parent moves to 4.1.
 - Tests: JUnit 5, AssertJ.
 
 ## Release

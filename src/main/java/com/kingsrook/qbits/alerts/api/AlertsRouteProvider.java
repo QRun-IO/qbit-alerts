@@ -18,10 +18,10 @@ package com.kingsrook.qbits.alerts.api;
 
 
 import java.util.Map;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QBadRequestException;
+import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.utils.CollectionUtils;
@@ -30,32 +30,20 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
 import com.kingsrook.qqq.middleware.javalin.QJavalinMetaData;
 import com.kingsrook.qqq.middleware.javalin.QJavalinRouteProviderInterface;
 import com.kingsrook.qqq.middleware.javalin.QJavalinUtils;
-import com.kingsrook.qqq.middleware.javalin.executors.ExecutorSessionUtils;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 
 
 /*******************************************************************************
- ** Javalin routes under /qqq/v1/alerts for the Next UI bell and record panel:
- ** - GET  /inbox/summary   unread count, highest unread severity, latest 10,
- **   sticky banners
- ** - GET  /inbox           the notifications page (status, category,
- **   severity, offset, limit)
- ** - POST /inbox/read      {"id": n}, {"ids": [..]}, {"all": true} or {"alertId": n}
- ** - POST /inbox/unread    {"id": n} or {"ids": [..]}
- ** - POST /inbox/dismiss   {"id": n}, {"ids": [..]} or {"all": true}
- ** - GET  /record-panel?tableName=t&amp;recordId=id   the "Open alerts" panel
- ** - POST /record-panel/watch   {"tableName": t, "recordId": id}
- ** - POST /ingest/alertmanager  Alertmanager's webhook (bearer token; off
- **   unless alertmanagerIngestTokenSecretRef is configured)
- ** Each request gets a session from the instance's authentication module;
- ** AlertsApi checks alerts.view and works in that session. Errors map
- ** through QJavalinUtils.handleException (400, 401, 403, 404). POST bodies
- ** must be JSON.
+ ** Machine webhook routes. The UI routes are registered through AlertsUiApi.
  *******************************************************************************/
 public class AlertsRouteProvider implements QJavalinRouteProviderInterface
 {
+   private static final QLogger LOG = QLogger.getLogger(AlertsRouteProvider.class);
+
+   public static final String WEBHOOK_PATH = "/qqq/hooks/alerts/alertmanager";
+   public static final String LEGACY_SUNSET = "Tue, 13 Apr 2027 00:00:00 GMT";
    public static final String BASE_PATH = "/qqq/v1/alerts";
 
    static final int MAX_INGEST_BYTES = 1024 * 1024;
@@ -97,14 +85,17 @@ public class AlertsRouteProvider implements QJavalinRouteProviderInterface
    @Override
    public void acceptJavalinConfig(JavalinConfig config)
    {
-      config.routes.get(BASE_PATH + "/inbox/summary", context -> respond(context, false, (api, body) -> api.inboxSummary()));
-      config.routes.get(BASE_PATH + "/inbox", context -> respond(context, false, (api, body) -> api.inbox(queryParams(context))));
-      config.routes.post(BASE_PATH + "/inbox/read", context -> respond(context, true, AlertsApi::markRead));
-      config.routes.post(BASE_PATH + "/inbox/unread", context -> respond(context, true, AlertsApi::markUnread));
-      config.routes.post(BASE_PATH + "/inbox/dismiss", context -> respond(context, true, AlertsApi::dismiss));
-      config.routes.get(BASE_PATH + "/record-panel", context -> respond(context, false, (api, body) -> api.recordPanel(context.queryParam("tableName"), context.queryParam("recordId"))));
-      config.routes.post(BASE_PATH + "/record-panel/watch", context -> respond(context, true, AlertsApi::watchRecord));
-      config.routes.post(BASE_PATH + "/ingest/alertmanager", this::ingestAlertmanager);
+      config.routes.post(WEBHOOK_PATH, this::ingestAlertmanager);
+      if(Boolean.TRUE.equals(AlertsRuntime.find(qInstance).getConfig().getLegacyAlertmanagerPath()))
+      {
+         config.routes.post(BASE_PATH + "/ingest/alertmanager", context ->
+         {
+            context.header("Deprecation", "true");
+            context.header("Sunset", LEGACY_SUNSET);
+            LOG.warn("Deprecated Alertmanager webhook called; migrate to " + WEBHOOK_PATH);
+            ingestAlertmanager(context);
+         });
+      }
    }
 
 
@@ -139,43 +130,6 @@ public class AlertsRouteProvider implements QJavalinRouteProviderInterface
 
 
    /*******************************************************************************
-    ** Session, body, handler, JSON - or the error's status.
-    *******************************************************************************/
-   private void respond(Context context, boolean readsBody, Handler handler)
-   {
-      try
-      {
-         ExecutorSessionUtils.setupSession(context, qInstance);
-         Map<String, Object> body = readsBody ? readJsonBody(context) : Map.of();
-         Object              result = handler.handle(new AlertsApi(AlertsRuntime.get(qInstance)), body);
-         context.contentType(ContentType.APPLICATION_JSON);
-         context.result(JsonUtils.toJsonCustomized(result, builder -> builder.serializationInclusion(JsonInclude.Include.ALWAYS)));
-      }
-      catch(Exception e)
-      {
-         QJavalinUtils.handleException(null, context, e);
-      }
-      finally
-      {
-         QContext.clear();
-      }
-   }
-
-
-
-   /*******************************************************************************
-    ** The first value of each query parameter.
-    *******************************************************************************/
-   private static Map<String, String> queryParams(Context context)
-   {
-      Map<String, String> params = new java.util.HashMap<>();
-      context.queryParamMap().forEach((name, values) -> params.put(name, values == null || values.isEmpty() ? null : values.get(0)));
-      return (params);
-   }
-
-
-
-   /*******************************************************************************
     ** The JSON body (an object), or 400.
     *******************************************************************************/
    @SuppressWarnings("unchecked")
@@ -203,15 +157,4 @@ public class AlertsRouteProvider implements QJavalinRouteProviderInterface
 
 
 
-   /*******************************************************************************
-    ** One endpoint's work.
-    *******************************************************************************/
-   @FunctionalInterface
-   interface Handler
-   {
-      /***************************************************************************
-       **
-       ***************************************************************************/
-      Object handle(AlertsApi api, Map<String, Object> body) throws Exception;
-   }
 }

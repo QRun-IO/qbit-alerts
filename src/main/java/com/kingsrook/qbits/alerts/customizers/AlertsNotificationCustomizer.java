@@ -30,11 +30,11 @@ import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.notifications.NotificationService;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
 import com.kingsrook.qqq.backend.core.actions.customizers.AbstractPreInsertCustomizer;
 import com.kingsrook.qqq.backend.core.actions.customizers.TableCustomizerInterface;
 import com.kingsrook.qqq.backend.core.actions.tables.DeleteAction;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.tables.delete.DeleteInput;
@@ -212,7 +212,7 @@ public class AlertsNotificationCustomizer implements TableCustomizerInterface
       }
       if(record.getValues().containsKey("audienceType"))
       {
-         NotificationAudience audience = NotificationAudience.parse(record.getValueString("audienceType"), record.getValueString("audienceValue"));
+         NotificationAudience audience = NotificationService.audienceOf(record);
          if(audience == null)
          {
             record.addError(new BadInputStatusMessage("Choose who the notification is for."));
@@ -220,11 +220,11 @@ public class AlertsNotificationCustomizer implements TableCustomizerInterface
          else if(audience.getType() != NotificationAudience.Type.ALL_USERS && audience.getValues().isEmpty())
          {
             record.addError(new BadInputStatusMessage("List the " + switch(audience.getType())
-            {
-               case ROLES -> "roles or groups";
-               case PERMISSION -> "permission";
-               default -> "user ids";
-            } + " in Audience Members."));
+               {
+                  case ROLES -> "roles or groups";
+                  case PERMISSION -> "permission";
+                  default -> "user ids";
+               } + " in Audience Members."));
          }
       }
    }

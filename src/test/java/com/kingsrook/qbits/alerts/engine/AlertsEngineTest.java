@@ -340,11 +340,11 @@ class AlertsEngineTest extends BaseAlertsTest
    @Test
    void testSink() throws Exception
    {
-      runtime.sink().raise(signal("k1"));
-      runtime.sink().heartbeat("sink.beat", null);
-      runtime.sink().resolve(new AlertResolution(TYPE, "k1", "gone"));
-      runtime.sink().raise(null);
-      runtime.sink().resolve(null);
+      runtime.getSink().raise(signal("k1"));
+      runtime.getSink().heartbeat("sink.beat", null);
+      runtime.getSink().resolve(new AlertResolution(TYPE, "k1", "gone"));
+      runtime.getSink().raise(null);
+      runtime.getSink().resolve(null);
       List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
       assertThat(alerts).hasSize(1);
       assertThat(alerts.get(0).getValueString("status")).isEqualTo("RESOLVED");

@@ -201,7 +201,7 @@ class HomeAndApiTest extends BaseAlertsTest
 
    /*******************************************************************************
     ** The record panel: hidden with nothing to show; open alerts and recent
-    ** resolutions otherwise; "Watch alerts for this record".
+    ** resolutions otherwise; legacy watch rows and collaboration capability.
     *******************************************************************************/
    @Test
    void testRecordPanel() throws Exception
@@ -225,13 +225,18 @@ class HomeAndApiTest extends BaseAlertsTest
       assertThat(other.get("visible")).isEqualTo(true);
       assertThat(other.get("openCount")).isEqualTo(0);
 
-      assertThat(api.watchRecord(Map.of("tableName", WIDGET, "recordId", widgets.get(0))).get("created")).isEqualTo(true);
-      assertThat(api.watchRecord(Map.of("tableName", WIDGET, "recordId", widgets.get(0))).get("created")).isEqualTo(false);
+      assertThat(panel.get("follow")).isEqualTo(Map.of("available", false));
+      com.kingsrook.qqq.middleware.javalin.specs.extensions.MiddlewareSpecExtensionsMetaData.ofOrWithNew(qInstance)
+         .withExtension(new com.kingsrook.qqq.middleware.javalin.specs.extensions.MiddlewareSpecExtension().withName("collaboration").withSemanticVersion("1.0.0"));
+      assertThat(api.recordPanel(WIDGET, String.valueOf(widgets.get(0))).get("follow")).isEqualTo(Map.of("available", true));
+      runtime.asSystem(() -> AlertsDb.insert(AlertsSubscription.TABLE_NAME, new QRecord()
+         .withValue("subscriberType", "USER").withValue("userId", ADMIN).withValue("scopeType", "RECORD")
+         .withValue("scopeValue", WIDGET).withValue("scopeRecordId", String.valueOf(widgets.get(0)))
+         .withValue("enabled", true)));
       assertThat(api.recordPanel(WIDGET, String.valueOf(widgets.get(0))).get("watching")).isEqualTo(true);
       assertThat(all(AlertsSubscription.TABLE_NAME)).anyMatch(s -> "RECORD".equals(s.getValueString("scopeType")));
 
       assertThatThrownBy(() -> api.recordPanel("nope", "1")).isInstanceOf(QBadRequestException.class);
-      assertThatThrownBy(() -> api.watchRecord(Map.of())).isInstanceOf(QBadRequestException.class);
       loginAs(OUTSIDER);
       assertThatThrownBy(() -> api.recordPanel(WIDGET, "1")).isInstanceOf(QPermissionDeniedException.class);
    }
