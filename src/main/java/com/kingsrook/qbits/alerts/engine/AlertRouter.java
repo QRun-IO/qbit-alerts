@@ -148,7 +148,7 @@ public class AlertRouter
       try
       {
          deliver(alert, eventType, eventId, kind, destinations(AlertTarget.of(alert),
-            AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING), kind));
+            AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING), kind, alert.getValue("id")));
       }
       catch(Exception e)
       {
@@ -164,7 +164,7 @@ public class AlertRouter
    public int remind(QRecord alert) throws QException
    {
       return (deliver(alert, null, null, DeliveryKind.REMINDER, destinations(AlertTarget.of(alert),
-         AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING), DeliveryKind.REMINDER)));
+         AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING), DeliveryKind.REMINDER, alert.getValue("id"))));
    }
 
 
@@ -415,20 +415,32 @@ public class AlertRouter
     ** Every destination for an alert: subscribed users (directly or through a
     ** team) with their in-app and email channels (or the subscription's
     ** chosen channels), subscribed channels, and readable record followers.
+    ** An alert that no subscription matches (at WARNING or above) goes to the
+    ** members of its group's owner team, so an unowned problem is not silent.
     *******************************************************************************/
-   List<Destination> destinations(AlertTarget target, AlertSeverity severity, DeliveryKind kind) throws QException
+   List<Destination> destinations(AlertTarget target, AlertSeverity severity, DeliveryKind kind, Object alertId) throws QException
    {
       Map<Integer, List<String>> groupNames   = new HashMap<>();
       Map<String, Destination>   destinations = new LinkedHashMap<>();
+      boolean                    subscribed   = false;
       for(QRecord subscription : AlertsDb.query(AlertsSubscription.TABLE_NAME, AlertsDb.eq("enabled", true)))
       {
          AlertSeverity min = AlertSeverity.fromLabel(subscription.getValueString("minSeverity"), AlertSeverity.WARNING);
-         if(!severity.isAtLeast(min) || !includesKind(subscription.getValueString("events"), kind)
+         if(!severity.isAtLeast(min)
             || !scopeMatches(subscription.getValueString("scopeType"), subscription.getValueString("scopeValue"), subscription.getValueString("scopeRecordId"), target, groupNames))
          {
             continue;
          }
 
+         //////////////////////////////////////////////////////////////////////////////
+         // covered by scope and severity alone: a subscription that leaves out an   //
+         // event kind (events=RAISED) still means someone owns this alert           //
+         //////////////////////////////////////////////////////////////////////////////
+         subscribed = true;
+         if(!includesKind(subscription.getValueString("events"), kind))
+         {
+            continue;
+         }
          Integer subscriptionId = subscription.getValueInteger("id");
          String  minName        = subscription.getValueString("minSeverity");
          String  subscriberType = subscription.getValueString("subscriberType");
@@ -465,6 +477,10 @@ public class AlertRouter
             }
          }
       }
+      if(!subscribed && severity.isAtLeast(AlertSeverity.WARNING))
+      {
+         addOwnerTeam(destinations, target, kind, alertId);
+      }
       for(String recordKey : kind == DeliveryKind.REMINDER ? java.util.Set.<String>of() : target.recordKeys())
       {
          String[] parts = recordKey.split(":", 2);
@@ -484,6 +500,79 @@ public class AlertRouter
          }
       }
       return (new ArrayList<>(destinations.values()));
+   }
+
+
+
+   /*******************************************************************************
+    ** The fallback for an alert nobody subscribed to: the members of the owner
+    ** team of its group (or of the nearest parent group that has one), through
+    ** their normal channels and the usual suppression checks.
+    *******************************************************************************/
+   private void addOwnerTeam(Map<String, Destination> destinations, AlertTarget target, DeliveryKind kind, Object alertId) throws QException
+   {
+      Integer teamId = ownerTeamId(target.groupId());
+      if(teamId == null)
+      {
+         return;
+      }
+      for(String userId : teamMembers(teamId))
+      {
+         if(!StringUtils.hasContent(userId))
+         {
+            continue;
+         }
+         if((kind == DeliveryKind.RESOLVED || kind == DeliveryKind.REMINDER) && !wasToldOfRaise(alertId, userId))
+         {
+            ///////////////////////////////////////////////////////////////////////////
+            // a follow-up only goes to owners who were told about the alert itself //
+            ///////////////////////////////////////////////////////////////////////////
+            continue;
+         }
+         QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
+         for(QRecord channel : userChannels(null, preference))
+         {
+            destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, null, null, preference, "IMMEDIATE"));
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether the user was sent (not suppressed) the RAISED notice for this alert.
+    *******************************************************************************/
+   private boolean wasToldOfRaise(Object alertId, String userId) throws QException
+   {
+      return (alertId != null && AlertsDb.count(AlertsDelivery.TABLE_NAME, AlertsDb.eq("alertId", (java.io.Serializable) alertId)
+         .withCriteria("recipientUserId", QCriteriaOperator.EQUALS, userId).withCriteria("kind", QCriteriaOperator.EQUALS, DeliveryKind.RAISED.name())
+         .withCriteria("status", QCriteriaOperator.NOT_EQUALS, DeliveryStatus.SUPPRESSED.name())) > 0);
+   }
+
+
+
+   /*******************************************************************************
+    ** The owner team of a group, or of the nearest parent that has one (null:
+    ** none).
+    *******************************************************************************/
+   Integer ownerTeamId(Integer groupId) throws QException
+   {
+      Integer current = groupId;
+      int     depth   = 0;
+      while(current != null && depth++ < 10)
+      {
+         QRecord group = AlertsDb.byId(AlertsGroup.TABLE_NAME, current);
+         if(group == null)
+         {
+            return (null);
+         }
+         if(group.getValueInteger("ownerTeamId") != null)
+         {
+            return (group.getValueInteger("ownerTeamId"));
+         }
+         current = group.getValueInteger("parentGroupId");
+      }
+      return (null);
    }
 
 
@@ -545,7 +634,9 @@ public class AlertRouter
 
    /*******************************************************************************
     ** A user's channels for a subscription: the ones it names, else in-app
-    ** (unless turned off) and email (when enabled in their settings).
+    ** (unless turned off) plus the user's own default channels (My Alert
+    ** Settings) in place of the built-in email, else in-app and email (when
+    ** enabled in their settings).
     *******************************************************************************/
    private List<QRecord> userChannels(QRecord subscription, QRecord preference) throws QException
    {
@@ -553,18 +644,32 @@ public class AlertRouter
       String        overrides = subscription == null ? null : subscription.getValueString("channelOverrideIds");
       if(StringUtils.hasContent(overrides))
       {
-         for(String id : overrides.split("[,\\s]+"))
+         return (channelsById(overrides));
+      }
+
+      boolean inApp = preference == null || !Boolean.FALSE.equals(preference.getValueBoolean("inAppEnabled"));
+      String  defaults = preference == null ? null : preference.getValueString("defaultChannelIds");
+      if(StringUtils.hasContent(defaults))
+      {
+         List<QRecord> chosen = channelsById(defaults);
+         if(!chosen.isEmpty())
          {
-            if(!id.isBlank())
+            /////////////////////////////////////////////////////////////////////////
+            // the bell stays (unless turned off); the list replaces external ones //
+            /////////////////////////////////////////////////////////////////////////
+            if(inApp)
             {
-               QRecord channel = AlertsDb.byId(AlertsChannel.TABLE_NAME, Integer.valueOf(id.trim()));
-               if(channel != null)
+               channels.add(runtime.getChannels().defaultChannel(ChannelType.IN_APP));
+            }
+            for(QRecord channel : chosen)
+            {
+               if(!ChannelType.IN_APP.name().equals(channel.getValueString("channelType")))
                {
                   channels.add(channel);
                }
             }
+            return (channels);
          }
-         return (channels);
       }
 
       if(preference == null || !Boolean.FALSE.equals(preference.getValueBoolean("inAppEnabled")))
@@ -574,6 +679,37 @@ public class AlertRouter
       if(preference != null && Boolean.TRUE.equals(preference.getValueBoolean("emailEnabled")) && StringUtils.hasContent(preference.getValueString("emailAddress")))
       {
          channels.add(runtime.getChannels().defaultChannel(ChannelType.EMAIL));
+      }
+      return (channels);
+   }
+
+
+
+   /*******************************************************************************
+    ** The channel rows for a list of ids ("3, 5"); ids that are not numbers or
+    ** no longer exist are skipped.
+    *******************************************************************************/
+   private List<QRecord> channelsById(String ids) throws QException
+   {
+      List<QRecord> channels = new ArrayList<>();
+      for(String id : ids.split("[,\\s]+"))
+      {
+         if(id.isBlank())
+         {
+            continue;
+         }
+         try
+         {
+            QRecord channel = AlertsDb.byId(AlertsChannel.TABLE_NAME, Integer.valueOf(id.trim()));
+            if(channel != null)
+            {
+               channels.add(channel);
+            }
+         }
+         catch(NumberFormatException e)
+         {
+            LOG.debug("Ignoring a channel id that is not a number", logPair("id", id));
+         }
       }
       return (channels);
    }

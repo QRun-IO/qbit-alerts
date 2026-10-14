@@ -515,6 +515,12 @@ ALTER TABLE alerts_notification_recipient ADD COLUMN slack_message_id VARCHAR(10
 CREATE INDEX ix_alerts_notification_recipient_slack_status ON alerts_notification_recipient (slack_status);
 
 -- changeset qbit-alerts:29
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM information_schema.columns WHERE LOWER(table_name) = 'alerts_notification_preference' AND LOWER(column_name) = 'in_app_min_severity'
+-- comment: Optional minimum severity for in-app notifications (security always arrives).
+ALTER TABLE alerts_notification_preference ADD COLUMN in_app_min_severity VARCHAR(16);
+
+-- changeset qbit-alerts:30
 -- comment: Indexes for the join child columns: a per-record monitor finds its open alerts by (monitor_id, status) on every evaluation (MonitorEvaluator), and the record pages list a type's monitors (alert_type_id) and a group's types (group_id).
 CREATE INDEX IF NOT EXISTS ix_alerts_alert_monitor_id_status ON alerts_alert (monitor_id, status);
 CREATE INDEX IF NOT EXISTS ix_alerts_monitor_alert_type_id ON alerts_monitor (alert_type_id);

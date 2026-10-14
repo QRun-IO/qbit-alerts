@@ -80,6 +80,7 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
  *******************************************************************************/
 public final class AlertsHome
 {
+   public static final String KIND_SETUP     = "setup";
    public static final String KIND_SEVERITY  = "severity";
    public static final String KIND_MINE      = "mine";
    public static final String KIND_ACTION    = "needsAction";
@@ -121,6 +122,7 @@ public final class AlertsHome
       Instant now = runtime.now();
       return switch(kind == null ? "" : kind)
       {
+         case KIND_SETUP -> setup(runtime, now);
          case KIND_SEVERITY -> severity(runtime, now);
          case KIND_MINE -> mine(now);
          case KIND_ACTION -> needsAction(now);
@@ -132,6 +134,34 @@ public final class AlertsHome
          case KIND_RESOLVED -> resolved(now);
          default -> new RawHTML(null, HomeHtml.emptyState("Unknown Alerts widget."));
       };
+   }
+
+
+
+   /*******************************************************************************
+    ** Setup (alerts admins): each configuration table, whether it is set up, and
+    ** the next step, linked to its table.
+    *******************************************************************************/
+   static QWidgetData setup(AlertsRuntime runtime, Instant now) throws QException
+   {
+      List<AlertsSetupStatus.Item> items = AlertsSetupStatus.load(runtime, now);
+      long                         todo  = items.stream().filter(item -> item.state() == AlertsSetupStatus.State.TODO).count();
+      StringBuilder                html  = new StringBuilder(HomeHtml.note(todo == 0 ? "Everything Alerts needs is set up." : HomeHtml.plural(todo, "item") + (todo == 1 ? " needs" : " need") + " attention."));
+      for(AlertsSetupStatus.Item item : items)
+      {
+         String badge = switch(item.state())
+         {
+            case OK -> HomeHtml.badge("Set up", HomeHtml.OK_COLOR);
+            case TODO -> HomeHtml.badge("Needs setup", HomeHtml.BAD_COLOR);
+            case DEFAULT -> HomeHtml.badge("Using defaults", HomeHtml.WARN_COLOR);
+            case OPTIONAL -> HomeHtml.badge("Optional", HomeHtml.OFF_COLOR);
+         };
+         String label = item.tableName() == null ? HomeHtml.escape(item.label()) : HomeHtml.link("/app/" + item.tableName(), item.label());
+         html.append("<div style=\"padding:8px 0;border-top:1px solid rgba(127,127,127,.2)\">")
+            .append(HomeHtml.card("<strong>" + label + "</strong> " + badge, HomeHtml.escape(item.detail()), item.nextStep() == null ? null : "Next: " + HomeHtml.escape(item.nextStep())))
+            .append("</div>");
+      }
+      return (new RawHTML(null, html.toString()));
    }
 
 
@@ -749,6 +779,6 @@ public final class AlertsHome
     *******************************************************************************/
    static Set<String> kinds()
    {
-      return (Set.of(KIND_SEVERITY, KIND_MINE, KIND_ACTION, KIND_BY_GROUP, KIND_TREND, KIND_NOISY, KIND_DELIVERY, KIND_RESOLVED));
+      return (Set.of(KIND_SETUP, KIND_SEVERITY, KIND_MINE, KIND_ACTION, KIND_BY_GROUP, KIND_TREND, KIND_NOISY, KIND_DELIVERY, KIND_RESOLVED));
    }
 }

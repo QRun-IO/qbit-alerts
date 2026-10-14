@@ -33,11 +33,12 @@ import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitComponentMetaData
 
 /*******************************************************************************
  ** The Alerts home dashboard (design section 6.2), in page order, all full
- ** width: open by severity, my alerts, needs action, by group, trend, noisy
+ ** width: setup (admins), open by severity, my alerts, needs action, by group, trend, noisy
  ** types, delivery health (admins) and recently resolved.
  *******************************************************************************/
 public class AlertsHomeWidgetsMetaDataProducer extends QBitComponentMetaDataProducer<MetaDataProducerMultiOutput, AlertsQBitConfig>
 {
+   public static final String SETUP    = "alertsHomeSetup";
    public static final String SEVERITY = "alertsHomeOpenBySeverity";
    public static final String MINE     = "alertsHomeMyAlerts";
    public static final String ACTION   = "alertsHomeNeedsAction";
@@ -55,7 +56,7 @@ public class AlertsHomeWidgetsMetaDataProducer extends QBitComponentMetaDataProd
     *******************************************************************************/
    public static List<String> homeWidgetNames()
    {
-      return (List.of(SEVERITY, MINE, ACTION, BY_GROUP, TREND, NOISY, DELIVERY, NOTICES, RESOLVED));
+      return (List.of(SETUP, SEVERITY, MINE, ACTION, BY_GROUP, TREND, NOISY, DELIVERY, NOTICES, RESOLVED));
    }
 
 
@@ -70,6 +71,7 @@ public class AlertsHomeWidgetsMetaDataProducer extends QBitComponentMetaDataProd
       String table = WidgetType.TABLE.getType();
 
       MetaDataProducerMultiOutput output = new MetaDataProducerMultiOutput();
+      output.add(widget(SETUP, "Setup", html, AlertsHome.KIND_SETUP, AlertsQBitConfig.PERMISSION_ADMIN));
       output.add(widget(SEVERITY, "Open Alerts", html, AlertsHome.KIND_SEVERITY, AlertsQBitConfig.PERMISSION_VIEW));
       output.add(widget(MINE, "My Alerts", table, AlertsHome.KIND_MINE, AlertsQBitConfig.PERMISSION_VIEW));
       output.add(widget(ACTION, "Needs Action", table, AlertsHome.KIND_ACTION, AlertsQBitConfig.PERMISSION_VIEW));
