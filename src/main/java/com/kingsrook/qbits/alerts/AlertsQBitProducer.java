@@ -24,6 +24,7 @@ import com.kingsrook.qbits.alerts.engine.AlertsProcessListener;
 import com.kingsrook.qbits.alerts.engine.AlertsSinkAdapter;
 import com.kingsrook.qbits.alerts.engine.MonitorEvaluator;
 import com.kingsrook.qbits.alerts.engine.QbitAlertsSink;
+import com.kingsrook.qbits.alerts.metadata.AlertsHelp;
 import com.kingsrook.qbits.alerts.metadata.AlertsTableMetaDataHelper;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
@@ -173,6 +174,7 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
 
       MetaDataProducerMultiOutput output = QBitMetaDataProducer.super.produce(qInstance);
       output.addSelfToInstance(qInstance);
+      AlertsHelp.apply(qInstance);
       return (new MetaDataProducerMultiOutput());
    }
 

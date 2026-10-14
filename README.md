@@ -140,6 +140,20 @@ new AlertsQBitProducer()
 
 4. **Optional: ESB and Quick Search.** `AlertsIntegrations` names the main tables and searchable fields for the host's ESB and Quick Search configuration.
 
+## Starter defaults and setup
+
+After the schema, include the starter defaults. They are insert-only (a row is added only when its name is absent, so edits survive and nothing is ever updated), hold no secrets, and are guarded so a host without the tables skips them:
+
+```yaml
+- include: { file: db/liquibase/qbit-alerts/alerts-defaults.changelog.sql }
+```
+
+They create the `in-app` and `email` channels and the `alerts` and `other` groups, exactly the rows the runtime would otherwise create on first use. Everything else starts empty for a reason the table's own help gives: alert types and default monitors are declared in code by the installed qbits and synced on the first visit; teams, escalation policies and subscriptions name your people; the rest is runtime data and user content.
+
+Every table has help that says what it is for and **how its rows get created**, shown on the table screen and when it is empty (`help/qbit-alerts.yaml`). Alerts admins also get a **Setup** card first on the home that lists each configuration table, whether it is set up, and the next step.
+
+Routing details worth knowing: an alert that no subscription matches goes to the owner team of its group (or the nearest parent group that has one), at WARNING and above; a person's **Default Channels** (My Alert Settings) are used for subscriptions that name no channels.
+
 ## Raising alerts
 
 Use the producer SPI from `com.kingsrook.qqq.backend.core.alerts`, released in QQQ 4.1.0-RC.5 ([QRun-IO/qqq#1108](https://github.com/QRun-IO/qqq/pull/1108)). `AlertsQBitProducer` registers the qbit's sink through core's `AlertsInstanceMetaData`, so host producers need only core:
