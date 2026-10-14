@@ -427,3 +427,7 @@ CREATE TABLE IF NOT EXISTS alerts_notification_preference (
    CONSTRAINT pk_alerts_notification_preference PRIMARY KEY (id),
    CONSTRAINT uq_alerts_notification_preference UNIQUE (user_id, category)
 );
+
+-- changeset qbit-alerts:21
+-- comment: Optional minimum severity for in-app notifications (security always arrives).
+ALTER TABLE alerts_notification_preference ADD COLUMN in_app_min_severity VARCHAR(16);

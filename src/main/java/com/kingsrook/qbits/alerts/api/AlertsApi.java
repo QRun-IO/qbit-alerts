@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsPreferences;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
+import com.kingsrook.qbits.alerts.AlertsQBitProducer;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.delivery.AlertMessageRenderer;
@@ -158,6 +159,7 @@ public class AlertsApi
       result.put("items", latest);
       result.put("banners", banners);
       result.put("notificationsHref", NOTIFICATIONS_HREF);
+      result.put("preferencesSection", AlertsQBitProducer.preferencesSectionName(QContext.getQInstance()));
       result.put("alertsHref", "/app/" + AlertsQBitConfig.APP_NAME);
       result.put("pollSeconds", POLL_SECONDS);
       return (result);

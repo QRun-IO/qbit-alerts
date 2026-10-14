@@ -449,7 +449,7 @@ public final class AlertsTableMetaDataHelper
          .withUniqueKey(new UniqueKey("userId", "category"))
          .withRecordSecurityLock(AlertsSecurity.ownerLock("userId"))
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
-         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "category", "inAppMuted", "emailMode", "emailMinSeverity")))
+         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "category", "inAppMuted", "inAppMinSeverity", "emailMode", "emailMinSeverity")))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("userId", "createDate", "modifyDate")));
       table.getField("category").setDefaultValue(NotificationCategory.SYSTEM.name());
       table.getField("inAppMuted").setDefaultValue(false);

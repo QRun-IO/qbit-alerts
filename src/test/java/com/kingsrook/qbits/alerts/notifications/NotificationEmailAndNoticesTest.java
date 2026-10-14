@@ -18,12 +18,15 @@
 package com.kingsrook.qbits.alerts.notifications;
 
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import com.kingsrook.qbits.alerts.AlertsPreferences;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.BaseAlertsTest;
+import com.kingsrook.qbits.alerts.api.AlertsApi;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
@@ -34,10 +37,12 @@ import com.kingsrook.qbits.alerts.spi.NotificationAudience;
 import com.kingsrook.qbits.alerts.spi.NotificationCategory;
 import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qbits.alerts.spi.NotificationSignal;
+import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.Content;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.SendMessageInput;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.SendMessageOutput;
+import com.kingsrook.qqq.backend.core.model.actions.tables.insert.InsertInput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.metadata.messaging.QMessagingProviderMetaData;
 import com.kingsrook.qqq.backend.core.modules.messaging.MessagingProviderInterface;
@@ -216,5 +221,81 @@ class NotificationEmailAndNoticesTest extends BaseAlertsTest
       new NotificationEmailer(runtime).run();
       assertThat(SENT).hasSize(4);
       assertThat(SENT).noneMatch(message -> text(message).contains("change your password"));
+   }
+
+
+
+   /*******************************************************************************
+    ** Pauses defer immediate and digest mail past a day without hiding the inbox;
+    ** SECURITY still sends in both email modes.
+    *******************************************************************************/
+   @Test
+   void testPausedEmail() throws Exception
+   {
+      emailSettings("viewer-1", "JOB", "IMMEDIATE", "INFO");
+      emailSettings("viewer-1", "SECURITY", "IMMEDIATE", "INFO");
+      emailSettings("viewer-2", "JOB", "DAILY_DIGEST", "INFO");
+      emailSettings("viewer-2", "SECURITY", "DAILY_DIGEST", "INFO");
+      runtime.asSystem(() ->
+      {
+         for(QRecord setting : all(AlertsUserPreference.TABLE_NAME))
+         {
+            AlertsDb.update(AlertsUserPreference.TABLE_NAME, new QRecord().withValue("id", setting.getValue("id"))
+               .withValue("pausedUntil", clock.instant().plus(Duration.ofDays(2))));
+         }
+         return (null);
+      });
+      for(NotificationCategory category : List.of(NotificationCategory.JOB, NotificationCategory.SECURITY))
+      {
+         runtime.getNotifications().notify(new NotificationSignal(category.name()).withCategory(category).withAudience(NotificationAudience.users("viewer-1", "viewer-2")));
+      }
+      NotificationEmailer.Result paused = new NotificationEmailer(runtime).run();
+      assertThat(paused.sent()).isEqualTo(1);
+      assertThat(paused.digests()).isEqualTo(1);
+      assertThat(paused.skipped()).isEqualTo(2);
+      assertThat(SENT).hasSize(2).allSatisfy(message -> assertThat(text(message)).contains("SECURITY").doesNotContain("JOB"));
+      assertThat(all(AlertsNotificationRecipient.TABLE_NAME)).filteredOn(row -> row.getValueInstant("emailedAt") == null).hasSize(2)
+         .allSatisfy(row -> assertThat(row.getValueString("emailStatus")).isEqualTo("NONE"));
+      assertThat(new AlertsApi(runtime).inboxSummary()).containsEntry("unreadCount", 2);
+      clock.advance(Duration.ofDays(2));
+      NotificationEmailer.Result resumed = new NotificationEmailer(runtime).run();
+      assertThat(resumed.sent()).isEqualTo(1);
+      assertThat(resumed.digests()).isEqualTo(1);
+      assertThat(SENT).hasSize(4);
+      assertThat(all(AlertsNotificationRecipient.TABLE_NAME)).allSatisfy(row -> assertThat(row.getValueInstant("emailedAt")).isNotNull());
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+   }
+
+
+
+   /*******************************************************************************
+    ** A full scan page of paused recipients cannot starve a later security notice.
+    *******************************************************************************/
+   @Test
+   void testPausedBacklogDoesNotBlockSecurity() throws Exception
+   {
+      emailSettings(VIEWER, "JOB", "IMMEDIATE", "INFO");
+      emailSettings(VIEWER, "SECURITY", "IMMEDIATE", "INFO");
+      runtime.asSystem(() ->
+      {
+         QRecord settings = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", VIEWER));
+         AlertsDb.update(AlertsUserPreference.TABLE_NAME, new QRecord().withValue("id", settings.getValue("id"))
+            .withValue("pausedUntil", clock.instant().plusSeconds(3600)));
+         List<QRecord> notifications = new ArrayList<>();
+         for(int i = 0; i < NotificationEmailer.SCAN; i++)
+         {
+            notifications.add(new QRecord().withValue("title", "Paused job " + i).withValue("category", "JOB").withValue("status", "SENT"));
+         }
+         notifications = InsertAction.executeForRecords(
+            new InsertInput(AlertsNotification.TABLE_NAME).withRecords(notifications));
+         List<QRecord> recipients = notifications.stream().map(notification -> new QRecord().withValue("notificationId", notification.getValue("id"))
+            .withValue("userId", VIEWER).withValue("deliveredAt", clock.instant())).toList();
+         InsertAction.executeForRecords(
+            new InsertInput(AlertsNotificationRecipient.TABLE_NAME).withRecords(recipients));
+         return (null);
+      });
+      runtime.getNotifications().notify(new NotificationSignal("Security after backlog").withCategory(NotificationCategory.SECURITY).withAudience(NotificationAudience.user(VIEWER)));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isEqualTo(1);
+      assertThat(SENT).singleElement().satisfies(message -> assertThat(message.getSubject()).isEqualTo("Security after backlog"));
    }
 }

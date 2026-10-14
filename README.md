@@ -42,7 +42,8 @@ The qbit also carries ordinary notifications for people (design: [docs/NOTIFICAT
 - **Email** is opt-in per user and category (IMMEDIATE, or DAILY_DIGEST at the digest hour in My Alert Settings), through the configured messaging provider; without one it is off. ALERT notifications are not emailed here (alert subscriptions already do), and SECURITY emails carry only the title and link.
 - **Failed and partial jobs** notify the person who started them (`notifyFailedJobs`, `jobRunLinkPattern`).
 - **Links** must be app paths with one leading slash, or https URLs; backslashes, whitespace and control characters are refused.
-- **People** see them in the Next UI bell and notifications page, and choose per-category settings in My Notification Settings (security notices can't be muted).
+- **Preferences:** the Notifications section combines pause, digest time and zone, alert switches, per-category in-app/email settings, and the user's own subscriptions. It uses existing tables and FIELD audits; SECURITY cannot be muted in-app. Requires core's user-preferences contract (currently the local `4.1.0-PREFS-SNAPSHOT`); disable with `withPreferencesSectionEnabled(false)`. See [Notification settings in Preferences](docs/NOTIFICATIONS.md#34-notification-settings-in-preferences).
+- **People** see them in the Next UI bell and notifications page, and choose settings in Preferences > Notifications or the standard My Notification Settings table (security notices can't be muted).
 
 Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions include their own recipient rows and settings.
 
@@ -99,7 +100,7 @@ Once the RC ships, producers call `QAlerts.raise(...)` from core and need no dep
 
 | Method | Path | What |
 |---|---|---|
-| GET | `/qqq/v1/alerts/inbox/summary` | Unread count, highest unread severity, the latest 10 notifications and sticky banners (the bell) |
+| GET | `/qqq/v1/alerts/inbox/summary` | Unread count, highest unread severity, the latest 10 notifications and sticky banners (the bell), plus `preferencesSection` (`"notifications"` when registered, otherwise null; see [API contract](docs/NOTIFICATIONS.md#81-api-qqqv1alerts-session-authenticated-alertsview)) |
 | GET | `/qqq/v1/alerts/inbox` | The notifications page: `status` (all, unread), `category`, `severity`, `offset`, `limit` |
 | POST | `/qqq/v1/alerts/inbox/read` | `{"id": n}`, `{"ids": [..]}`, `{"all": true}`, or `{"alertId": n}` |
 | POST | `/qqq/v1/alerts/inbox/unread` | `{"id": n}` or `{"ids": [..]}` |

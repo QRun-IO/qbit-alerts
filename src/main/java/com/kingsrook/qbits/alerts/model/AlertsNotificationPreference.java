@@ -46,6 +46,9 @@ public class AlertsNotificationPreference extends QRecordEntity
    @QField(label = "Muted In-App")
    private Boolean inAppMuted;
 
+   @QField(maxLength = 16, possibleValueSourceName = "alerts_notification_severity", label = "In-App From Severity")
+   private String inAppMinSeverity;
+
    @QField(maxLength = 16, possibleValueSourceName = "alerts_email_mode", label = "Email")
    private String emailMode;
 
@@ -297,6 +300,34 @@ public class AlertsNotificationPreference extends QRecordEntity
    public AlertsNotificationPreference withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** getInAppMinSeverity
+    *******************************************************************************/
+   public String getInAppMinSeverity()
+   {
+      return (this.inAppMinSeverity);
+   }
+
+
+   /*******************************************************************************
+    ** setInAppMinSeverity
+    *******************************************************************************/
+   public void setInAppMinSeverity(String inAppMinSeverity)
+   {
+      this.inAppMinSeverity = inAppMinSeverity;
+   }
+
+
+   /*******************************************************************************
+    ** withInAppMinSeverity
+    *******************************************************************************/
+   public AlertsNotificationPreference withInAppMinSeverity(String inAppMinSeverity)
+   {
+      this.inAppMinSeverity = inAppMinSeverity;
       return (this);
    }
 }

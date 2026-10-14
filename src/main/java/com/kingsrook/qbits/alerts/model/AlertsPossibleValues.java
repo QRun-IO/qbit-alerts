@@ -312,7 +312,7 @@ public final class AlertsPossibleValues
       List<QPossibleValue<?>> possibleValues = new ArrayList<>();
       for(Enum<?> value : values)
       {
-         possibleValues.add(new QPossibleValue<>(value.name(), label(value.name())));
+         possibleValues.add(new QPossibleValue<>(value.name(), value == EmailMode.DAILY_DIGEST ? "Daily digest" : label(value.name())));
       }
       return (new QPossibleValueSource()
          .withName(name)

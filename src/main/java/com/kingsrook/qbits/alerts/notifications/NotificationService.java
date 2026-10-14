@@ -170,7 +170,7 @@ public class NotificationService
 
          AlertsAudienceResolver.Resolved resolved = resolver.resolve(audienceOf(notification));
          Set<String>                     existing = recipientUserIds(notificationId);
-         Set<String>                     muted    = mutedUsers(notification.getValueString("category"));
+         Set<String>                     muted    = mutedUsers(notification.getValueString("category"), notification.getValueString("severity"));
 
          List<QRecord> inserts = new ArrayList<>();
          for(String userId : resolved.userIds())
@@ -530,16 +530,20 @@ public class NotificationService
    /*******************************************************************************
     ** Users who muted a category in-app (never for SECURITY).
     *******************************************************************************/
-   private Set<String> mutedUsers(String category) throws QException
+   private Set<String> mutedUsers(String category, String severity) throws QException
    {
       Set<String> userIds = new HashSet<>();
       if(category == null || NotificationCategory.SECURITY.name().equals(category))
       {
          return (userIds);
       }
-      for(QRecord preference : AlertsDb.query(AlertsNotificationPreference.TABLE_NAME, AlertsDb.eq("category", category).withCriteria("inAppMuted", QCriteriaOperator.EQUALS, true)))
+      for(QRecord preference : AlertsDb.query(AlertsNotificationPreference.TABLE_NAME, AlertsDb.eq("category", category)))
       {
-         userIds.add(preference.getValueString("userId"));
+         String minimum = preference.getValueString("inAppMinSeverity");
+         if(Boolean.TRUE.equals(preference.getValueBoolean("inAppMuted")) || (minimum != null && !NotificationEmailer.atLeast(severity, minimum)))
+         {
+            userIds.add(preference.getValueString("userId"));
+         }
       }
       return (userIds);
    }

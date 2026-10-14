@@ -95,6 +95,7 @@ public class AlertsQBitConfig implements QBitConfig
 
    private String alertmanagerIngestTokenSecretRef;
 
+   private Boolean preferencesSectionEnabled = true;
    private Boolean registerRoutes  = true;
    private Boolean synchronousSink = false;
 
@@ -791,6 +792,27 @@ public class AlertsQBitConfig implements QBitConfig
    public AlertsQBitConfig withJobRunLinkPattern(String jobRunLinkPattern)
    {
       this.jobRunLinkPattern = jobRunLinkPattern;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether to register Notifications in user preferences (default true).
+    *******************************************************************************/
+   public Boolean getPreferencesSectionEnabled()
+   {
+      return (preferencesSectionEnabled);
+   }
+
+
+
+   /*******************************************************************************
+    ** Enable or disable the Notifications preferences section.
+    *******************************************************************************/
+   public AlertsQBitConfig withPreferencesSectionEnabled(Boolean enabled)
+   {
+      preferencesSectionEnabled = enabled;
       return (this);
    }
 }

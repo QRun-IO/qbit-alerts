@@ -182,7 +182,9 @@ class AlertsQBitProducerTest extends BaseAlertsTest
          QTableMetaData table = qInstance.getTable(tableName);
          for(QFieldMetaData field : table.getFields().values())
          {
-            assertThat(body).as(tableName + "." + field.getName()).contains("   " + QInstanceEnricher.inferBackendName(field.getName()) + " ");
+            String column = QInstanceEnricher.inferBackendName(field.getName());
+            assertThat(body.contains("   " + column + " ") || changelog.contains("ALTER TABLE " + tableName + " ADD COLUMN " + column + " "))
+               .as(tableName + "." + field.getName() + " is created or added by a migration").isTrue();
          }
       }
    }

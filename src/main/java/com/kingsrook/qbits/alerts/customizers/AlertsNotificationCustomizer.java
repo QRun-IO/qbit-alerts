@@ -220,11 +220,11 @@ public class AlertsNotificationCustomizer implements TableCustomizerInterface
          else if(audience.getType() != NotificationAudience.Type.ALL_USERS && audience.getValues().isEmpty())
          {
             record.addError(new BadInputStatusMessage("List the " + switch(audience.getType())
-            {
-               case ROLES -> "roles or groups";
-               case PERMISSION -> "permission";
-               default -> "user ids";
-            } + " in Audience Members."));
+               {
+                  case ROLES -> "roles or groups";
+                  case PERMISSION -> "permission";
+                  default -> "user ids";
+               } + " in Audience Members."));
          }
       }
    }
@@ -236,7 +236,7 @@ public class AlertsNotificationCustomizer implements TableCustomizerInterface
     *******************************************************************************/
    static void checkPreference(QRecord record)
    {
-      if(NotificationCategory.SECURITY.name().equals(record.getValueString("category")) && Boolean.TRUE.equals(record.getValueBoolean("inAppMuted")))
+      if(NotificationCategory.SECURITY.name().equals(record.getValueString("category")) && (Boolean.TRUE.equals(record.getValueBoolean("inAppMuted")) || record.getValue("inAppMinSeverity") != null))
       {
          record.addError(new PermissionDeniedMessage("Security notices can't be muted in-app; you can still choose how they are emailed."));
       }

@@ -366,6 +366,7 @@ CREATE TABLE IF NOT EXISTS alerts_notification_preference (
    user_id VARCHAR(100) NOT NULL,
    category VARCHAR(16) NOT NULL,
    in_app_muted BOOLEAN,
+   in_app_min_severity VARCHAR(16),
    email_mode VARCHAR(16),
    email_min_severity VARCHAR(16),
    create_date TIMESTAMP,

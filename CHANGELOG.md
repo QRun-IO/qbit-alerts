@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Added
+- Notifications user-preferences section over the existing settings and subscription tables, with user/client-channel audits, category severity controls, ownership validation, and an inbox `preferencesSection` shortcut. Enabled by default when core preferences metadata is available; configurable with `withPreferencesSectionEnabled`.
+- Nullable in-app notification severity threshold (`qbit-alerts:21`); SECURITY always arrives in-app. Notification email pauses now defer non-security immediate and digest delivery without losing older pending items.
 - Optional external channels:
   - Slack (an Incoming Webhook, Block Kit)
   - Microsoft Teams (a Workflows webhook, an Adaptive Card)
