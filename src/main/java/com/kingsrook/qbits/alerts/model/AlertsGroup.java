@@ -60,6 +60,9 @@ public class AlertsGroup extends QRecordEntity
    @QField(possibleValueSourceName = "alerts_team", label = "Owner Team")
    private Integer ownerTeamId;
 
+   @QField(possibleValueSourceName = "alerts_escalation_policy")
+   private Integer escalationPolicyId;
+
    @QField(isEditable = false)
    private Instant createDate;
 
@@ -392,6 +395,37 @@ public class AlertsGroup extends QRecordEntity
    public AlertsGroup withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for escalationPolicyId
+    *******************************************************************************/
+   public Integer getEscalationPolicyId()
+   {
+      return (this.escalationPolicyId);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for escalationPolicyId
+    *******************************************************************************/
+   public void setEscalationPolicyId(Integer escalationPolicyId)
+   {
+      this.escalationPolicyId = escalationPolicyId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for escalationPolicyId
+    *******************************************************************************/
+   public AlertsGroup withEscalationPolicyId(Integer escalationPolicyId)
+   {
+      this.escalationPolicyId = escalationPolicyId;
       return (this);
    }
 }

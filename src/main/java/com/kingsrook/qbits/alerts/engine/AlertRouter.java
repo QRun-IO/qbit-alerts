@@ -142,134 +142,218 @@ public class AlertRouter
 
       try
       {
-         Instant       now      = runtime.now();
-         AlertTarget   target   = AlertTarget.of(alert);
-         QRecord       type     = AlertsDb.byId(AlertsType.TABLE_NAME, alert.getValue("alertTypeId"));
-         AlertSeverity severity = AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING);
-
-         List<Destination> destinations = destinations(target, severity, kind);
-         if(destinations.isEmpty())
-         {
-            return;
-         }
-
-         boolean silent    = type != null && Boolean.FALSE.equals(type.getValueBoolean("notify"));
-         boolean muted     = isMuted(target, now, MuteEffect.SILENCE_NOTIFICATIONS);
-         boolean flapping  = Boolean.TRUE.equals(alert.getValueBoolean("flapping")) && eventType != EventType.FLAPPING_STARTED;
-         if(muted && !Boolean.TRUE.equals(alert.getValueBoolean("muted")))
-         {
-            AlertsDb.update(AlertsAlert.TABLE_NAME, new QRecord().withValue("id", alert.getValue("id")).withValue("muted", true));
-            runtime.getEngine().event(alert.getValueInteger("id"), EventType.MUTED, null, null, null, "A mute silenced notifications", now);
-         }
-
-         Map<String, Optional<Boolean>> visibleByUser = new HashMap<>();
-         int                  queued        = 0;
-         for(Destination destination : destinations)
-         {
-            SuppressedReason reason = null;
-            String           channelType = destination.channel().getValueString("channelType");
-            boolean          inApp       = ChannelType.IN_APP.name().equals(channelType);
-
-            if(severity == AlertSeverity.INFO && !inApp && !AlertSeverity.INFO.name().equals(destination.minSeverity()))
-            {
-               continue;
-            }
-            if(!inApp && "alerts.channel.failing".equals(alert.getValueString("alertTypeName")))
-            {
-               ///////////////////////////////////////////////////////////////
-               // a broken channel is only ever reported in-app (no loops) //
-               ///////////////////////////////////////////////////////////////
-               continue;
-            }
-            AlertSeverity channelMin = AlertSeverity.fromLabel(destination.channel().getValueString("minSeverity"), null);
-            if(channelMin != null && !severity.isAtLeast(channelMin) && !inApp)
-            {
-               continue;
-            }
-
-            if(silent)
-            {
-               reason = SuppressedReason.TYPE_SILENT;
-            }
-            else if(muted)
-            {
-               reason = SuppressedReason.MUTED;
-            }
-            else if(flapping)
-            {
-               reason = SuppressedReason.FLAPPING;
-            }
-            else if(destination.userId() != null && !visibleByUser.computeIfAbsent(destination.userId(), userId -> knownVisibility(userId, alert))
-               .orElse(inApp || (alert.getValue("visibilityPermission") == null && alert.getValue("subjectTableName") == null)))
-            {
-               reason = SuppressedReason.NOT_VISIBLE;
-            }
-            else if(destination.userId() != null && !inApp && isPaused(destination.preference(), now))
-            {
-               reason = SuppressedReason.USER_PAUSED;
-            }
-            else if(Boolean.FALSE.equals(destination.channel().getValueBoolean("enabled")))
-            {
-               reason = SuppressedReason.CHANNEL_DISABLED;
-            }
-            else if(ChannelType.EMAIL.name().equals(channelType) && !StringUtils.hasContent(emailAddress(destination)))
-            {
-               reason = SuppressedReason.NO_ADDRESS;
-            }
-            else if(!inApp && isRateLimited(destination.channel(), now))
-            {
-               reason = SuppressedReason.RATE_LIMITED;
-            }
-            else if(isDuplicate(alert, destination, kind, now))
-            {
-               reason = SuppressedReason.DUPLICATE;
-            }
-
-            QRecord notification = new QRecord()
-               .withValue("alertId", alert.getValue("id"))
-               .withValue("alertEventId", eventId)
-               .withValue("subscriptionId", destination.subscriptionId())
-               .withValue("channelId", destination.channel().getValue("id"))
-               .withValue("recipientUserId", destination.userId())
-               .withValue("recipientLabel", recipientLabel(destination))
-               .withValue("kind", kind.name())
-               .withValue("attempts", 0);
-
-            if(reason != null)
-            {
-               notification.setValue("status", DeliveryStatus.SUPPRESSED.name());
-               notification.setValue("suppressedReason", reason.name());
-               AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
-            }
-            else if(inApp)
-            {
-               notification.setValue("status", DeliveryStatus.SENT.name());
-               notification.setValue("sentAt", now);
-               QRecord inserted = AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
-               runtime.getNotifications().deliverAlert(destination.userId(), alert, now);
-               LOG.debug("In-app alert delivered", logPair("deliveryId", inserted.getValue("id")));
-               queued++;
-            }
-            else
-            {
-               notification.setValue("status", DeliveryStatus.PENDING.name());
-               notification.setValue("nextAttemptAt", now);
-               AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
-               queued++;
-            }
-         }
-
-         if(queued > 0)
-         {
-            AlertsDb.update(AlertsAlert.TABLE_NAME, new QRecord().withValue("id", alert.getValue("id")).withValue("lastNotifiedAt", now));
-            runtime.getEngine().event(alert.getValueInteger("id"), EventType.NOTIFIED, null, null, String.valueOf(queued),
-               queued == 1 ? "1 notification" : queued + " notifications", now);
-         }
+         deliver(alert, eventType, eventId, kind, destinations(AlertTarget.of(alert),
+            AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING), kind));
       }
       catch(Exception e)
       {
          LOG.warn("Error routing alert notifications", e, logPair("alertId", alert.getValue("id")), logPair("eventType", eventType));
       }
+   }
+
+
+
+   /*******************************************************************************
+    ** A due reminder uses subscription event filters and the normal delivery checks.
+    *******************************************************************************/
+   public int remind(QRecord alert) throws QException
+   {
+      return (deliver(alert, null, null, DeliveryKind.REMINDER, destinations(AlertTarget.of(alert),
+         AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING), DeliveryKind.REMINDER)));
+   }
+
+
+
+   /*******************************************************************************
+    ** A policy target uses the same channel, permission and suppression checks.
+    ** Team members are read in bounded pages; no membership source is changed.
+    *******************************************************************************/
+   public void escalate(QRecord alert, QRecord step, Integer eventId) throws QException
+   {
+      String targetType = step.getValueString("targetType");
+      if(SubscriberType.CHANNEL.name().equals(targetType))
+      {
+         QRecord channel = AlertsDb.byId(AlertsChannel.TABLE_NAME, step.getValue("channelId"));
+         if(channel != null)
+         {
+            deliver(alert, EventType.ESCALATED, eventId, DeliveryKind.ESCALATED,
+               List.of(new Destination(null, channel, null, null, null)));
+         }
+      }
+      else if(SubscriberType.USER.name().equals(targetType))
+      {
+         escalateToUser(alert, step.getValueString("userId"), eventId);
+      }
+      else if(SubscriberType.TEAM.name().equals(targetType))
+      {
+         int lastId = 0;
+         while(true)
+         {
+            List<QRecord> members = AlertsDb.query(AlertsTeamMember.TABLE_NAME, AlertsDb.eq("teamId", step.getValue("teamId"))
+               .withCriteria("id", QCriteriaOperator.GREATER_THAN, lastId)
+               .withOrderBy(new com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy("id", true)).withLimit(100));
+            if(members.isEmpty())
+            {
+               break;
+            }
+            for(QRecord member : members)
+            {
+               escalateToUser(alert, member.getValueString("userId"), eventId);
+               lastId = member.getValueInteger("id");
+            }
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** User and team targets use the user's normal destinations.
+    *******************************************************************************/
+   private void escalateToUser(QRecord alert, String userId, Integer eventId) throws QException
+   {
+      if(!StringUtils.hasContent(userId))
+      {
+         return;
+      }
+      QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
+      for(QRecord channel : userChannels(null, preference))
+      {
+         deliver(alert, EventType.ESCALATED, eventId, DeliveryKind.ESCALATED,
+            List.of(new Destination(userId, channel, null, null, preference)));
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Shared fan-out. Scheduled callers propagate failures so their transaction rolls back.
+    *******************************************************************************/
+   private int deliver(QRecord alert, EventType eventType, Integer eventId, DeliveryKind kind, List<Destination> destinations) throws QException
+   {
+      Instant       now      = runtime.now();
+      AlertTarget   target   = AlertTarget.of(alert);
+      QRecord       type     = AlertsDb.byId(AlertsType.TABLE_NAME, alert.getValue("alertTypeId"));
+      AlertSeverity severity = AlertSeverity.fromLabel(alert.getValueString("severity"), AlertSeverity.WARNING);
+
+      if(destinations.isEmpty())
+      {
+         return (0);
+      }
+
+      boolean silent    = type != null && Boolean.FALSE.equals(type.getValueBoolean("notify"));
+      boolean muted     = isMuted(target, now, MuteEffect.SILENCE_NOTIFICATIONS);
+      boolean flapping  = Boolean.TRUE.equals(alert.getValueBoolean("flapping")) && eventType != EventType.FLAPPING_STARTED;
+      if(muted && !Boolean.TRUE.equals(alert.getValueBoolean("muted")))
+      {
+         AlertsDb.update(AlertsAlert.TABLE_NAME, new QRecord().withValue("id", alert.getValue("id")).withValue("muted", true));
+         runtime.getEngine().event(alert.getValueInteger("id"), EventType.MUTED, null, null, null, "A mute silenced notifications", now);
+      }
+
+      Map<String, Optional<Boolean>> visibleByUser = new HashMap<>();
+      int                  queued        = 0;
+      for(Destination destination : destinations)
+      {
+         SuppressedReason reason = null;
+         String           channelType = destination.channel().getValueString("channelType");
+         boolean          inApp       = ChannelType.IN_APP.name().equals(channelType);
+
+         if(severity == AlertSeverity.INFO && !inApp && !AlertSeverity.INFO.name().equals(destination.minSeverity()))
+         {
+            continue;
+         }
+         if(!inApp && "alerts.channel.failing".equals(alert.getValueString("alertTypeName")))
+         {
+            ///////////////////////////////////////////////////////////////
+            // a broken channel is only ever reported in-app (no loops) //
+            ///////////////////////////////////////////////////////////////
+            continue;
+         }
+         AlertSeverity channelMin = AlertSeverity.fromLabel(destination.channel().getValueString("minSeverity"), null);
+         if(channelMin != null && !severity.isAtLeast(channelMin) && !inApp)
+         {
+            continue;
+         }
+
+         if(silent)
+         {
+            reason = SuppressedReason.TYPE_SILENT;
+         }
+         else if(muted)
+         {
+            reason = SuppressedReason.MUTED;
+         }
+         else if(flapping)
+         {
+            reason = SuppressedReason.FLAPPING;
+         }
+         else if(destination.userId() != null && !visibleByUser.computeIfAbsent(destination.userId(), userId -> knownVisibility(userId, alert))
+            .orElse(inApp || (alert.getValue("visibilityPermission") == null && alert.getValue("subjectTableName") == null)))
+         {
+            reason = SuppressedReason.NOT_VISIBLE;
+         }
+         else if(destination.userId() != null && !inApp && isPaused(destination.preference(), now))
+         {
+            reason = SuppressedReason.USER_PAUSED;
+         }
+         else if(Boolean.FALSE.equals(destination.channel().getValueBoolean("enabled")))
+         {
+            reason = SuppressedReason.CHANNEL_DISABLED;
+         }
+         else if(ChannelType.EMAIL.name().equals(channelType) && !StringUtils.hasContent(emailAddress(destination)))
+         {
+            reason = SuppressedReason.NO_ADDRESS;
+         }
+         else if(!inApp && isRateLimited(destination.channel(), now))
+         {
+            reason = SuppressedReason.RATE_LIMITED;
+         }
+         else if(kind != DeliveryKind.REMINDER && isDuplicate(alert, destination, kind, eventId, now))
+         {
+            reason = SuppressedReason.DUPLICATE;
+         }
+
+         QRecord notification = new QRecord()
+            .withValue("alertId", alert.getValue("id"))
+            .withValue("alertEventId", eventId)
+            .withValue("subscriptionId", destination.subscriptionId())
+            .withValue("channelId", destination.channel().getValue("id"))
+            .withValue("recipientUserId", destination.userId())
+            .withValue("recipientLabel", recipientLabel(destination))
+            .withValue("kind", kind.name())
+            .withValue("attempts", 0);
+
+         if(reason != null)
+         {
+            notification.setValue("status", DeliveryStatus.SUPPRESSED.name());
+            notification.setValue("suppressedReason", reason.name());
+            AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
+         }
+         else if(inApp)
+         {
+            notification.setValue("status", DeliveryStatus.SENT.name());
+            notification.setValue("sentAt", now);
+            QRecord inserted = AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
+            runtime.getNotifications().deliverAlert(destination.userId(), alert, now);
+            LOG.debug("In-app alert delivered", logPair("deliveryId", inserted.getValue("id")));
+            queued++;
+         }
+         else
+         {
+            notification.setValue("status", DeliveryStatus.PENDING.name());
+            notification.setValue("nextAttemptAt", now);
+            AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
+            queued++;
+         }
+      }
+
+      if(queued > 0)
+      {
+         AlertsDb.update(AlertsAlert.TABLE_NAME, new QRecord().withValue("id", alert.getValue("id")).withValue("lastNotifiedAt", now));
+         runtime.getEngine().event(alert.getValueInteger("id"), EventType.NOTIFIED, null, null, String.valueOf(queued),
+            queued == 1 ? "1 notification" : queued + " notifications", now);
+      }
+      return (queued);
    }
 
 
@@ -360,7 +444,7 @@ public class AlertRouter
             }
          }
       }
-      for(String recordKey : target.recordKeys())
+      for(String recordKey : kind == DeliveryKind.REMINDER ? java.util.Set.<String>of() : target.recordKeys())
       {
          String[] parts = recordKey.split(":", 2);
          RecordReference reference = new RecordReference(parts[0], parts[1]);
@@ -622,13 +706,20 @@ public class AlertRouter
    /*******************************************************************************
     ** The same alert, channel, recipient and kind within 10 minutes.
     *******************************************************************************/
-   private boolean isDuplicate(QRecord alert, Destination destination, DeliveryKind kind, Instant now) throws QException
+   private boolean isDuplicate(QRecord alert, Destination destination, DeliveryKind kind, Integer eventId, Instant now) throws QException
    {
       var filter = AlertsDb.eq("alertId", alert.getValue("id"))
          .withCriteria("channelId", QCriteriaOperator.EQUALS, destination.channel().getValue("id"))
          .withCriteria("kind", QCriteriaOperator.EQUALS, kind.name())
          .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.PENDING.name(), DeliveryStatus.SENDING.name(), DeliveryStatus.SENT.name(), DeliveryStatus.RETRYING.name()))
          .withCriteria("createDate", QCriteriaOperator.GREATER_THAN, now.minus(DUPLICATE_WINDOW_MINUTES, ChronoUnit.MINUTES));
+      if(kind == DeliveryKind.ESCALATED)
+      {
+         filter = AlertsDb.eq("alertId", alert.getValue("id"))
+            .withCriteria("channelId", QCriteriaOperator.EQUALS, destination.channel().getValue("id"))
+            .withCriteria("alertEventId", QCriteriaOperator.EQUALS, eventId)
+            .withCriteria("status", QCriteriaOperator.NOT_EQUALS, DeliveryStatus.SUPPRESSED.name());
+      }
       if(destination.userId() != null)
       {
          filter.withCriteria("recipientUserId", QCriteriaOperator.EQUALS, destination.userId());

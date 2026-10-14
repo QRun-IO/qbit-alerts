@@ -251,7 +251,7 @@ public final class AlertsPossibleValues
          enumSource(MONITOR_KIND, AlertMonitorKind.values()),
          enumSource(MONITOR_STATUS, MonitorStatus.values()),
          enumSource(EVENT_TYPE, EventType.values()),
-         enumSource(RESOLUTION, Resolution.values()),
+         enumSource(RESOLUTION, new Resolution[] { Resolution.PRODUCER, Resolution.MONITOR, Resolution.QUIET_PERIOD, Resolution.MANUAL }),
          enumSource(SUBSCRIBER_TYPE, SubscriberType.values()),
          enumSource(SCOPE_TYPE, ScopeType.values()),
          enumSource(DELIVERY_MODE, DeliveryMode.values()),

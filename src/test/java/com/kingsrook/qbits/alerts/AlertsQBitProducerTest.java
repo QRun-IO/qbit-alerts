@@ -182,7 +182,9 @@ class AlertsQBitProducerTest extends BaseAlertsTest
          QTableMetaData table = qInstance.getTable(tableName);
          for(QFieldMetaData field : table.getFields().values())
          {
-            assertThat(body).as(tableName + "." + field.getName()).contains("   " + QInstanceEnricher.inferBackendName(field.getName()) + " ");
+            String column = QInstanceEnricher.inferBackendName(field.getName());
+            assertThat(body.contains("   " + column + " ") || changelog.contains("ALTER TABLE " + tableName + " ADD COLUMN " + column + " "))
+               .as(tableName + "." + field.getName()).isTrue();
          }
       }
    }
@@ -216,4 +218,37 @@ class AlertsQBitProducerTest extends BaseAlertsTest
       assertThat(AlertsIntegrations.esbTableNames()).containsExactly("alerts_alert", "alerts_monitor", "alerts_type");
       assertThat(AlertsIntegrations.quickSearchTables()).hasSize(3);
    }
+
+
+   /*******************************************************************************
+    ** Policy records are admin-only, steps are children, and the job is hidden.
+    *******************************************************************************/
+   @Test
+   void testEscalationMetadata() throws Exception
+   {
+      assertThat(AlertsAppMetaDataProducer.MAIN_TABLES).contains("alerts_escalation_policy").doesNotContain("alerts_escalation_step");
+      assertThat(qInstance.getTable("alerts_escalation_policy").getSections()).anySatisfy(section ->
+         assertThat(section.getWidgetName()).isEqualTo("alerts_escalation_policy_join_alerts_escalation_step"));
+      assertThat(qInstance.getTable("alerts_type").getField("escalationPolicyId").getPossibleValueSourceName()).isEqualTo("alerts_escalation_policy");
+      assertThat(qInstance.getTable("alerts_group").getField("escalationPolicyId").getPossibleValueSourceName()).isEqualTo("alerts_escalation_policy");
+      assertThat(qInstance.getTable("alerts_escalation_step").getField("onlyIfStatus").getDefaultValue()).isEqualTo("OPEN");
+      assertThat(qInstance.getPossibleValueSource("alerts_resolution").getEnumValues()).extracting(value -> String.valueOf(value.getId())).doesNotContain("EXPIRED");
+      QProcessMetaData process = qInstance.getProcess(AlertsProcessesMetaDataProducer.ESCALATE_AND_REMIND);
+      assertThat(process.getIsHidden()).isTrue();
+      assertThat(process.getSchedule()).isNull();
+      QProcessMetaData scheduled = AlertsProcessesMetaDataProducer.buildProcesses(new AlertsQBitConfig().withSchedulerName("scheduler"))
+         .stream().filter(candidate -> candidate.getName().equals(AlertsProcessesMetaDataProducer.ESCALATE_AND_REMIND)).findFirst().orElseThrow();
+      assertThat(scheduled.getSchedule().getSchedulerName()).isEqualTo("scheduler");
+      assertThat(scheduled.getSchedule().getRepeatSeconds()).isEqualTo(60);
+      loginAs(VIEWER);
+      for(String table : List.of("alerts_escalation_policy", "alerts_escalation_step"))
+      {
+         assertThat(PermissionsHelper.hasTablePermission(new com.kingsrook.qqq.backend.core.model.actions.AbstractActionInput(), table,
+            com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType.READ)).isFalse();
+      }
+      loginAs(ADMIN);
+      assertThat(PermissionsHelper.hasTablePermission(new com.kingsrook.qqq.backend.core.model.actions.AbstractActionInput(), "alerts_escalation_policy",
+         com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType.INSERT)).isTrue();
+   }
+
 }

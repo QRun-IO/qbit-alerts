@@ -21,6 +21,9 @@ All notable changes to this project are documented here. The format follows Keep
 - Webhook signing delegates to core `WebhookSigner`/`WebhookSecret` (qbit-alerts#15, F11). Headers, `v1,` signatures and `whsec_` encoding are unchanged. A thin adapter preserves legacy keys shorter than core's 16-byte minimum using equivalent HMAC zero-padding.
 
 ### Added
+- Apply reminders and escalation (#27, part 2): a minute-based hidden job sends due reminders, advances ordered USER/TEAM/CHANNEL escalation steps, and caps final-step repeats. Acknowledgement, snooze, resolution and mutes stop both; reopening restarts escalation. Delivery, events and progress commit together, with a persisted same-minute checkpoint.
+- Add admin escalation policy and step tables, child step lists, and type/group policy links in guarded Liquibase changesets 23–26. Type policies override group policies. CRITICAL reminders default to 60 minutes; explicit zero turns them off.
+- Keep EXPIRED reserved and remove it from selectable resolution values because the design specifies no expiration rule.
 - Optional external channels:
   - Slack (an Incoming Webhook, Block Kit)
   - Microsoft Teams (a Workflows webhook, an Adaptive Card)

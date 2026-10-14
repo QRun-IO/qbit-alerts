@@ -167,14 +167,57 @@ When qbit-email is produced in the same instance (and on the classpath; it is an
 - **Text** in the variables is the existing redacted, external-safe text. No record labels are passed.
 - **Config.** `messagingProviderName` and `fromAddress` are not needed (the From address comes from the email provider). Without qbit-email they work as before.
 
+## Reminders and escalation
+
+The hidden `alertsEscalateAndRemind` process runs every minute on `schedulerName`.
+Without a configured scheduler, hosts can invoke the process themselves. Apply
+Liquibase changesets 23–26 before running this version.
+
+An OPEN, unacknowledged alert sends REMINDER deliveries to matching subscriptions
+whose events include REMINDER (an empty events list includes all kinds). Set the
+type's `reminderIntervalMinutes`: null defaults to 60 for CRITICAL alerts and off
+otherwise; zero disables reminders, including CRITICAL. The interval starts at
+the later of the latest raise and the latest successful notification. Delivery
+uses the normal permission, channel and suppression checks, writes NOTIFIED in
+the timeline when something is queued, and updates `lastNotifiedAt`.
+
+Admins can create **Escalation Policies** in the Alerts app and add **Steps** on a
+policy's record screen. Attach `escalationPolicyId` to a type or group; a type's
+explicit policy takes precedence, including when that policy is disabled. Steps
+have a positive, unique `stepOrder`, a nonnegative `afterMinutes`, and exactly
+one USER (`userId`), TEAM (`teamId`) or CHANNEL (`channelId`) target. User and team
+targets use the users' normal in-app/email preferences. Steps apply only to OPEN
+alerts matching `onlyIfStatus` (default OPEN). Timing starts at the first raise
+or the latest reopen; repeated raises do not postpone escalation.
+
+Each due step sends ESCALATED through the normal delivery checks, records an
+ESCALATED event with the previous and new levels, and advances `escalationLevel`.
+After the final step, positive `repeatAfterMinutes` and `maxRepeats` allow that
+many additional attempts at the final target. Null/zero disables repeats. Repeats
+leave the level unchanged and are counted in the timeline within the current
+open cycle. Reopening resets the level and repeat budget. One step runs per tick;
+a delayed scheduler catches up over subsequent minutes instead of sending a burst.
+Acknowledgement, snooze, resolution, mute, flapping, and a disabled or silent type
+stop timed notifications. Suppressed deliveries still count as escalation attempts.
+
+Each alert's delivery rows, timeline and progress commit together. The persisted
+`timedNotificationCheckedAt` prevents duplicate attempts in the same minute,
+including when no recipient is eligible. Run this job on **one scheduler node**;
+there is no distributed lock between scheduler nodes. No ESCALATION feature
+switch exists in the current config; enable or disable individual policies.
+
+`EXPIRED` remains a reserved resolution enum value. The design defines no alert
+expiration rule, so it is excluded from selectable resolution values and is never
+assigned automatically. The Resolve action continues to record MANUAL.
+
 ## Known limits (v1)
 
-- **Claims are best-effort.** Delivery and monitor claims use a lease, not an atomic conditional update. With several scheduler nodes, run the two scheduled processes on one node, or accept at-least-once delivery.
+- **Claims are best-effort.** Delivery and monitor claims use a lease, not an atomic conditional update. With several scheduler nodes, run the scheduled processes on one node, or accept at-least-once delivery.
 - **Email threading headers.** `Message-ID` and `In-Reply-To` need core messaging support for custom headers, so they are not set.
 - **Recipient visibility.** It is checked through `createAutomatedSessionForUser`. If a host's authentication module can't build a session with permissions for a user, email goes out only for alerts that have no visibility permission and no subject table. In-app delivery is always filtered by the record locks.
 - **Outbound HTTP** blocks plain http, but has no full SSRF guard. Channels are admin-only. Core's `SafeHttpClient` (QRun-IO/qqq#1109) replaces the client when it is released.
 - **Alertmanager sink:** open alerts are sent with an `endsAt` a week out, not re-posted.
-- **Not built yet:** digests, quiet hours, reminders, Micrometer metrics, ROLE and IdP-group team resolvers, escalation, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
+- **Not built yet:** digests, quiet hours, Micrometer metrics, ROLE and IdP-group team resolvers, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
 
 ## Build
 

@@ -568,6 +568,8 @@ public class AlertsEngine
          .withValue("severity", severity.name())
          .withValue("lastRaisedAt", now)
          .withValue("occurrenceCount", (resolved.getValueInteger("occurrenceCount") == null ? 0 : resolved.getValueInteger("occurrenceCount")) + 1)
+         .withValue("escalationLevel", 0)
+         .withValue("timedNotificationCheckedAt", null)
          .withValue("reopenCount", (resolved.getValueInteger("reopenCount") == null ? 0 : resolved.getValueInteger("reopenCount")) + 1)
          .withValue("resolvedAt", null)
          .withValue("resolvedByUserId", null)
