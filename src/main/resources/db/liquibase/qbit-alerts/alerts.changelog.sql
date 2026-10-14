@@ -427,3 +427,13 @@ CREATE TABLE IF NOT EXISTS alerts_notification_preference (
    CONSTRAINT pk_alerts_notification_preference PRIMARY KEY (id),
    CONSTRAINT uq_alerts_notification_preference UNIQUE (user_id, category)
 );
+
+-- changeset qbit-alerts:27
+-- comment: Digest items share a window key. A separate log row claims each channel/window exactly once.
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM information_schema.columns WHERE LOWER(table_name) = 'alerts_delivery' AND LOWER(column_name) = 'digest_key'
+ALTER TABLE alerts_delivery ADD COLUMN digest_key VARCHAR(200);
+ALTER TABLE alerts_delivery ADD COLUMN digest_claim_key VARCHAR(240);
+ALTER TABLE alerts_delivery ADD COLUMN digest_last_item_id INTEGER;
+ALTER TABLE alerts_delivery ADD CONSTRAINT uq_alerts_delivery_digest_claim UNIQUE (digest_claim_key);
+CREATE INDEX ix_alerts_delivery_digest ON alerts_delivery (digest_key, channel_id, status);

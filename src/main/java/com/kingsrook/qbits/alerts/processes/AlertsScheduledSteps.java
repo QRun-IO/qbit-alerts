@@ -18,6 +18,7 @@ package com.kingsrook.qbits.alerts.processes;
 
 
 import com.kingsrook.qbits.alerts.AlertsRuntime;
+import com.kingsrook.qbits.alerts.delivery.DigestWorker;
 import com.kingsrook.qbits.alerts.notifications.NotificationEmailer;
 import com.kingsrook.qqq.backend.core.actions.processes.BackendStep;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -27,7 +28,7 @@ import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepOutp
 
 /*******************************************************************************
  ** The hidden scheduled processes' steps: evaluate due monitors (plus snooze,
- ** quiet-period and flapping upkeep), and deliver due notifications.
+ ** quiet-period and flapping upkeep), deliver due notifications and send digests.
  *******************************************************************************/
 public final class AlertsScheduledSteps
 {
@@ -78,6 +79,23 @@ public final class AlertsScheduledSteps
          runtime.getNotifications().purge();
          new NotificationEmailer(runtime).run();
          output.addValue(OUTPUT_COUNT, runtime.getDeliveryWorker().deliverDue());
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** alertsSendDigests
+    *******************************************************************************/
+   public static class SendDigests implements BackendStep
+   {
+      /***************************************************************************
+       ** Send completed digest windows through the configured channels.
+       ***************************************************************************/
+      @Override
+      public void run(RunBackendStepInput input, RunBackendStepOutput output) throws QException
+      {
+         output.addValue(OUTPUT_COUNT, new DigestWorker(AlertsRuntime.get()).sendDue());
       }
    }
 }

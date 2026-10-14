@@ -223,7 +223,7 @@ public final class AlertsPossibleValues
     *******************************************************************************/
    public enum SuppressedReason
    {
-      QUIET_HOURS, MUTED, FLAPPING, RATE_LIMITED, NOT_VISIBLE, CHANNEL_DISABLED, DUPLICATE, USER_PAUSED, TYPE_SILENT, NO_ADDRESS
+      QUIET_HOURS, MUTED, FLAPPING, RATE_LIMITED, NOT_VISIBLE, CHANNEL_DISABLED, DUPLICATE, USER_PAUSED, TYPE_SILENT, NO_ADDRESS, MIN_SEVERITY
    }
 
 

@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Changed
+- Apply user pause and local quiet hours to personal push channels (email, email lists and other non-IN_APP channels), including team members, with logged suppression reasons and a configurable quiet-hours severity bypass. The in-app bell remains unaffected, including digest delivery. Channel subscriptions are unaffected.
+- Queue hourly and daily alert subscription digests and send them through the hidden hourly `alertsSendDigests` process. Group linked alert summaries into one message per user/channel/window, use the existing email integration, and keep durable dispatch claims in the Delivery Log (guarded changeset 27). Reruns cannot send a window twice; failed, interrupted and oversized windows remain visible for review.
 - Switch the optional qbit-email integration to its published `com.kingsrook.qbits.email.api` package in `0.1.0-RC.2`, preserving templates, categories, idempotency keys, linked records and outcome mapping. Narrow the architecture allowance to that API package while retaining all guardrails.
 - Email goes through qbit-email when it is produced in the instance (optional dependency, `qbit-email.version` 0.1.0-RC.2): alert channel emails (template `alerts_alert`), notification emails (`alerts_notification`) and digests (`alerts_digest`), all NOTIFICATION, one recipient per message, with idempotency keys and the alert or notification as the linked record. `messagingProviderName` stays as the fallback when qbit-email is absent, and is not required when it is present.
 - Target released QQQ `4.1.0-RC.6`; verify normally with `./mvnw -B verify` (no version override).

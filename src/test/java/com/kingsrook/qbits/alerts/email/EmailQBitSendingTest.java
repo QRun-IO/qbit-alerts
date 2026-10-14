@@ -29,10 +29,12 @@ import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.BaseAlertsTest;
 import com.kingsrook.qbits.alerts.delivery.AlertMessage;
 import com.kingsrook.qbits.alerts.delivery.DeliveryResult;
+import com.kingsrook.qbits.alerts.delivery.DigestWorker;
 import com.kingsrook.qbits.alerts.delivery.EmailChannel;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
+import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
 import com.kingsrook.qbits.alerts.notifications.NotificationEmailer;
 import com.kingsrook.qbits.email.EmailQBitConfig;
@@ -40,6 +42,8 @@ import com.kingsrook.qbits.email.EmailQBitProducer;
 import com.kingsrook.qbits.email.api.EmailApi;
 import com.kingsrook.qbits.email.api.EmailApiMessage;
 import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
 import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
 import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
 import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
@@ -388,6 +392,38 @@ class EmailQBitSendingTest extends BaseAlertsTest
       assertThat(message.getValueString("htmlBody")).contains("Version 2.5 is out").contains("Dark mode").contains("Version 2.6 is out");
       assertThat(message.getValueString("linkedTableName")).isEqualTo("alerts_notification");
       assertThat(new NotificationEmailer(runtime).run().digests()).isEqualTo(0);
+   }
+
+
+
+   /*******************************************************************************
+    ** Alert subscription digests use the public EmailApi path, the digest
+    ** template, real per-alert links, and a durable cadence/channel key.
+    *******************************************************************************/
+   @Test
+   void testAlertSubscriptionDigest() throws Exception
+   {
+      addProvider();
+      runtime.asSystem(() -> AlertsDb.insert(AlertsUserPreference.TABLE_NAME, new QRecord().withValue("userId", ADMIN)
+         .withValue("emailEnabled", true).withValue("inAppEnabled", false).withValue("emailAddress", "ops@example.com")));
+      runtime.asSystem(() -> AlertsDb.insert(AlertsSubscription.TABLE_NAME, new QRecord().withValue("subscriberType", "USER")
+         .withValue("userId", ADMIN).withValue("scopeType", "ALL").withValue("deliveryMode", "DIGEST_HOURLY").withValue("enabled", true)));
+      QRecord first = runtime.getEngine().raise(new AlertSignal("test.digest").withDedupKey("first").withTitle("First failed").withSeverity(AlertSeverity.ERROR));
+      QRecord second = runtime.getEngine().raise(new AlertSignal("test.digest").withDedupKey("second").withTitle("Second failed").withSeverity(AlertSeverity.CRITICAL));
+      assertThat(runtime.getDeliveryWorker().deliverDue()).isZero();
+      assertThat(messages()).isEmpty();
+      clock.advance(java.time.Duration.ofHours(1));
+      assertThat(new DigestWorker(runtime).sendDue()).isEqualTo(1);
+      QRecord message = messages().get(0);
+      assertThat(templateName(message)).isEqualTo("alerts_digest");
+      assertThat(message.getValueString("subject")).isEqualTo("2 new notifications");
+      assertThat(message.getValueString("senderProcess")).isEqualTo("alertsSendDigests");
+      assertThat(message.getValueString("linkedTableName")).isEqualTo("alerts_alert");
+      assertThat(message.getValueString("idempotencyKey")).startsWith("alerts:digest:" + ADMIN + ":2026-10-12T12:00:00Z:DIGEST_HOURLY:channel:");
+      assertThat(message.getValueString("htmlBody")).contains("Open alerts by severity", "New since the last digest", "First failed", "Second failed",
+         "href=\"https://admin.example.com/app/alerts_alert/" + first.getValue("id") + "\"", "href=\"https://admin.example.com/app/alerts_alert/" + second.getValue("id") + "\"");
+      assertThat(new DigestWorker(runtime).sendDue()).isZero();
+      assertThat(messages()).hasSize(1);
    }
 
 
