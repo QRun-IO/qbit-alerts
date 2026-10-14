@@ -27,25 +27,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsPreferences;
-import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.BaseAlertsTest;
 import com.kingsrook.qbits.alerts.api.AlertsApi;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
-import com.kingsrook.qbits.alerts.engine.QbitAlertsSink;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.processes.AlertsAction;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
-import com.kingsrook.qbits.alerts.spi.NotificationSignal;
+import com.kingsrook.qqq.backend.core.actions.QBackendTransaction;
 import com.kingsrook.qqq.backend.core.actions.processes.QProcessCallback;
 import com.kingsrook.qqq.backend.core.actions.processes.RunProcessAction;
 import com.kingsrook.qqq.backend.core.actions.tables.DeleteAction;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.QAlerts;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.processes.ProcessSummaryLine;
@@ -269,11 +269,11 @@ class NotificationsTest extends BaseAlertsTest
    {
       for(int i = 0; i < 4; i++)
       {
-         runtime.getNotifications().notify(new NotificationSignal("Job " + i + " failed").withSeverity(i % 2 == 0 ? NotificationSeverity.ERROR : NotificationSeverity.WARNING)
+         QAlerts.notify(new NotificationSignal("Job " + i + " failed").withSeverity(i % 2 == 0 ? NotificationSeverity.ERROR : NotificationSeverity.WARNING)
             .withCategory(NotificationCategory.JOB).withAudience(NotificationAudience.user("viewer-1")));
          clock.advance(Duration.ofMinutes(1));
       }
-      runtime.getNotifications().notify(new NotificationSignal("Sign-in from a new device").withCategory(NotificationCategory.SECURITY)
+      QAlerts.notify(new NotificationSignal("Sign-in from a new device").withCategory(NotificationCategory.SECURITY)
          .withSeverity(NotificationSeverity.CRITICAL).withSticky(true).withAudience(NotificationAudience.user("viewer-1")));
 
       loginAs("viewer-1");
@@ -321,8 +321,12 @@ class NotificationsTest extends BaseAlertsTest
       api.markRead(Map.of("all", true));
       assertThat(api.inboxSummary().get("unreadCount")).isEqualTo(0);
 
-      Integer second = runtime.getNotifications().notify(signal.withTitle("Export failed again"));
-      assertThat(second).isEqualTo(first);
+      QAlerts.notify(signal.withTitle("Export failed again").withAudience(NotificationAudience.users(" viewer-1 ", "viewer-1")));
+      assertThat(runtime.asSystem(() -> all(AlertsNotification.TABLE_NAME))).singleElement().satisfies(notification ->
+      {
+         assertThat(notification.getValueInteger("id")).isEqualTo(first);
+         assertThat(notification.getValueString("audienceValue")).isEqualTo("viewer-1");
+      });
       Map<String, Object> summary = api.inboxSummary();
       assertThat(summary.get("unreadCount")).isEqualTo(1);
       assertThat(items(summary).get(0)).containsEntry("title", "Export failed again").containsEntry("href", "/app/widget/5");
@@ -331,7 +335,7 @@ class NotificationsTest extends BaseAlertsTest
       assertThat(NotificationService.linkUrl(AlertLink.toUrl("https://example.com/x", "x"))).isEqualTo("https://example.com/x");
       assertThat(NotificationService.linkUrl(AlertLink.toPath("/app/alerts", "x"))).isEqualTo("/app/alerts");
       assertThat(NotificationService.safeLink("//evil.example.com")).isNull();
-      for(String bad : List.of("/\\evil.com", "\\\\evil.com", "javascript:alert(1)", "data:text/html,x", "http://x.example.com", "https:///nohost", "/a b", "/a	b", "https://"))
+      for(String bad : List.of("/\\evil.com", "\\\\evil.com", "javascript:alert(1)", "data:text/html,x", "http://x.example.com", "https:///nohost", "/a b", "/a\tb", "https://"))
       {
          assertThat(NotificationService.safeLink(bad)).as(bad).isNull();
       }
@@ -342,28 +346,19 @@ class NotificationsTest extends BaseAlertsTest
       ////////////////////////////////////////////////////////////////////
       // through the sink (the producer SPI path)                        //
       ////////////////////////////////////////////////////////////////////
-      runtime.sink().notify(new NotificationSignal("Shared with you: Q3 notebook").withCategory(NotificationCategory.SHARE).withAudience(NotificationAudience.user("viewer-1")));
+      QAlerts.notify(new NotificationSignal("Shared with you: Q3 notebook").withCategory(NotificationCategory.SHARE).withAudience(NotificationAudience.user("viewer-1")));
       assertThat(api.inboxSummary().get("unreadCount")).isEqualTo(2);
    }
 
 
 
    /*******************************************************************************
-    ** Preserve the method descriptors used by released notification producers,
-    ** including the local AlertLink, and deliver to the selected user's bell.
+    ** Core-only notification producers deliver to the selected user's bell.
     *******************************************************************************/
    @Test
-   void testLegacyNotificationSinkSignaturesAndDelivery() throws Exception
+   void testCoreNotificationDelivery() throws Exception
    {
-      assertThat(AlertsRuntime.class.getMethod("sink").getReturnType()).isEqualTo(QbitAlertsSink.class);
-      assertThat(QbitAlertsSink.class.getMethod("notify", NotificationSignal.class).getReturnType()).isEqualTo(void.class);
-      assertThat(NotificationSignal.class.getMethod("withLink", AlertLink.class).getReturnType()).isEqualTo(NotificationSignal.class);
-      assertThat(NotificationSignal.class.getMethod("getLink").getReturnType()).isEqualTo(AlertLink.class);
-      assertThat(NotificationSignal.class.getMethod("withAudience", NotificationAudience.class).getReturnType()).isEqualTo(NotificationSignal.class);
-      assertThat(AlertLink.class.getMethod("toRecord", String.class, Serializable.class, String.class).getReturnType()).isEqualTo(AlertLink.class);
-      assertThat(NotificationAudience.class.getMethod("user", String.class).getReturnType()).isEqualTo(NotificationAudience.class);
-
-      runtime.sink().notify(new NotificationSignal("Shipment delivered")
+      QAlerts.notify(new NotificationSignal("Shipment delivered")
          .withSeverity(NotificationSeverity.INFO).withCategory(NotificationCategory.JOB)
          .withLink(AlertLink.toRecord("widget", 5, "Shipment"))
          .withAudience(NotificationAudience.user("viewer-1")));
@@ -374,6 +369,64 @@ class NotificationsTest extends BaseAlertsTest
       assertThat(items(summary).get(0)).containsEntry("title", "Shipment delivered").containsEntry("href", "/app/widget/5");
       loginAs("viewer-2");
       assertThat(new AlertsApi(runtime).inboxSummary().get("unreadCount")).isEqualTo(0);
+   }
+
+
+
+   /*******************************************************************************
+    ** Every core audience factory resolves through the persisted notification.
+    *******************************************************************************/
+   @Test
+   void testCoreAudiences() throws Exception
+   {
+      config.setUserDirectory(new QCodeReference(TestDirectory.class));
+      Map<NotificationAudience, List<String>> audiences = Map.of(
+         NotificationAudience.user("viewer-1"), List.of("viewer-1"),
+         NotificationAudience.users(" viewer-1 ", "viewer-2", "viewer-1"), List.of("viewer-1", "viewer-2"),
+         NotificationAudience.roles(" staff ", "editors"), List.of("viewer-1", "viewer-2"),
+         NotificationAudience.permission(" alerts.admin "), List.of("admin-1"),
+         NotificationAudience.allUsers(), List.of("viewer-1", "viewer-2", "admin-1", "outsider-1"));
+      for(var entry : audiences.entrySet())
+      {
+         String key = entry.getKey().toString();
+         QAlerts.notify(new NotificationSignal("Audience test").withSourceKey(key).withAudience(entry.getKey()));
+         QRecord notification = runtime.asSystem(() -> AlertsDb.first(AlertsNotification.TABLE_NAME, AlertsDb.eq("sourceKey", key)));
+         assertThat(notification).isNotNull();
+         assertThat(notification.getValueString("category")).isEqualTo("SYSTEM");
+         assertThat(runtime.asSystem(() -> where(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("notificationId", notification.getValue("id")))))
+            .extracting(record -> record.getValueString("userId")).containsExactlyInAnyOrderElementsOf(entry.getValue());
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Core commit deferral and rollback apply before the qbit creates recipients.
+    *******************************************************************************/
+   @Test
+   void testCoreNotificationTransactions() throws Exception
+   {
+      QBackendTransaction committed = new QBackendTransaction();
+      QAlerts.notify(new NotificationSignal("Committed").withAudience(NotificationAudience.user("viewer-1")), committed);
+      assertThat(all(AlertsNotification.TABLE_NAME)).isEmpty();
+      committed.commit();
+      assertThat(all(AlertsNotification.TABLE_NAME)).singleElement()
+         .satisfies(record -> assertThat(record.getValueString("title")).isEqualTo("Committed"));
+
+      QBackendTransaction rolledBack = new QBackendTransaction();
+      QContext.setTransaction(rolledBack);
+      try
+      {
+         QAlerts.notify(new NotificationSignal("Rolled back").withAudience(NotificationAudience.user("viewer-1")));
+         rolledBack.rollback();
+      }
+      finally
+      {
+         QContext.setTransaction(null);
+      }
+      assertThat(all(AlertsNotification.TABLE_NAME)).hasSize(1);
+      loginAs("viewer-1");
+      assertThat(new AlertsApi(runtime).inboxSummary()).containsEntry("unreadCount", 1);
    }
 
 
@@ -435,8 +488,8 @@ class NotificationsTest extends BaseAlertsTest
       // a muted category skips the user; security is never skipped      //
       ////////////////////////////////////////////////////////////////////
       new InsertAction().execute(new InsertInput(AlertsNotificationPreference.TABLE_NAME).withRecord(new QRecord().withValue("category", "MARKETING").withValue("inAppMuted", true)));
-      runtime.getNotifications().notify(new NotificationSignal("Big sale").withCategory(NotificationCategory.MARKETING).withAudience(NotificationAudience.users("viewer-1", "viewer-2")));
-      runtime.getNotifications().notify(new NotificationSignal("Password changed").withCategory(NotificationCategory.SECURITY).withAudience(NotificationAudience.user("viewer-1")));
+      QAlerts.notify(new NotificationSignal("Big sale").withCategory(NotificationCategory.MARKETING).withAudience(NotificationAudience.users("viewer-1", "viewer-2")));
+      QAlerts.notify(new NotificationSignal("Password changed").withCategory(NotificationCategory.SECURITY).withAudience(NotificationAudience.user("viewer-1")));
       assertThat(new AlertsApi(runtime).inboxSummary().get("unreadCount")).isEqualTo(1);
    }
 

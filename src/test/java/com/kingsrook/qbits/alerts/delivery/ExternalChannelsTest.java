@@ -237,9 +237,9 @@ class ExternalChannelsTest
       List<?> resolvedBody = JsonUtils.toObject(received.get(1).body(), List.class);
       assertThat(((Map<?, ?>) resolvedBody.get(0)).get("endsAt")).isEqualTo("2026-10-12T11:00:00Z");
 
-      //////////////////////////////////////////////////////
-      // a test message is one stand-in alert, already over //
-      //////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // a test message is one sample alert, already over //
+      ////////////////////////////////////////////////////
       alertmanager.deliver(new AlertMessage("TEST: hello", "t", "h", "INFO", "TEST", List.of(), "https://x/app/alerts_alert"), channel, null, secrets);
       assertThat(received.get(2).body()).contains("alerts.test");
    }
