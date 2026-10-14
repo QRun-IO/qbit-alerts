@@ -160,6 +160,6 @@ class RenderingTest
       assertThat(AlertsPossibleValues.label("IDP_GROUP")).isEqualTo("IdP Group");
       assertThat(AlertsPossibleValues.label("IN_APP")).isEqualTo("In App");
       assertThat(AlertsPossibleValues.label(null)).isNull();
-      assertThat(AlertsPossibleValues.buildEnumSources()).hasSize(25);
+      assertThat(AlertsPossibleValues.buildEnumSources()).hasSize(26);
    }
 }

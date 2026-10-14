@@ -58,6 +58,12 @@ public class AlertsNotificationRecipient extends QRecordEntity
    @QField(isEditable = false, maxLength = 16, possibleValueSourceName = "alerts_email_status")
    private String emailStatus;
 
+   @QField(isEditable = false, maxLength = 16, possibleValueSourceName = "alerts_slack_status")
+   private String slackStatus;
+
+   @QField(isEditable = false, maxLength = 100)
+   private String slackMessageId;
+
    @QField(isEditable = false)
    private Instant createDate;
 
@@ -359,6 +365,66 @@ public class AlertsNotificationRecipient extends QRecordEntity
    public AlertsNotificationRecipient withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for slackStatus
+    *******************************************************************************/
+   public String getSlackStatus()
+   {
+      return (this.slackStatus);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for slackStatus
+    *******************************************************************************/
+   public void setSlackStatus(String slackStatus)
+   {
+      this.slackStatus = slackStatus;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for slackStatus
+    *******************************************************************************/
+   public AlertsNotificationRecipient withSlackStatus(String slackStatus)
+   {
+      this.slackStatus = slackStatus;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for slackMessageId
+    *******************************************************************************/
+   public String getSlackMessageId()
+   {
+      return (this.slackMessageId);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for slackMessageId
+    *******************************************************************************/
+   public void setSlackMessageId(String slackMessageId)
+   {
+      this.slackMessageId = slackMessageId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for slackMessageId
+    *******************************************************************************/
+   public AlertsNotificationRecipient withSlackMessageId(String slackMessageId)
+   {
+      this.slackMessageId = slackMessageId;
       return (this);
    }
 }
