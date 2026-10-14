@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Changed
+- Team subscriptions now combine explicit members with ROLE and IDP_GROUP users from the optional public `AlertAudienceResolver` configured through `withAudienceResolver`. Recipients are deduplicated and retain per-user visibility checks. Missing resolvers resolve to nobody, log the reason, and show configuration-aware help on team/member screens.
+- Fix the alert Mute action to target its subject record, or its type and dedup key when no subject exists. Add the separate "Mute this alert type" action. RECORD mutes now compare table and record ID. Guarded changesets 21–22 add `scope_record_id` and allow full ALERT keys; existing type-wide mutes retain their scope.
 - Switch the optional qbit-email integration to its published `com.kingsrook.qbits.email.api` package in `0.1.0-RC.2`, preserving templates, categories, idempotency keys, linked records and outcome mapping. Narrow the architecture allowance to that API package while retaining all guardrails.
 - Email goes through qbit-email when it is produced in the instance (optional dependency, `qbit-email.version` 0.1.0-RC.2): alert channel emails (template `alerts_alert`), notification emails (`alerts_notification`) and digests (`alerts_digest`), all NOTIFICATION, one recipient per message, with idempotency keys and the alert or notification as the linked record. `messagingProviderName` stays as the fallback when qbit-email is absent, and is not required when it is present.
 - Target released QQQ `4.1.0-RC.6`; verify normally with `./mvnw -B verify` (no version override).
