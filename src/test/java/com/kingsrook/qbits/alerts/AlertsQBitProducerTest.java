@@ -283,7 +283,12 @@ class AlertsQBitProducerTest extends BaseAlertsTest
       {
          changelog = new String(in.readAllBytes(), StandardCharsets.UTF_8);
       }
-      String sql = changelog.lines().filter(line -> !line.stripLeading().startsWith("--")).collect(Collectors.joining("\n"));
+      ////////////////////////////////////////////////////////////////////////////////////
+      // the foreign-key changesets (30+) use PostgreSQL functions; AlertsForeignKeysTest //
+      // runs the whole changelog on PostgreSQL                                           //
+      ////////////////////////////////////////////////////////////////////////////////////
+      String preForeignKeys = changelog.substring(0, changelog.indexOf("-- changeset qbit-alerts:30"));
+      String sql            = preForeignKeys.lines().filter(line -> !line.stripLeading().startsWith("--")).collect(Collectors.joining("\n"));
       try(Connection connection = DriverManager.getConnection("jdbc:h2:mem:alerts_digest_migration"); Statement statement = connection.createStatement())
       {
          for(String command : sql.split(";"))
