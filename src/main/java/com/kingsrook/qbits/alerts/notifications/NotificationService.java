@@ -22,23 +22,26 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
+import com.kingsrook.qbits.alerts.delivery.AlertMessage;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
-import com.kingsrook.qbits.alerts.spi.NotificationSignal;
 import com.kingsrook.qqq.backend.core.actions.tables.DeleteAction;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.exceptions.QUserFacingException;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
@@ -335,7 +338,7 @@ public class NotificationService
       QRecord values    = new QRecord()
          .withValue("title", StringUtils.safeTruncate(alert.getValueString("title"), 200))
          .withValue("body", alert.getValueString("summary"))
-         .withValue("severity", NotificationSeverity.fromName(alert.getValueString("severity"), NotificationSeverity.WARNING).name())
+         .withValue("severity", severityOf(alert.getValueString("severity"), NotificationSeverity.WARNING).name())
          .withValue("category", NotificationCategory.ALERT.name())
          .withValue("sourceName", StringUtils.hasContent(alert.getValueString("sourceName")) ? alert.getValueString("sourceName") : "alerts")
          .withValue("sourceKey", sourceKey)
@@ -380,6 +383,29 @@ public class NotificationService
 
 
    /*******************************************************************************
+    ** One bell notification for a claimed digest, with all its alert links.
+    ** ALERT category keeps the general notification emailer from emailing it.
+    *******************************************************************************/
+   public void deliverDigest(String userId, AlertMessage message, Instant now) throws QException
+   {
+      QRecord existing = AlertsDb.first(AlertsNotification.TABLE_NAME, AlertsDb.eq("sourceKey", message.idempotencyKey()));
+      if(existing != null)
+      {
+         return;
+      }
+      QRecord notification = AlertsDb.insert(AlertsNotification.TABLE_NAME, new QRecord()
+         .withValue("title", message.subject()).withValue("body", message.text()).withValue("severity", message.severity())
+         .withValue("category", NotificationCategory.ALERT.name()).withValue("status", STATUS_SENT)
+         .withValue("sourceName", "alerts").withValue("sourceKey", message.idempotencyKey())
+         .withValue("linkUrl", "/app/" + AlertsAlert.TABLE_NAME).withValue("linkLabel", "Open alerts")
+         .withValue("audienceType", NotificationAudience.Type.USERS.name()).withValue("audienceValue", userId)
+         .withValue("publishAt", now).withValue("sentAt", now).withValue("recipientCount", 1));
+      AlertsDb.insert(AlertsNotificationRecipient.TABLE_NAME, newRecipient(notification.getValueInteger("id"), userId, now));
+   }
+
+
+
+   /*******************************************************************************
     ** Recount a notification's readers (after people mark it read or unread).
     *******************************************************************************/
    public void recountRead(Set<Integer> notificationIds) throws QException
@@ -402,7 +428,42 @@ public class NotificationService
     *******************************************************************************/
    public static NotificationAudience audienceOf(QRecord notification)
    {
-      return (NotificationAudience.parse(notification.getValueString("audienceType"), notification.getValueString("audienceValue")));
+      String   type   = notification.getValueString("audienceType");
+      String   value  = notification.getValueString("audienceValue");
+      String[] values = value == null ? new String[0] : Arrays.stream(value.split("[,\n]"))
+         .map(String::trim).filter(v -> !v.isEmpty()).distinct().toArray(String[]::new);
+      if(type == null)
+      {
+         return (null);
+      }
+      return (switch(type.trim().toUpperCase(Locale.ROOT))
+      {
+         case "ALL_USERS" -> NotificationAudience.allUsers();
+         case "ROLES" -> NotificationAudience.roles(values);
+         case "PERMISSION" -> NotificationAudience.permission(values.length == 0 ? null : values[0]);
+         case "USERS" -> NotificationAudience.users(values);
+         default -> null;
+      });
+   }
+
+
+
+   /*******************************************************************************
+    ** Read a stored severity without changing legacy case and fallback behavior.
+    *******************************************************************************/
+   public static NotificationSeverity severityOf(String name, NotificationSeverity fallback)
+   {
+      if(name != null)
+      {
+         for(NotificationSeverity severity : NotificationSeverity.values())
+         {
+            if(severity.name().equalsIgnoreCase(name.trim()))
+            {
+               return (severity);
+            }
+         }
+      }
+      return (fallback);
    }
 
 
@@ -483,7 +544,7 @@ public class NotificationService
          .withValue("linkUrl", linkUrl(signal.getLink()))
          .withValue("linkLabel", signal.getLink() == null ? null : signal.getLink().getLabel())
          .withValue("audienceType", signal.getAudience().getType().name())
-         .withValue("audienceValue", signal.getAudience().valuesAsString())
+         .withValue("audienceValue", audienceValue(signal.getAudience()))
          .withValue("publishAt", signal.getPublishAt())
          .withValue("expireAt", signal.getExpireAt())
          .withValue("sticky", Boolean.TRUE.equals(signal.getSticky())));
@@ -496,8 +557,19 @@ public class NotificationService
     *******************************************************************************/
    private static QFilterCriteria audienceValueCriteria(NotificationAudience audience)
    {
-      String value = audience.valuesAsString();
+      String value = audienceValue(audience);
       return (value == null ? new QFilterCriteria("audienceValue", QCriteriaOperator.IS_BLANK) : new QFilterCriteria("audienceValue", QCriteriaOperator.EQUALS, value));
+   }
+
+
+
+   /*******************************************************************************
+    ** Preserve the qbit's stored audience format and dedup keys with core types.
+    *******************************************************************************/
+   private static String audienceValue(NotificationAudience audience)
+   {
+      List<String> values = audience.getValues().stream().map(String::trim).filter(value -> !value.isEmpty()).distinct().toList();
+      return (values.isEmpty() ? null : String.join(",", values));
    }
 
 
@@ -507,7 +579,7 @@ public class NotificationService
     *******************************************************************************/
    private static QRecord newRecipient(Integer notificationId, String userId, Instant now)
    {
-      return (new QRecord().withValue("notificationId", notificationId).withValue("userId", userId).withValue("deliveredAt", now).withValue("emailStatus", "NONE"));
+      return (new QRecord().withValue("notificationId", notificationId).withValue("userId", userId).withValue("deliveredAt", now).withValue("emailStatus", "NONE").withValue("slackStatus", "NONE"));
    }
 
 

@@ -25,7 +25,7 @@ import com.kingsrook.qbits.alerts.engine.AlertRouter;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryKind;
-import com.kingsrook.qbits.alerts.spi.DetailLevel;
+import com.kingsrook.qqq.backend.core.alerts.DetailLevel;
 import com.kingsrook.qqq.backend.core.instances.QMetaDataVariableInterpreter;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import org.junit.jupiter.api.Test;
@@ -160,6 +160,6 @@ class RenderingTest
       assertThat(AlertsPossibleValues.label("IDP_GROUP")).isEqualTo("IdP Group");
       assertThat(AlertsPossibleValues.label("IN_APP")).isEqualTo("In App");
       assertThat(AlertsPossibleValues.label(null)).isNull();
-      assertThat(AlertsPossibleValues.buildEnumSources()).hasSize(25);
+      assertThat(AlertsPossibleValues.buildEnumSources()).hasSize(26);
    }
 }

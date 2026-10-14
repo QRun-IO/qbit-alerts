@@ -23,7 +23,9 @@ system as well"
 ## 1. Owner decisions (2026-10-13)
 
 1. **Channels.** In-app (the bell and the notifications page) always. Email is opt-in per user, by
-   severity or as a daily digest. Slack stays a group or monitor channel only, never per user.
+   severity or as a daily digest. Slack is also a per-user channel, chosen per category (owner decision
+   2026-10-14, superseding the 2026-10-13 "Slack stays a group or monitor channel only, never per user";
+   alert-group and monitor Slack channels are unchanged).
 2. **Audience.** Dynamic audiences: all users, groups or roles, holders of a permission, or named users.
    The audience is resolved at send time and materialized as one recipient row per user, so read,
    unread and dismissed are tracked per user.
@@ -88,8 +90,9 @@ everywhere. Deleting it deletes its recipient rows.
 
 A child of the notification: one row per user, unique (`notificationId`, `userId`).
 
-`notificationId`, `userId`, `deliveredAt`, `readAt`, `dismissedAt`, `emailedAt`, `emailStatus`
-(NONE / PENDING / SENT / DIGESTED / SKIPPED / FAILED).
+`notificationId`, `userId`, `deliveredAt`, `readAt`, `dismissedAt`, `emailedAt`, `emailStatus`,
+`slackStatus`, `slackMessageId` (each status is NONE / PENDING / SENT / DIGESTED / SKIPPED / FAILED;
+`slackMessageId` is filled when the Slack provider reports one).
 
 Users see and change only their own rows (owner lock on `userId`). Only `readAt` and `dismissedAt` are
 editable; inserts and deletes are the qbit's.
@@ -99,13 +102,14 @@ editable; inserts and deletes are the qbit's.
 One row per user and category, unique (`userId`, `category`); a missing row means the defaults.
 
 `userId`, `category`, `inAppMuted` (boolean; refused for SECURITY), `inAppMinSeverity` (nullable; null means every severity, refused for SECURITY), `emailMode` (OFF / IMMEDIATE /
-DAILY_DIGEST, default OFF), `emailMinSeverity` (default WARNING). It is owner-locked on `userId`. The
+DAILY_DIGEST, default OFF), `emailMinSeverity` (default WARNING), `slackMode` (OFF / IMMEDIATE / DAILY_DIGEST, default OFF),
+`slackMinSeverity` (default WARNING). It is owner-locked on `userId`. The
 digest hour and time zone come from `alerts_user_preference`.
 
 ### 3.4 Notification settings in Preferences
 
 With the core user-preferences contract installed, the qbit registers **Notifications** (`notifications`,
-order 20, icon `notifications`): “What reaches you in the app and by email.” It requires `alerts.view`
+order 20, icon `notifications`): “What reaches you in the app, by email and on Slack.” It requires `alerts.view`
 and has no app scope. Hosts can disable it with `AlertsQBitConfig.withPreferencesSectionEnabled(false)`.
 Older core runtimes without preferences metadata omit the section.
 
@@ -116,7 +120,10 @@ level audits retaining the signed-in user and client channel. It exposes:
   time zone (a valid Java `ZoneId`), and the alert in-app and email switches from `alerts_user_preference`.
   A missing user row gets the same defaults as the bell's first-visit setup.
 - One category row per notification category: In-app, In-app from, Email (Off / Immediate / Daily digest),
-  and Email from. Missing category rows use table defaults; edits upsert only that user's category.
+  Email from, Slack (Off / Immediate / Daily digest) and Slack from. Slack fields appear only when
+  the configured `slackProviderName` messaging provider is registered before Alerts is produced.
+  They use the same `alerts_email_mode` choices as the table. Missing category rows use table defaults;
+  edits upsert only that user's category. SECURITY Slack fields remain editable.
   SECURITY's two in-app fields are read-only: “Security notices can't be muted.”
 - Only the user's own USER subscriptions, labelled by scope, with Enabled, From severity and Delivery mode.
   Other users' rules and team/channel rules cannot be edited here, including by administrators.
@@ -128,7 +135,7 @@ level audits retaining the signed-in user and client channel. It exposes:
 {
   "values": { "digestHour": 8, "timeZone": "America/Chicago" },
   "lists": {
-    "categories": [{ "key": "JOB", "values": { "inAppMinSeverity": "WARNING", "emailMode": "DAILY_DIGEST" } }],
+    "categories": [{ "key": "JOB", "values": { "inAppMinSeverity": "WARNING", "emailMode": "DAILY_DIGEST", "slack": "IMMEDIATE", "slackMinSeverity": "WARNING" } }],
     "subscriptions": [{ "key": "42", "values": { "enabled": true, "minSeverity": "ERROR" } }]
   }
 }
@@ -141,15 +148,14 @@ table screens for administering other users' settings.
 
 In-app severity filters apply when recipients are materialized, just like category muting; existing
 inbox items remain. SECURITY always reaches its in-app recipients. While `pausedUntil` is in the future,
-non-SECURITY notification emails are deferred, including daily digests; recipients remain in the inbox
+non-SECURITY notification emails and per-user Slack DMs are deferred, including daily digests; recipients remain in the inbox
 and eligible after the pause ends, even after more than a day. SECURITY keeps its category email mode
-and severity settings but bypasses the pause. Existing alert routing continues to use the same pause
+and Slack mode/severity settings but bypasses the pause. Existing alert routing continues to use the same pause
 and alert channel switches.
 
-Schema migration: `qbit-alerts:21` adds nullable `in_app_min_severity VARCHAR(16)`.
-Until the core contract is released, build with the locally installed snapshot:
-`./mvnw -o -q verify -Dqqq.snapshot.version=4.1.0-PREFS-SNAPSHOT`.
-The POM's default QQQ version stays unchanged until the shipping RC is selected.
+Schema migration: `qbit-alerts:29` adds nullable `in_app_min_severity VARCHAR(16)`.
+The migration uses `onFail:MARK_RAN` when the column already exists.
+The POM targets released QQQ `4.1.0-RC.7`; build with `./mvnw -o -q verify`.
 
 ## 4. Audiences
 
@@ -187,8 +193,9 @@ notification admins. The home stays the only Alerts dashboard.
 
 ## 6. Producer SPI
 
-It extends the core alerts SPI (`com.kingsrook.qqq.backend.core.alerts`) through a core PR to qqq
-`develop`, for the next 4.1 RC:
+The notification API from [QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)
+ships in 4.1.0-RC.6. This branch targets that release and delivers core `QAlerts.notify`
+calls through the installed qbit sink:
 
 ```java
 QAlerts.notify(new NotificationSignal("Your export failed")
@@ -200,13 +207,26 @@ QAlerts.notify(new NotificationSignal("Your export failed")
    .withAudience(NotificationAudience.user(userId)));
 ```
 
-- `AlertSinkInterface` gets a default method, `notify(NotificationSignal)`, that logs; existing sinks keep
-  working. `LoggingAlertSink` logs at INFO. The qbit's sink queues the signal like an alert signal.
+- `AlertSinkInterface` has a default method, `notify(NotificationSignal)`, that logs; existing sinks keep
+  working. `LoggingAlertSink` logs at INFO (WARN for ERROR/CRITICAL). The qbit's sink queues the signal like an alert signal.
 - The guarantees match `raise`: it never throws or blocks, it waits for the commit when a transaction is
   open, and bad input is counted.
 - `NotificationAudience`: `allUsers()`, `roles(...)`, `permission(p)`, `users(...)`, `user(id)`.
-- Until that RC ships, the qbit carries the same classes in its `spi` stand-in package, and hosts call
-  `AlertsRuntime.get(qInstance).sink().notify(...)`.
+- All producer types, including `AlertLink`, are from `com.kingsrook.qqq.backend.core.alerts`.
+  The qbit implements core's `notify` override in `AlertsSinkAdapter` and `QbitAlertsSink`;
+  signals use the existing bounded queue and `NotificationService` for audience resolution,
+  inbox recipients, scheduling and category/email preferences. Alert subscription channels
+  keep their existing behavior. Quiet-hour scheduling for alerts remains unimplemented (see README).
+- **Breaking migration:** the local `spi` package and `AlertsRuntime.sink()` are removed.
+  Change imports to core, call `QAlerts.notify(signal)` in the producer's `QContext`, and
+  rebuild. qbit-easypost-tracking#16 uses core. The runtime's `getSink()` supports adapter
+  delegation and queue lifecycle operations; producers use `QAlerts`.
+- Stored audience types and comma/newline-separated values remain readable. The service
+  retains trimming, duplicate removal and null storage for empty audiences, so existing
+  notification dedup keys and rows need no migration. Core types do not own database parsing.
+- Verification covers core producer calls through the asynchronous queue to the strict HTTP
+  inbox, all audience factories, commit/rollback, category mutes, immediate email and digests.
+  The UI fragment and all six HTTP operations are unchanged by this notification migration.
 
 ### 6.1 Automatic sources
 
@@ -226,7 +246,20 @@ QAlerts.notify(new NotificationSignal("Your export failed")
   sends from the delivery job. DAILY_DIGEST sends one email per user at their digest hour, listing their
   unread notifications since the last digest. A muted category is skipped. Email never includes a body
   for SECURITY beyond the title and a link.
-- **Slack** stays a channel for alert groups and monitors only.
+- **Slack** (per user, opt-in per category through the Slack column of My Notification Settings): sent by
+  `NotificationSlackSender` from the same delivery job, only through core `SendMessageAction` (provider
+  `slackProviderName`, default `slack`; address `user:<userId>`, the recipient as owner, so the DM goes
+  through that user's own Slack connection; qbit-slack is never imported). IMMEDIATE sends one DM per
+  notification at or above `slackMinSeverity`; DAILY_DIGEST sends one DM per user at their digest hour,
+  listing their unread notifications, and marks the rows DIGESTED. Slack is a push channel, so a user's pause
+  holds non-SECURITY items; quiet hours (`alerts_user_preference`) hold items with the same CRITICAL
+  bypass as other push channels. SECURITY bypasses pause, and mixed digests include only eligible items;
+  the bell is never held. ALERT notifications are not sent (alert channels already cover them) and SECURITY
+  carries the title and link only. With no provider registered under that name the rows are SKIPPED. A user
+  without a Slack connection is SKIPPED with no retry; any other error is FAILED; neither fails the
+  notification. Idempotency key `notify:<notificationId>:<userId>:slack`; until core adds an idempotency
+  field (STAND-IN core#1194, remove by RC.8) the recipient's `slackStatus` prevents a resend.
+- **Alert-group and monitor Slack channels** (incoming webhooks) work as before.
 
 ## 8. Next UI bell and page
 
@@ -247,7 +280,7 @@ Gating is unchanged from #85: no bell and zero requests unless `metaData.apps.al
 
 | Method | Path | Body or query | Returns |
 |---|---|---|---|
-| GET | `/inbox/summary` | | `{unreadCount, highestUnreadSeverity, items[≤10], banners[], pollSeconds, notificationsHref, preferencesSection}` |
+| GET | `/inbox/summary` | | `{unreadCount, highestUnreadSeverity, items[≤10], banners[], pollSeconds, notificationsHref, inboxHref, alertsHref, preferencesSection}` |
 | GET | `/inbox` | `?status=all\|unread&category=&severity=&offset=0&limit=25` | `{items[], total, offset, limit}` |
 | POST | `/inbox/read` | `{id}` or `{ids:[..]}` or `{all:true}` (`{alertId}` still works) | `{updated}` |
 | POST | `/inbox/unread` | `{id}` | `{updated}` |
@@ -257,6 +290,7 @@ An item is `{id, notificationId, title, body, severity, category, source, href, 
 deliveredAt, age, unread, sticky}`. `id` is the recipient row id. `body` appears only in `/inbox` and in
 banners. `highestUnreadSeverity` is one of the five severities. Every call works in the caller's
 session, so the record locks apply.
+The alerts extension is version `1.1.0`. `inboxHref` retains the canonical inbox link.
 `preferencesSection` is `"notifications"` when that section is registered, otherwise JSON null.
 Clients can use it for the bell's settings shortcut to the core Preferences section.
 
@@ -282,7 +316,7 @@ recipients) whose `expireAt` is more than 7 days past, plus SENT or RETRACTED no
 |---|---|
 | a | Tables, the rename and retirement, admin screens and actions, audiences and recipients, the bell API, ALERT notifications |
 | b | Next UI: badge, popover, page, banner |
-| c | Producer SPI (core PR plus the stand-in), job failures |
+| c | Core RC.6 producer SPI and sink integration, job failures |
 | d | Security notices, shares, release and marketing producers |
 | e | Email: immediate and daily digest |
 
@@ -296,3 +330,11 @@ recipients) whose `expireAt` is more than 7 days past, plus SENT or RETRACTED no
 5. Core authentication events? **Later.** Hosts call `AlertsSecurityNotices` from their authentication
    customizer until core offers a sign-in event.
 6. Server-sent events? **Later.** Polling with backoff is enough at 60 s.
+
+## UI contract
+
+The implemented UI routes and additive action/follow metadata are specified in [UI-API.md](UI-API.md),
+with the generated fragment at `src/main/resources/openapi/qqq-v1/alerts.yaml`. Record following
+belongs to collaboration; the old alerts panel watch route is removed.
+Record-linked alerts fan out through core's RC.6 followers provider with source-record access
+checks and the ordinary alert preference/suppression pipeline; see [record follower routing](UI-API.md#record-follower-routing).

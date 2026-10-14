@@ -42,31 +42,29 @@ import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ScopeType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Status;
-import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.SubscriberType;
 import com.kingsrook.qbits.alerts.model.AlertsRecordRef;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.notifications.NotificationService;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
+import com.kingsrook.qbits.alerts.processes.AlertsAction;
 import com.kingsrook.qqq.backend.core.actions.permissions.PermissionsHelper;
 import com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType;
-import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QBadRequestException;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.exceptions.QPermissionDeniedException;
 import com.kingsrook.qqq.backend.core.model.actions.AbstractActionInput;
-import com.kingsrook.qqq.backend.core.model.actions.tables.insert.InsertInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter;
 import com.kingsrook.qqq.backend.core.model.actions.tables.update.UpdateInput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
-import com.kingsrook.qqq.backend.core.utils.CollectionUtils;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
+import com.kingsrook.qqq.middleware.javalin.specs.extensions.MiddlewareSpecExtensionsMetaData;
 
 
 /*******************************************************************************
@@ -140,7 +138,7 @@ public class AlertsApi
          if(entry.unread())
          {
             unread++;
-            NotificationSeverity severity = NotificationSeverity.fromName(entry.notification().getValueString("severity"), NotificationSeverity.INFO);
+            NotificationSeverity severity = NotificationService.severityOf(entry.notification().getValueString("severity"), NotificationSeverity.INFO);
             highest = highest == null || severity.compareTo(highest) > 0 ? severity : highest;
          }
          if(latest.size() < INBOX_ITEMS)
@@ -160,6 +158,7 @@ public class AlertsApi
       result.put("banners", banners);
       result.put("notificationsHref", NOTIFICATIONS_HREF);
       result.put("preferencesSection", AlertsQBitProducer.preferencesSectionName(QContext.getQInstance()));
+      result.put("inboxHref", NOTIFICATIONS_HREF);
       result.put("alertsHref", "/app/" + AlertsQBitConfig.APP_NAME);
       result.put("pollSeconds", POLL_SECONDS);
       return (result);
@@ -393,6 +392,11 @@ public class AlertsApi
       {
          row.put("alertId", parseInteger(notification.getValueString("sourceRecordId")));
       }
+      List<Map<String, Object>> actions = new ArrayList<>();
+      actions.add(Map.of("name", entry.unread() ? "read" : "unread", "label", entry.unread() ? "Mark read" : "Mark unread",
+         "operationId", entry.unread() ? InboxReadSpec.OPERATION_ID : InboxUnreadSpec.OPERATION_ID));
+      actions.add(Map.of("name", "dismiss", "label", "Dismiss", "operationId", InboxDismissSpec.OPERATION_ID));
+      row.put("actions", actions);
       return (row);
    }
 
@@ -584,42 +588,9 @@ public class AlertsApi
       result.put("viewAllHref", allIds.isEmpty() ? null : AlertsHome.listUrl(new QQueryFilter().withCriteria("id", QCriteriaOperator.IN, dedupe(allIds))));
       result.put("canManage", session.hasPermission(AlertsQBitConfig.PERMISSION_MANAGE));
       result.put("watching", isWatching(tableName, recordId));
+      MiddlewareSpecExtensionsMetaData extensions = MiddlewareSpecExtensionsMetaData.of(runtime.getQInstance());
+      result.put("follow", Map.of("available", extensions != null && extensions.getExtensions().containsKey("collaboration")));
       return (result);
-   }
-
-
-
-   /*******************************************************************************
-    ** "Watch alerts for this record": a RECORD-scope subscription for the user.
-    *******************************************************************************/
-   public Map<String, Object> watchRecord(Map<String, Object> body) throws QException
-   {
-      String userId    = requireViewer();
-      String tableName = body == null ? null : (String) body.get("tableName");
-      Object recordId  = body == null ? null : body.get("recordId");
-      if(userId == null || !StringUtils.hasContent(tableName) || recordId == null || runtime.getQInstance().getTable(tableName) == null)
-      {
-         throw (new QBadRequestException("Send a table name and record id."));
-      }
-      if(isWatching(tableName, String.valueOf(recordId)))
-      {
-         return (Map.of("watching", true, "created", false));
-      }
-      List<QRecord> inserted = InsertAction.executeForRecords(new InsertInput(AlertsSubscription.TABLE_NAME).withRecord(new QRecord()
-         .withValue("subscriberType", SubscriberType.USER.name())
-         .withValue("userId", userId)
-         .withValue("scopeType", ScopeType.RECORD.name())
-         .withValue("scopeValue", tableName)
-         .withValue("scopeRecordId", String.valueOf(recordId))
-         .withValue("minSeverity", AlertSeverity.WARNING.name())
-         .withValue("events", "RAISED,ESCALATED,REMINDER,RESOLVED")
-         .withValue("deliveryMode", "IMMEDIATE")
-         .withValue("enabled", true)));
-      if(CollectionUtils.nullSafeHasContents(inserted.get(0).getErrors()))
-      {
-         throw (new QBadRequestException(inserted.get(0).getErrors().get(0).getMessage()));
-      }
-      return (Map.of("watching", true, "created", true, "subscriptionId", inserted.get(0).getValue("id")));
    }
 
 
@@ -656,7 +627,28 @@ public class AlertsApi
       row.put("age", AlertMessageRenderer.age(alert.getValueInstant("firstRaisedAt"), now));
       row.put("raisedAt", alert.getValueInstant("firstRaisedAt") == null ? null : alert.getValueInstant("firstRaisedAt").toString());
       row.put("href", "/app/" + AlertsAlert.TABLE_NAME + "/" + alert.getValue("id"));
+      List<Map<String, Object>> actions = new ArrayList<>();
+      if(QContext.getQSession().hasPermission(AlertsQBitConfig.PERMISSION_MANAGE))
+      {
+         if(Status.OPEN.name().equals(alert.getValueString("status")))
+         {
+            actions.add(processAction("acknowledge", AlertsAction.ACKNOWLEDGE, alert.getValueInteger("id")));
+         }
+         actions.add(processAction("snooze", AlertsAction.SNOOZE, alert.getValueInteger("id")));
+      }
+      row.put("actions", actions);
       return (row);
+   }
+
+
+
+   /*******************************************************************************
+    ** Complete navigation target so clients need no process or table conventions.
+    *******************************************************************************/
+   private static Map<String, Object> processAction(String name, AlertsAction action, Integer alertId)
+   {
+      return (Map.of("name", name, "label", action.getLabel(), "processName", action.getProcessName(),
+         "href", "/app/" + action.getProcessName() + "?recordsParam=recordIds&recordIds=" + alertId + "&tableName=" + AlertsAlert.TABLE_NAME));
    }
 
 

@@ -27,13 +27,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
+import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.actions.permissions.CorePermissionEnforcer;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QBadRequestException;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -74,7 +75,7 @@ public class AlertsNotificationPreferencesProvider implements UserPreferenceProv
    /*******************************************************************************
     ** Register once; no app scope, so bell users need only alerts.view.
     *******************************************************************************/
-   public static void register(QInstance instance)
+   public static void register(QInstance instance, AlertsQBitConfig config)
    {
       if(isRegistered(instance))
       {
@@ -86,9 +87,19 @@ public class AlertsNotificationPreferencesProvider implements UserPreferenceProv
          hours.add(new QPossibleValue<>(hour, (hour % 12 == 0 ? 12 : hour % 12) + ":00 " + (hour < 12 ? "AM" : "PM")));
       }
       instance.addPossibleValueSource(new QPossibleValueSource().withName("alerts_digest_hour").withType(QPossibleValueSourceType.ENUM).withEnumValues(hours));
+      UserPreferenceListMetaData categories = new UserPreferenceListMetaData().withName("categories").withLabel("Categories").withRowLabel("Category")
+         .withField(new QFieldMetaData("inApp", QFieldType.BOOLEAN).withLabel("In-app"))
+         .withField(enumField("inAppMinSeverity", "In-app from", "alerts_notification_severity"))
+         .withField(enumField("emailMode", "Email", "alerts_email_mode"))
+         .withField(enumField("emailMinSeverity", "Email from", "alerts_notification_severity"));
+      if(slackConfigured(instance, config))
+      {
+         categories.withField(enumField("slack", "Slack", "alerts_email_mode"))
+            .withField(enumField("slackMinSeverity", "Slack from", "alerts_notification_severity"));
+      }
       UserPreferencesMetaData.ofOrWithNew(instance).withSection(new UserPreferenceSectionMetaData()
          .withName(SECTION_NAME).withLabel("Notifications").withIcon(new QIcon("notifications")).withOrder(20)
-         .withDescription("What reaches you in the app and by email.").withPermissionName(AlertsQBitConfig.PERMISSION_VIEW)
+         .withDescription("What reaches you in the app, by email and on Slack.").withPermissionName(AlertsQBitConfig.PERMISSION_VIEW)
          .withProvider(new QCodeReference(AlertsNotificationPreferencesProvider.class))
          .withField(new QFieldMetaData("pausedUntil", QFieldType.DATE_TIME).withLabel("Pause notifications until")
             .withHelpContent(new QHelpContent("Security notices still arrive.")))
@@ -96,15 +107,22 @@ public class AlertsNotificationPreferencesProvider implements UserPreferenceProv
          .withField(new QFieldMetaData("timeZone", QFieldType.STRING).withLabel("Time zone").withMaxLength(64))
          .withField(new QFieldMetaData("alertInAppEnabled", QFieldType.BOOLEAN).withLabel("Show alerts in the app"))
          .withField(new QFieldMetaData("alertEmailEnabled", QFieldType.BOOLEAN).withLabel("Email me alerts"))
-         .withList(new UserPreferenceListMetaData().withName("categories").withLabel("Categories").withRowLabel("Category")
-            .withField(new QFieldMetaData("inApp", QFieldType.BOOLEAN).withLabel("In-app"))
-            .withField(enumField("inAppMinSeverity", "In-app from", "alerts_notification_severity"))
-            .withField(enumField("emailMode", "Email", "alerts_email_mode"))
-            .withField(enumField("emailMinSeverity", "Email from", "alerts_notification_severity")))
+         .withList(categories)
          .withList(new UserPreferenceListMetaData().withName("subscriptions").withLabel("Subscriptions").withRowLabel("Alert rule")
             .withField(new QFieldMetaData("enabled", QFieldType.BOOLEAN).withLabel("Enabled"))
             .withField(enumField("minSeverity", "From severity", "alerts_severity"))
             .withField(enumField("deliveryMode", "Delivery mode", "alerts_delivery_mode"))));
+   }
+
+
+
+   /*******************************************************************************
+    ** Only expose Slack controls when the configured messaging provider exists.
+    *******************************************************************************/
+   private static boolean slackConfigured(QInstance instance, AlertsQBitConfig config)
+   {
+      String name = config.getSlackProviderName();
+      return (name != null && !name.isBlank() && instance.getMessagingProvider(name) != null);
    }
 
 
@@ -161,6 +179,14 @@ public class AlertsNotificationPreferencesProvider implements UserPreferenceProv
          if(values.get("inAppMinSeverity") == null)
          {
             values.put("inAppMinSeverity", NotificationSeverity.INFO.name());
+         }
+         if(slackConfigured(QContext.getQInstance(), AlertsRuntime.get(QContext.getQInstance()).getConfig()))
+         {
+            for(String field : List.of("slackMode", "slackMinSeverity"))
+            {
+               values.put("slackMode".equals(field) ? "slack" : field, preference == null
+                  ? QContext.getQInstance().getTable(AlertsNotificationPreference.TABLE_NAME).getField(field).getDefaultValue() : preference.getValue(field));
+            }
          }
          String label = QContext.getQInstance().getPossibleValueSource("alerts_notification_category").getEnumValues().stream()
             .filter(value -> category.name().equals(value.getId())).findFirst().orElseThrow().getLabel();
@@ -255,7 +281,7 @@ public class AlertsNotificationPreferencesProvider implements UserPreferenceProv
          QRecord existing = AlertsDb.first(AlertsNotificationPreference.TABLE_NAME, AlertsDb.eq("userId", context.getUserId())
             .withCriteria("category", QCriteriaOperator.EQUALS, row.getKey()));
          QRecord update = new QRecord();
-         row.getValues().forEach((field, value) -> update.setValue("inApp".equals(field) ? "inAppMuted" : field,
+         row.getValues().forEach((field, value) -> update.setValue("inApp".equals(field) ? "inAppMuted" : "slack".equals(field) ? "slackMode" : field,
             "inApp".equals(field) ? Boolean.FALSE.equals(value) : value));
          if(existing == null)
          {

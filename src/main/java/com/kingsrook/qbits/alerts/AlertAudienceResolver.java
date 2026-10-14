@@ -14,36 +14,24 @@
  * limitations under the License.
  */
 
+package com.kingsrook.qbits.alerts;
 
-package com.kingsrook.qbits.alerts.spi;
+
+import java.util.Set;
+import com.kingsrook.qqq.backend.core.exceptions.QException;
 
 
 /*******************************************************************************
- ** How a notification looks to its reader: INFO and SUCCESS are good news,
- ** WARNING and ERROR need a look, CRITICAL makes the badge red (stand-in for
- ** core's com.kingsrook.qqq.backend.core.alerts.NotificationSeverity).
+ ** Host SPI for ROLE and IDP_GROUP team membership. Implementations use the
+ ** host's public APIs and return user IDs, never display names. Return an empty
+ ** set for an unknown source or value. Results must be bounded by the configured
+ ** maxAudienceSize; routing still checks every user's alert visibility.
  *******************************************************************************/
-public enum NotificationSeverity
+@FunctionalInterface
+public interface AlertAudienceResolver
 {
-   INFO, SUCCESS, WARNING, ERROR, CRITICAL;
-
-
-
    /*******************************************************************************
-    ** The severity for a name (any case), or the fallback.
+    ** Resolve the team's memberSource and memberSourceValue to user IDs.
     *******************************************************************************/
-   public static NotificationSeverity fromName(String name, NotificationSeverity fallback)
-   {
-      if(name != null)
-      {
-         for(NotificationSeverity severity : values())
-         {
-            if(severity.name().equalsIgnoreCase(name.trim()))
-            {
-               return (severity);
-            }
-         }
-      }
-      return (fallback);
-   }
+   Set<String> resolve(String sourceType, String sourceValue) throws QException;
 }

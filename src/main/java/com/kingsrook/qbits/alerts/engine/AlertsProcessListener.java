@@ -25,13 +25,14 @@ import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.AlertMonitorKind;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
-import com.kingsrook.qbits.alerts.spi.NotificationSignal;
 import com.kingsrook.qqq.backend.core.actions.processes.listeners.ProcessLifecycleListenerInterface;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.AlertMonitorKind;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.QAlerts;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.actions.processes.ProcessSummaryLine;
@@ -242,7 +243,7 @@ public class AlertsProcessListener implements ProcessLifecycleListenerInterface
       QProcessMetaData process   = QContext.getQInstance().getProcess(input.getProcessName());
       String           label     = process == null || process.getLabel() == null ? input.getProcessName() : process.getLabel();
       String           tableName = process == null ? null : process.getTableName();
-      runtime.sink().notify(new NotificationSignal(String.format(titleFormat, label))
+      QAlerts.notify(new NotificationSignal(String.format(titleFormat, label))
          .withBody(body)
          .withSeverity(severity)
          .withCategory(NotificationCategory.JOB)

@@ -46,8 +46,9 @@ public enum AlertsAction
    ASSIGN("alertsAssign", "Assign", "assignment_ind", AlertsAlert.TABLE_NAME, AlertsQBitConfig.PERMISSION_MANAGE, null),
    COMMENT("alertsAddComment", "Add comment", "comment", AlertsAlert.TABLE_NAME, AlertsQBitConfig.PERMISSION_VIEW, 1),
    MUTE_ALERT("alertsMuteAlert", "Mute", "notifications_off", AlertsAlert.TABLE_NAME, AlertsQBitConfig.PERMISSION_MANAGE, 1),
+   MUTE_ALERT_TYPE("alertsMuteAlertType", "Mute this alert type", "notifications_off", AlertsAlert.TABLE_NAME, AlertsQBitConfig.PERMISSION_MANAGE, 1),
    SUBSCRIBE_TYPE("alertsSubscribeToType", "Subscribe me", "notifications", AlertsType.TABLE_NAME, AlertsQBitConfig.PERMISSION_VIEW, 1),
-   MUTE_TYPE("alertsMuteType", "Mute", "notifications_off", AlertsType.TABLE_NAME, AlertsQBitConfig.PERMISSION_MANAGE, 1),
+   MUTE_TYPE("alertsMuteType", "Mute this alert type", "notifications_off", AlertsType.TABLE_NAME, AlertsQBitConfig.PERMISSION_MANAGE, 1),
    CREATE_MONITOR("alertsCreateMonitorFromType", "Create monitor", "add_alert", AlertsType.TABLE_NAME, AlertsQBitConfig.PERMISSION_ADMIN, 1),
    SUBSCRIBE_GROUP("alertsSubscribeToGroup", "Subscribe me", "notifications", AlertsGroup.TABLE_NAME, AlertsQBitConfig.PERMISSION_VIEW, 1),
    MUTE_GROUP("alertsMuteGroup", "Mute", "notifications_off", AlertsGroup.TABLE_NAME, AlertsQBitConfig.PERMISSION_MANAGE, 1),
@@ -131,7 +132,7 @@ public enum AlertsAction
                .withPossibleValueSourceName(AlertsPossibleValues.SEVERITY),
             new QFieldMetaData(FIELD_DELIVERY_MODE, QFieldType.STRING).withLabel("Delivery").withIsRequired(true).withDefaultValue("IMMEDIATE")
                .withPossibleValueSourceName(AlertsPossibleValues.DELIVERY_MODE));
-         case MUTE_ALERT, MUTE_TYPE, MUTE_GROUP, MUTE_MONITOR -> List.of(
+         case MUTE_ALERT, MUTE_ALERT_TYPE, MUTE_TYPE, MUTE_GROUP, MUTE_MONITOR -> List.of(
             new QFieldMetaData(FIELD_MUTE_MINUTES, QFieldType.INTEGER).withLabel("Mute for (minutes)").withIsRequired(true).withDefaultValue(60),
             new QFieldMetaData(FIELD_NOTE, QFieldType.TEXT).withLabel("Reason").withIsRequired(true));
          default -> List.of();

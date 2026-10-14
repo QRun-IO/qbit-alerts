@@ -38,9 +38,9 @@ import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.HealthStatus;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Resolution;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
-import com.kingsrook.qbits.alerts.spi.DetailLevel;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.DetailLevel;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.exceptions.QUserFacingException;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
@@ -102,6 +102,7 @@ public class DeliveryWorker
          Instant now = runtime.now();
          List<QRecord> due = AlertsDb.query(AlertsDelivery.TABLE_NAME, new QQueryFilter()
             .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.PENDING.name(), DeliveryStatus.RETRYING.name()))
+            .withCriteria("kind", QCriteriaOperator.NOT_EQUALS, DeliveryKind.DIGEST.name())
             .withCriteria("nextAttemptAt", QCriteriaOperator.LESS_THAN_OR_EQUALS, now)
             .withOrderBy(new QFilterOrderBy("id"))
             .withLimit(BATCH_LIMIT));
@@ -327,14 +328,14 @@ public class DeliveryWorker
             .withTitle("Alert channel \"" + channel.getValueString("label") + "\" is failing")
             .withSummary(failures + " deliveries in a row failed.")
             .withDetails(result.error())
-            .withRecordRef(com.kingsrook.qbits.alerts.spi.AlertRecordRef.of(AlertsChannel.TABLE_NAME, channelId)));
+            .withRecordRef(com.kingsrook.qqq.backend.core.alerts.AlertRecordRef.of(AlertsChannel.TABLE_NAME, channelId)));
       }
    }
 
 
 
    /*******************************************************************************
-    ** The stand-in alert a TEST message describes.
+    ** The sample alert a TEST message describes.
     *******************************************************************************/
    private static QRecord testAlert(Instant now)
    {

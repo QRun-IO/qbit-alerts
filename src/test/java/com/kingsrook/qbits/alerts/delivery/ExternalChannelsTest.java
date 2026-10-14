@@ -26,10 +26,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.kingsrook.qbits.alerts.delivery.channels.ExternalChannels;
-import com.kingsrook.qbits.alerts.delivery.channels.StandardWebhookSigner;
 import com.kingsrook.qqq.backend.core.instances.QMetaDataVariableInterpreter;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.utils.JsonUtils;
+import com.kingsrook.qqq.backend.core.utils.webhooks.WebhookSecret;
+import com.kingsrook.qqq.backend.core.utils.webhooks.WebhookVerifier;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -172,8 +173,8 @@ class ExternalChannelsTest
       String timestamp = request.headers().get("Webhook-timestamp").get(0);
       String signature = request.headers().get("Webhook-signature").get(0);
       assertThat(id).startsWith("msg_");
-      String expected = StandardWebhookSigner.sign(id, Long.parseLong(timestamp), request.body().getBytes(StandardCharsets.UTF_8), "whsec_c2VjcmV0LWtleS1mb3ItdGVzdHM=");
-      assertThat(signature).isEqualTo("v1," + expected);
+      new WebhookVerifier(List.of(WebhookSecret.parse("whsec_c2VjcmV0LWtleS1mb3ItdGVzdHM=")))
+         .verify(Map.of("webhook-id", id, "webhook-timestamp", timestamp, "webhook-signature", signature), request.body().getBytes(StandardCharsets.UTF_8));
       assertThat(request.body()).contains("\"type\":\"qqq.alert.resolved\"").contains("\"dedupKey\":\"provider:cf\"");
 
       ////////////////////////////////////////////////////
@@ -236,9 +237,9 @@ class ExternalChannelsTest
       List<?> resolvedBody = JsonUtils.toObject(received.get(1).body(), List.class);
       assertThat(((Map<?, ?>) resolvedBody.get(0)).get("endsAt")).isEqualTo("2026-10-12T11:00:00Z");
 
-      //////////////////////////////////////////////////////
-      // a test message is one stand-in alert, already over //
-      //////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // a test message is one sample alert, already over //
+      ////////////////////////////////////////////////////
       alertmanager.deliver(new AlertMessage("TEST: hello", "t", "h", "INFO", "TEST", List.of(), "https://x/app/alerts_alert"), channel, null, secrets);
       assertThat(received.get(2).body()).contains("alerts.test");
    }

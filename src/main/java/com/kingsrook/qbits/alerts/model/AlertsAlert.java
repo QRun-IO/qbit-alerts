@@ -148,6 +148,9 @@ public class AlertsAlert extends QRecordEntity
    private Integer escalationLevel;
 
    @QField(isEditable = false)
+   private Instant timedNotificationCheckedAt;
+
+   @QField(isEditable = false)
    private Instant createDate;
 
    @QField(isEditable = false)
@@ -1378,6 +1381,37 @@ public class AlertsAlert extends QRecordEntity
    public AlertsAlert withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for timedNotificationCheckedAt
+    *******************************************************************************/
+   public Instant getTimedNotificationCheckedAt()
+   {
+      return (this.timedNotificationCheckedAt);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for timedNotificationCheckedAt
+    *******************************************************************************/
+   public void setTimedNotificationCheckedAt(Instant timedNotificationCheckedAt)
+   {
+      this.timedNotificationCheckedAt = timedNotificationCheckedAt;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for timedNotificationCheckedAt
+    *******************************************************************************/
+   public AlertsAlert withTimedNotificationCheckedAt(Instant timedNotificationCheckedAt)
+   {
+      this.timedNotificationCheckedAt = timedNotificationCheckedAt;
       return (this);
    }
 }

@@ -41,6 +41,7 @@ import com.kingsrook.qqq.backend.core.instances.QInstanceEnricher;
 import com.kingsrook.qqq.backend.core.model.audits.AuditsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.metadata.MetaDataProducerMultiOutput;
+import com.kingsrook.qqq.backend.core.model.metadata.messaging.QMessagingProviderMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.preferences.UserPreferenceChange;
 import com.kingsrook.qqq.backend.core.model.metadata.preferences.UserPreferenceRequestContext;
 import com.kingsrook.qqq.backend.core.model.metadata.preferences.UserPreferenceRowChange;
@@ -114,6 +115,45 @@ class NotificationPreferencesTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** Slack settings are available only with the configured provider, persist per
+    ** user and category, and remain editable for SECURITY.
+    *******************************************************************************/
+   @Test
+   void slackPreferences() throws Exception
+   {
+      var absent = action.getSection("notifications");
+      assertThat(absent.getValues().getLists().get("categories")).allSatisfy(row ->
+         assertThat(row.getValues()).doesNotContainKeys("slack", "slackMinSeverity"));
+      assertThatThrownBy(() -> action.patchSection("notifications", Map.of("lists", Map.of("categories",
+         List.of(row("JOB", Map.of("slack", "IMMEDIATE"))))))).isInstanceOf(QBadRequestException.class);
+      runtime.getConfig().withSlackProviderName("personal-slack");
+      qInstance.addMessagingProvider(new QMessagingProviderMetaData().withName("personal-slack").withType("test"));
+      UserPreferencesMetaData.of(qInstance).getSections().clear();
+      qInstance.getPossibleValueSources().remove("alerts_digest_hour");
+      AlertsNotificationPreferencesProvider.register(qInstance, runtime.getConfig());
+      loginAs(VIEWER).setPermissions(Set.of(AlertsQBitConfig.PERMISSION_VIEW));
+      qInstance.setEnforcePermissionsInCoreActions(true);
+      var defaults = action.getSection("notifications");
+      assertThat(defaults.getValues().getLists().get("categories")).allSatisfy(row ->
+         assertThat(row.getValues()).containsEntry("slack", "OFF").containsEntry("slackMinSeverity", "WARNING"));
+      action.patchSection("notifications", Map.of("lists", Map.of("categories", List.of(
+         row("JOB", Map.of("slack", "DAILY_DIGEST", "slackMinSeverity", "ERROR")),
+         row("SECURITY", Map.of("slack", "IMMEDIATE", "slackMinSeverity", "INFO"))))));
+      assertThat(action.getSection("notifications").getValues().getLists().get("categories"))
+         .filteredOn(row -> row.getKey().equals("JOB")).singleElement().satisfies(row ->
+            assertThat(row.getValues()).containsEntry("slack", "DAILY_DIGEST").containsEntry("slackMinSeverity", "ERROR"));
+      assertThat(where(AlertsNotificationPreference.TABLE_NAME, AlertsDb.eq("userId", VIEWER)))
+         .filteredOn(row -> "SECURITY".equals(row.getValueString("category"))).singleElement().satisfies(row ->
+            assertThat(row.getValues()).containsEntry("slackMode", "IMMEDIATE").containsEntry("slackMinSeverity", "INFO"));
+      action.patchSection("notifications", Map.of("lists", Map.of("categories", List.of(row("SECURITY", Map.of("slack", "OFF"))))));
+      loginAs("viewer-2");
+      assertThat(action.getSection("notifications").getValues().getLists().get("categories")).allSatisfy(row ->
+         assertThat(row.getValues()).containsEntry("slack", "OFF").containsEntry("slackMinSeverity", "WARNING"));
+   }
+
+
+
+   /*******************************************************************************
     ** Invalid and foreign row keys fail even for admins with all-access keys.
     *******************************************************************************/
    @Test
@@ -152,7 +192,7 @@ class NotificationPreferencesTest extends BaseAlertsTest
    @Test
    void registrationAndSummary() throws Exception
    {
-      AlertsNotificationPreferencesProvider.register(qInstance);
+      AlertsNotificationPreferencesProvider.register(qInstance, runtime.getConfig());
       assertThat(UserPreferencesMetaData.of(qInstance).getSections()).hasSize(1);
       assertThat(new AlertsApi(runtime).inboxSummary()).containsEntry("preferencesSection", "notifications");
       assertThat(qInstance.getPossibleValueSource("alerts_digest_hour").getEnumValues()).hasSize(24);

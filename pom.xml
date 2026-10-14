@@ -22,12 +22,16 @@
       <maven.compiler.source>21</maven.compiler.source>
       <maven.compiler.target>21</maven.compiler.target>
       <jacoco.version>0.8.15</jacoco.version>
+      <!-- qbit-email from Maven Central -->
+      <qbit-email.version>0.1.0-RC.2</qbit-email.version>
+      <qbit.guardrails.enforce>true</qbit.guardrails.enforce>
+      <qbit.guardrails.strictUiApiRoutes>true</qbit.guardrails.strictUiApiRoutes>
    </properties>
 
    <parent>
       <groupId>com.kingsrook</groupId>
       <artifactId>qbit-build-parent</artifactId>
-      <version>2.0.0</version>
+      <version>2.1.1</version>
    </parent>
 
    <groupId>com.kingsrook.qbits</groupId>
@@ -80,6 +84,15 @@
          <optional>true</optional>
       </dependency>
 
+      <!-- Email through qbit-email when it is produced in the same instance; -->
+      <!-- otherwise core SendMessageAction and messagingProviderName.        -->
+      <dependency>
+         <groupId>com.kingsrook.qbits</groupId>
+         <artifactId>qbit-email</artifactId>
+         <version>${qbit-email.version}</version>
+         <optional>true</optional>
+      </dependency>
+
       <dependency>
          <groupId>com.kingsrook.qqq</groupId>
          <artifactId>qqq-backend-module-rdbms</artifactId>
@@ -107,6 +120,32 @@
 
    <build>
       <plugins>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-checkstyle-plugin</artifactId>
+            <version>3.6.0</version>
+            <dependencies>
+               <dependency>
+                  <groupId>com.puppycrawl.tools</groupId>
+                  <artifactId>checkstyle</artifactId>
+                  <version>14.3.0</version>
+               </dependency>
+            </dependencies>
+            <configuration>
+               <configLocation>checkstyle/config.xml</configLocation>
+               <includeTestSourceDirectory>true</includeTestSourceDirectory>
+               <violationSeverity>warning</violationSeverity>
+            </configuration>
+            <executions>
+               <execution>
+                  <id>checkstyle</id>
+                  <phase>validate</phase>
+                  <goals>
+                     <goal>check</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
          <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
@@ -158,14 +197,14 @@
    <profiles>
       <!-- Built against qqq 4.1 (QBitMetaDataProducer). Until qbit-build-parent  -->
       <!-- imports the released 4.1 BOM, this profile is active by default and     -->
-      <!-- imports qqq-bom-pom 4.1.0-RC.4 ahead of the parent's 4.0.0 BOM.         -->
+      <!-- imports qqq-bom-pom 4.1.0-RC.6 ahead of the parent's 4.0.0 BOM.         -->
       <profile>
          <id>qqq-snapshot</id>
          <activation>
             <activeByDefault>true</activeByDefault>
          </activation>
          <properties>
-            <qqq.snapshot.version>4.1.0-RC.4</qqq.snapshot.version>
+            <qqq.snapshot.version>4.1.0-RC.7</qqq.snapshot.version>
          </properties>
          <dependencyManagement>
             <dependencies>

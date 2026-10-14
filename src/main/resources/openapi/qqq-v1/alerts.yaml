@@ -1,0 +1,523 @@
+components:
+  schemas:
+    AlertsActionV1:
+      description: "An available action: operationId targets an inbox operation with\
+        \ this item id; process actions provide a complete href."
+      properties:
+        href:
+          type: "string"
+        label:
+          type: "string"
+        name:
+          type: "string"
+        operationId:
+          type: "string"
+        processName:
+          type: "string"
+      type: "object"
+    AlertsErrorV1:
+      description: "Framework error response."
+      properties:
+        error:
+          nullable: true
+          type: "string"
+      type: "object"
+    AlertsFollowV1:
+      description: "Capability discovery only. Next obtains the follow URL from its\
+        \ collaboration module."
+      properties:
+        available:
+          description: "True exactly when the collaboration UI API extension is registered."
+          type: "boolean"
+      type: "object"
+    AlertsInboxItemV1:
+      description: "A notification recipient. body is included only in page items\
+        \ and banners; alertId only for ALERT notifications."
+      properties:
+        actions:
+          items:
+            $ref: "#/components/schemas/AlertsActionV1"
+          type: "array"
+        age:
+          type: "string"
+        alertId:
+          nullable: true
+          type: "integer"
+        body:
+          nullable: true
+          type: "string"
+        category:
+          nullable: true
+          type: "string"
+        deliveredAt:
+          nullable: true
+          type: "string"
+        href:
+          description: "Existing safe link, or null."
+          nullable: true
+          type: "string"
+        id:
+          type: "integer"
+        linkLabel:
+          nullable: true
+          type: "string"
+        notificationId:
+          type: "integer"
+        severity:
+          nullable: true
+          type: "string"
+        source:
+          nullable: true
+          type: "string"
+        sticky:
+          type: "boolean"
+        title:
+          nullable: true
+          type: "string"
+        unread:
+          type: "boolean"
+      type: "object"
+    AlertsInboxPageV1:
+      description: "Filtered notification page."
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/AlertsInboxItemV1"
+          type: "array"
+        limit:
+          type: "integer"
+        offset:
+          type: "integer"
+        total:
+          type: "integer"
+      type: "object"
+    AlertsInboxSummaryV1:
+      description: "Bell summary, latest ten items and up to three sticky banners."
+      properties:
+        alertsHref:
+          type: "string"
+        banners:
+          items:
+            $ref: "#/components/schemas/AlertsInboxItemV1"
+          type: "array"
+        highestUnreadSeverity:
+          nullable: true
+          type: "string"
+        inboxHref:
+          description: "Canonical inbox navigation link."
+          type: "string"
+        items:
+          items:
+            $ref: "#/components/schemas/AlertsInboxItemV1"
+          type: "array"
+        notificationsHref:
+          description: "Existing notifications page link; retained for compatibility."
+          type: "string"
+        pollSeconds:
+          type: "integer"
+        preferencesSection:
+          description: "Name of the user Preferences section for notification settings\
+            \ (/qqq/v1/preferences/{name}), or null when not registered."
+          nullable: true
+          type: "string"
+        unreadCount:
+          type: "integer"
+      type: "object"
+    AlertsInboxTargetV1:
+      description: "Select id, nonempty ids (first 500), legacy alertId, or all:true\
+        \ in that precedence. All scans are capped at 1000 rows."
+      properties:
+        alertId:
+          type: "integer"
+        all:
+          type: "boolean"
+        id:
+          type: "integer"
+        ids:
+          items:
+            type: "integer"
+          type: "array"
+      type: "object"
+    AlertsMutationResultV1:
+      description: "Number of the caller own recipient rows changed."
+      properties:
+        updated:
+          type: "integer"
+      type: "object"
+    AlertsPanelAlertV1:
+      description: "A visible open alert with permission-aware process actions."
+      properties:
+        actions:
+          items:
+            $ref: "#/components/schemas/AlertsActionV1"
+          type: "array"
+        age:
+          type: "string"
+        alertId:
+          type: "integer"
+        group:
+          nullable: true
+          type: "string"
+        href:
+          type: "string"
+        raisedAt:
+          nullable: true
+          type: "string"
+        severity:
+          nullable: true
+          type: "string"
+        status:
+          nullable: true
+          type: "string"
+        title:
+          nullable: true
+          type: "string"
+      type: "object"
+    AlertsRecordPanelV1:
+      description: "Open alerts, recent resolutions and collaboration capability.\
+        \ watching is deprecated legacy subscription state."
+      properties:
+        canManage:
+          type: "boolean"
+        follow:
+          $ref: "#/components/schemas/AlertsFollowV1"
+        open:
+          items:
+            $ref: "#/components/schemas/AlertsPanelAlertV1"
+          type: "array"
+        openCount:
+          type: "integer"
+        resolvedLast30Days:
+          type: "integer"
+        viewAllHref:
+          nullable: true
+          type: "string"
+        visible:
+          type: "boolean"
+        watching:
+          description: "Deprecated: existing RECORD subscriptions only; does not represent\
+            \ collaboration follow state."
+          type: "boolean"
+      type: "object"
+    AlertsUnreadTargetV1:
+      description: "Select id or nonempty ids (first 500), in that precedence. Legacy\
+        \ alertId is also accepted for compatibility. all is not supported."
+      properties:
+        alertId:
+          type: "integer"
+        id:
+          type: "integer"
+        ids:
+          items:
+            type: "integer"
+          type: "array"
+      type: "object"
+  securitySchemes:
+    sessionUuidCookie:
+      in: "cookie"
+      name: "sessionUUID"
+      type: "apiKey"
+info:
+  contact:
+    email: "contact@kingsrook.com"
+  description: "Alerts inbox and record panel"
+  title: "QQQ Middleware API extension: alerts"
+  version: "1.1.0"
+openapi: "3.0.3"
+paths:
+  /qqq/v1/alerts/inbox/summary:
+    get:
+      description: "Uses the signed-in caller's permissions and record visibility."
+      operationId: "alertsInboxSummary"
+      responses:
+        400:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Invalid input"
+        401:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Sign in required"
+        403:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Permission denied"
+        404:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Not found"
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsInboxSummaryV1"
+          description: "Successful Response"
+      security:
+      - sessionUuidCookie:
+        - "N/A"
+      summary: "Read the bell summary"
+  /qqq/v1/alerts/inbox:
+    get:
+      description: "Uses the signed-in caller's permissions and record visibility."
+      operationId: "alertsInbox"
+      parameters:
+      - description: "all or unread; other values behave as all."
+        in: "query"
+        name: "status"
+        required: false
+        schema:
+          type: "string"
+      - description: "Case-insensitive category filter."
+        in: "query"
+        name: "category"
+        required: false
+        schema:
+          type: "string"
+      - description: "Case-insensitive severity filter."
+        in: "query"
+        name: "severity"
+        required: false
+        schema:
+          type: "string"
+      - description: "Default 0; negatives clamp to 0; malformed values use the default."
+        in: "query"
+        name: "offset"
+        required: false
+        schema:
+          type: "integer"
+      - description: "Default 25; clamped to 1..100; malformed values use the default."
+        in: "query"
+        name: "limit"
+        required: false
+        schema:
+          type: "integer"
+      responses:
+        400:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Invalid input"
+        401:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Sign in required"
+        403:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Permission denied"
+        404:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Not found"
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsInboxPageV1"
+          description: "Successful Response"
+      security:
+      - sessionUuidCookie:
+        - "N/A"
+      summary: "Page the notification inbox"
+  /qqq/v1/alerts/inbox/read:
+    post:
+      description: "Uses the signed-in caller's permissions and record visibility."
+      operationId: "alertsInboxRead"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertsInboxTargetV1"
+        required: true
+      responses:
+        400:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Invalid input"
+        401:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Sign in required"
+        403:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Permission denied"
+        404:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Not found"
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsMutationResultV1"
+          description: "Successful Response"
+      security:
+      - sessionUuidCookie:
+        - "N/A"
+      summary: "Mark own notifications read"
+  /qqq/v1/alerts/inbox/unread:
+    post:
+      description: "Uses the signed-in caller's permissions and record visibility."
+      operationId: "alertsInboxUnread"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertsUnreadTargetV1"
+        required: true
+      responses:
+        400:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Invalid input"
+        401:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Sign in required"
+        403:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Permission denied"
+        404:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Not found"
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsMutationResultV1"
+          description: "Successful Response"
+      security:
+      - sessionUuidCookie:
+        - "N/A"
+      summary: "Mark own notifications unread"
+  /qqq/v1/alerts/inbox/dismiss:
+    post:
+      description: "Uses the signed-in caller's permissions and record visibility."
+      operationId: "alertsInboxDismiss"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertsInboxTargetV1"
+        required: true
+      responses:
+        400:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Invalid input"
+        401:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Sign in required"
+        403:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Permission denied"
+        404:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Not found"
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsMutationResultV1"
+          description: "Successful Response"
+      security:
+      - sessionUuidCookie:
+        - "N/A"
+      summary: "Dismiss own notifications"
+  /qqq/v1/alerts/record-panel:
+    get:
+      description: "Uses the signed-in caller's permissions and record visibility."
+      operationId: "alertsRecordPanel"
+      parameters:
+      - description: "Parent table name."
+        in: "query"
+        name: "tableName"
+        required: true
+        schema:
+          type: "string"
+      - description: "Parent record key."
+        in: "query"
+        name: "recordId"
+        required: true
+        schema:
+          type: "string"
+      responses:
+        400:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Invalid input"
+        401:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Sign in required"
+        403:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Permission denied"
+        404:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsErrorV1"
+          description: "Not found"
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsRecordPanelV1"
+          description: "Successful Response"
+      security:
+      - sessionUuidCookie:
+        - "N/A"
+      summary: "Read visible alerts for a record"

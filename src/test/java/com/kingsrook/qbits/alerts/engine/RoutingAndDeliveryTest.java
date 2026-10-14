@@ -19,6 +19,7 @@ package com.kingsrook.qbits.alerts.engine;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsPreferences;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.BaseAlertsTest;
@@ -29,19 +30,19 @@ import com.kingsrook.qbits.alerts.delivery.DeliveryWorker;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
+import com.kingsrook.qbits.alerts.model.AlertsMute;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
-import com.kingsrook.qbits.alerts.model.AlertsMute;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsTeam;
 import com.kingsrook.qbits.alerts.model.AlertsTeamMember;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
-import com.kingsrook.qbits.alerts.spi.AlertRecordRef;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
-import com.kingsrook.qbits.alerts.spi.AlertsInstanceMetaData;
-import com.kingsrook.qbits.alerts.spi.QAlertTypeMetaData;
+import com.kingsrook.qqq.backend.core.alerts.AlertRecordRef;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertsInstanceMetaData;
+import com.kingsrook.qqq.backend.core.alerts.QAlertTypeMetaData;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
@@ -196,6 +197,124 @@ class RoutingAndDeliveryTest extends BaseAlertsTest
 
       List<String> recipients = notifications().stream().map(n -> n.getValueString("recipientUserId")).sorted().toList();
       assertThat(recipients).containsExactly("u-attr", "u-group", "u-record", "u-table", "u-team-1", "u-team-2", "u-type");
+   }
+
+
+
+   /*******************************************************************************
+    ** Both host sources combine with explicit members and other subscriptions;
+    ** duplicate users receive once and invisible users remain suppressed.
+    *******************************************************************************/
+   @Test
+   void testHostTeamSources() throws Exception
+   {
+      List<String> calls = new java.util.ArrayList<>();
+      config.withMaxAudienceSize(3).withAudienceResolver((source, value) ->
+      {
+         calls.add(source + ":" + value);
+         return (Set.of(VIEWER, MANAGER, OUTSIDER));
+      });
+      for(String source : List.of("ROLE", "IDP_GROUP"))
+      {
+         Integer teamId = sourcedTeam(source);
+         runtime.asSystem(() -> AlertsDb.insert(AlertsTeamMember.TABLE_NAME, new QRecord().withValue("teamId", teamId).withValue("userId", VIEWER)));
+      }
+      subscribe("USER", VIEWER, null, null, "ALL", null, null, "ERROR");
+      runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("source-members"));
+
+      assertThat(calls).containsExactly("ROLE:source-ROLE", "IDP_GROUP:source-IDP_GROUP");
+      assertThat(notifications()).hasSize(3);
+      assertThat(notifications()).filteredOn(n -> "SENT".equals(n.getValueString("status")))
+         .extracting(n -> n.getValueString("recipientUserId")).containsExactlyInAnyOrder(VIEWER, MANAGER);
+      assertThat(notifications()).filteredOn(n -> OUTSIDER.equals(n.getValueString("recipientUserId")))
+         .singleElement().matches(n -> "NOT_VISIBLE".equals(n.getValueString("suppressedReason")));
+   }
+
+
+
+   /*******************************************************************************
+    ** Unconfigured sources resolve to nobody; explicit members still work.
+    *******************************************************************************/
+   @Test
+   void testMissingTeamResolver() throws Exception
+   {
+      sourcedTeam("ROLE");
+      sourcedTeam("IDP_GROUP");
+      runtime.getEngine().raise(new AlertSignal(SYSTEM).withDedupKey("no-resolver"));
+      assertThat(notifications()).isEmpty();
+
+      Integer manualTeam = sourcedTeam("MANUAL");
+      runtime.asSystem(() -> AlertsDb.insert(AlertsTeamMember.TABLE_NAME, new QRecord().withValue("teamId", manualTeam).withValue("userId", VIEWER)));
+      config.withAudienceResolver((source, value) ->
+      {
+         throw (new QException("Unavailable"));
+      });
+      runtime.getEngine().raise(new AlertSignal(SYSTEM).withDedupKey("failed-resolver"));
+      assertThat(notifications()).singleElement().matches(n -> VIEWER.equals(n.getValueString("recipientUserId")) && "SENT".equals(n.getValueString("status")));
+   }
+
+
+
+   /*******************************************************************************
+    ** Oversized resolver results fail closed without truncating the audience.
+    *******************************************************************************/
+   @Test
+   void testTeamAudienceLimit() throws Exception
+   {
+      config.withMaxAudienceSize(1).withAudienceResolver((source, value) -> Set.of(VIEWER, MANAGER));
+      sourcedTeam("ROLE");
+      runtime.getEngine().raise(new AlertSignal(SYSTEM).withDedupKey("too-many"));
+      assertThat(notifications()).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Create a team subscription using a host-managed or manual source.
+    *******************************************************************************/
+   private Integer sourcedTeam(String source) throws QException
+   {
+      Integer teamId = runtime.asSystem(() -> AlertsDb.insert(AlertsTeam.TABLE_NAME, new QRecord().withValue("name", source).withValue("label", source)
+         .withValue("memberSource", source).withValue("memberSourceValue", "source-" + source)).getValueInteger("id"));
+      subscribe("TEAM", null, teamId, null, "ALL", null, null, "ERROR");
+      return (teamId);
+   }
+
+
+
+   /*******************************************************************************
+    ** RECORD mutes require both table and ID, including an alert whose subject
+    ** is stored directly without an active record-reference row.
+    *******************************************************************************/
+   @Test
+   void testRecordMuteMatching() throws Exception
+   {
+      runtime.asSystem(() -> AlertsDb.insert(AlertsMute.TABLE_NAME, new QRecord().withValue("name", "Record mute")
+         .withValue("scopeType", "RECORD").withValue("scopeValue", WIDGET).withValue("scopeRecordId", "123")
+         .withValue("startsAt", clock.instant()).withValue("endsAt", clock.instant().plusSeconds(60))
+         .withValue("effect", "SILENCE_NOTIFICATIONS").withValue("enabled", true)));
+      QRecord alert = runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("subject-only"));
+      alert.setValue("subjectRecordId", "123");
+      assertThat(recordMuted(alert)).isTrue();
+      alert.setValue("subjectRecordId", "124");
+      assertThat(recordMuted(alert)).isFalse();
+      alert.setValue("subjectRecordId", "123");
+      alert.setValue("subjectTableName", "another_table");
+      assertThat(recordMuted(alert)).isFalse();
+      alert.setValue("subjectTableName", WIDGET);
+      clock.advance(Duration.ofMinutes(1));
+      assertThat(recordMuted(alert)).isFalse();
+   }
+
+
+
+   /*******************************************************************************
+    ** Match a mute as the router does under the system session.
+    *******************************************************************************/
+   private boolean recordMuted(QRecord alert) throws QException
+   {
+      return (runtime.asSystem(() -> new AlertRouter(runtime).isMuted(AlertsEngine.AlertTarget.of(alert), clock.instant(),
+         com.kingsrook.qbits.alerts.model.AlertsPossibleValues.MuteEffect.SILENCE_NOTIFICATIONS)));
    }
 
 

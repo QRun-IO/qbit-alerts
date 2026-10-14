@@ -32,16 +32,16 @@ import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
 import com.kingsrook.qbits.alerts.processes.AlertsAction;
-import com.kingsrook.qbits.alerts.spi.AlertRecordRef;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
-import com.kingsrook.qbits.alerts.spi.AlertsInstanceMetaData;
-import com.kingsrook.qbits.alerts.spi.QAlertTypeMetaData;
 import com.kingsrook.qqq.backend.core.actions.processes.RunProcessAction;
 import com.kingsrook.qqq.backend.core.actions.tables.CountAction;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
+import com.kingsrook.qqq.backend.core.alerts.AlertRecordRef;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertsInstanceMetaData;
+import com.kingsrook.qqq.backend.core.alerts.QAlertTypeMetaData;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.processes.ProcessSummaryLineInterface;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessInput;
@@ -267,6 +267,100 @@ class SecurityAndActionsTest extends BaseAlertsTest
          AlertsAction.ACKNOWLEDGE.getProcessName())).isFalse();
       assertThat(com.kingsrook.qqq.backend.core.actions.permissions.PermissionsHelper.hasProcessPermission(new com.kingsrook.qqq.backend.core.model.actions.AbstractActionInput(),
          AlertsAction.COMMENT.getProcessName())).isTrue();
+   }
+
+
+
+   /*******************************************************************************
+    ** The record action mutes its subject, leaving other records of the same
+    ** alert type deliverable. The separate type action silences those too.
+    *******************************************************************************/
+   @Test
+   void testRecordAndTypeMuteActions() throws Exception
+   {
+      List<Integer> widgets = insertWidgets("BROKEN", "BROKEN");
+      QRecord one = runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("one").withRecordRef(AlertRecordRef.of(WIDGET, widgets.get(0))));
+      QRecord two = runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("two").withRecordRef(AlertRecordRef.of(WIDGET, widgets.get(1))));
+      subscribeForMuteTest();
+      loginAs(MANAGER);
+      assertThat(run(AlertsAction.MUTE_ALERT, List.of(one.getValueInteger("id")), Map.of(AlertsAction.FIELD_NOTE, "Working on this record")))
+         .anyMatch(line -> line.startsWith("OK: 1"));
+      QRecord mute = all(AlertsMute.TABLE_NAME).get(0);
+      assertThat(mute.getValueString("scopeType")).isEqualTo("RECORD");
+      assertThat(mute.getValueString("scopeValue")).isEqualTo(WIDGET);
+      assertThat(mute.getValueString("scopeRecordId")).isEqualTo(String.valueOf(widgets.get(0)));
+      routeForMuteTest(one);
+      routeForMuteTest(two);
+      assertThat(deliveriesFor(one)).singleElement().matches(d -> "MUTED".equals(d.getValueString("suppressedReason")));
+      assertThat(deliveriesFor(two)).singleElement().matches(d -> "SENT".equals(d.getValueString("status")));
+
+      run(AlertsAction.MUTE_ALERT_TYPE, List.of(one.getValueInteger("id")), Map.of(AlertsAction.FIELD_NOTE, "Working on the type"));
+      routeForMuteTest(two);
+      assertThat(deliveriesFor(two)).anyMatch(d -> "MUTED".equals(d.getValueString("suppressedReason")));
+      assertThat(AlertsAction.MUTE_ALERT_TYPE.getLabel()).isEqualTo("Mute this alert type");
+      assertThat(AlertsAction.MUTE_TYPE.getLabel()).isEqualTo("Mute this alert type");
+   }
+
+
+
+   /*******************************************************************************
+    ** Subjectless alerts mute by full type and dedup key, never by type alone.
+    *******************************************************************************/
+   @Test
+   void testSubjectlessMuteAction() throws Exception
+   {
+      String type = "test.system." + "t".repeat(170);
+      String key = "k".repeat(300);
+      QRecord one = runtime.getEngine().raise(new AlertSignal(type).withDedupKey(key));
+      QRecord two = runtime.getEngine().raise(new AlertSignal(type).withDedupKey("other"));
+      QRecord otherType = runtime.getEngine().raise(new AlertSignal("test.system.other").withDedupKey(key));
+      subscribeForMuteTest();
+      loginAs(MANAGER);
+      run(AlertsAction.MUTE_ALERT, List.of(one.getValueInteger("id")), Map.of(AlertsAction.FIELD_NOTE, "Working on this alert"));
+      QRecord mute = all(AlertsMute.TABLE_NAME).get(0);
+      assertThat(mute.getValueString("scopeType")).isEqualTo("ALERT");
+      assertThat(mute.getValueString("scopeValue")).isEqualTo(type + "|" + key);
+      routeForMuteTest(one);
+      routeForMuteTest(two);
+      routeForMuteTest(otherType);
+      assertThat(deliveriesFor(one)).singleElement().matches(d -> "MUTED".equals(d.getValueString("suppressedReason")));
+      assertThat(deliveriesFor(two)).singleElement().matches(d -> "SENT".equals(d.getValueString("status")));
+      assertThat(deliveriesFor(otherType)).singleElement().matches(d -> "SENT".equals(d.getValueString("status")));
+   }
+
+
+
+   /*******************************************************************************
+    ** Subscribe after raising so initial delivery does not mask mute assertions.
+    *******************************************************************************/
+   private void subscribeForMuteTest() throws QException
+   {
+      runtime.asSystem(() -> AlertsDb.insert(AlertsSubscription.TABLE_NAME, new QRecord().withValue("subscriberType", "USER")
+         .withValue("userId", VIEWER).withValue("scopeType", "ALL").withValue("minSeverity", "WARNING").withValue("enabled", true)));
+   }
+
+
+
+   /*******************************************************************************
+    ** Route a fresh notification event against the current mute rules.
+    *******************************************************************************/
+   private void routeForMuteTest(QRecord alert) throws QException
+   {
+      runtime.asSystem(() ->
+      {
+         new com.kingsrook.qbits.alerts.engine.AlertRouter(runtime).route(alert, com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EventType.RAISED, null);
+         return (null);
+      });
+   }
+
+
+
+   /*******************************************************************************
+    ** Read delivery outcomes for one alert.
+    *******************************************************************************/
+   private List<QRecord> deliveriesFor(QRecord alert) throws QException
+   {
+      return (where(AlertsDelivery.TABLE_NAME, AlertsDb.eq("alertId", alert.getValue("id"))));
    }
 
 

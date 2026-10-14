@@ -66,6 +66,15 @@ public class AlertsDelivery extends QRecordEntity
    @QField(isEditable = false, maxLength = 20, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, possibleValueSourceName = "alerts_suppressed_reason")
    private String suppressedReason;
 
+   @QField(isEditable = false, maxLength = 200)
+   private String digestKey;
+
+   @QField(isEditable = false, maxLength = 240)
+   private String digestClaimKey;
+
+   @QField(isEditable = false)
+   private Integer digestLastItemId;
+
    @QField(isEditable = false)
    private Integer attempts;
 
@@ -664,6 +673,99 @@ public class AlertsDelivery extends QRecordEntity
    public AlertsDelivery withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for digestKey
+    *******************************************************************************/
+   public String getDigestKey()
+   {
+      return (this.digestKey);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for digestKey
+    *******************************************************************************/
+   public void setDigestKey(String digestKey)
+   {
+      this.digestKey = digestKey;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for digestKey
+    *******************************************************************************/
+   public AlertsDelivery withDigestKey(String digestKey)
+   {
+      this.digestKey = digestKey;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for digestClaimKey
+    *******************************************************************************/
+   public String getDigestClaimKey()
+   {
+      return (this.digestClaimKey);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for digestClaimKey
+    *******************************************************************************/
+   public void setDigestClaimKey(String digestClaimKey)
+   {
+      this.digestClaimKey = digestClaimKey;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for digestClaimKey
+    *******************************************************************************/
+   public AlertsDelivery withDigestClaimKey(String digestClaimKey)
+   {
+      this.digestClaimKey = digestClaimKey;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for digestLastItemId
+    *******************************************************************************/
+   public Integer getDigestLastItemId()
+   {
+      return (this.digestLastItemId);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for digestLastItemId
+    *******************************************************************************/
+   public void setDigestLastItemId(Integer digestLastItemId)
+   {
+      this.digestLastItemId = digestLastItemId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for digestLastItemId
+    *******************************************************************************/
+   public AlertsDelivery withDigestLastItemId(Integer digestLastItemId)
+   {
+      this.digestLastItemId = digestLastItemId;
       return (this);
    }
 }

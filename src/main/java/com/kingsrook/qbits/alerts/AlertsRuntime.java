@@ -276,10 +276,10 @@ public class AlertsRuntime
 
 
    /*******************************************************************************
-    ** The sink producers send signals to (until the core SPI ships, hosts call
-    ** it directly: AlertsRuntime.get().sink().raise(...)).
+    ** The runtime sink for adapter delegation and queue lifecycle management.
+    ** Producers use core QAlerts for both alerts and notifications.
     *******************************************************************************/
-   public QbitAlertsSink sink()
+   public QbitAlertsSink getSink()
    {
       return (this.sink);
    }

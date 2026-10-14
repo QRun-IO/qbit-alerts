@@ -19,10 +19,10 @@ package com.kingsrook.qbits.alerts.engine;
 
 import java.time.Instant;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
-import com.kingsrook.qbits.alerts.spi.AlertResolution;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
-import com.kingsrook.qbits.alerts.spi.AlertSinkInterface;
-import com.kingsrook.qbits.alerts.spi.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertResolution;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertSinkInterface;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
 import com.kingsrook.qqq.backend.core.context.QContext;
 
 
@@ -44,7 +44,7 @@ public class AlertsSinkAdapter implements AlertSinkInterface
       AlertsRuntime runtime = AlertsRuntime.find(QContext.getQInstance());
       if(runtime != null)
       {
-         runtime.sink().raise(signal);
+         runtime.getSink().raise(signal);
       }
    }
 
@@ -59,7 +59,7 @@ public class AlertsSinkAdapter implements AlertSinkInterface
       AlertsRuntime runtime = AlertsRuntime.find(QContext.getQInstance());
       if(runtime != null)
       {
-         runtime.sink().resolve(resolution);
+         runtime.getSink().resolve(resolution);
       }
    }
 
@@ -74,14 +74,14 @@ public class AlertsSinkAdapter implements AlertSinkInterface
       AlertsRuntime runtime = AlertsRuntime.find(QContext.getQInstance());
       if(runtime != null)
       {
-         runtime.sink().heartbeat(heartbeatKey, at);
+         runtime.getSink().heartbeat(heartbeatKey, at);
       }
    }
 
 
 
    /*******************************************************************************
-    **
+    ** Core notification producers share the runtime's bounded delivery queue.
     *******************************************************************************/
    @Override
    public void notify(NotificationSignal signal)
@@ -89,7 +89,7 @@ public class AlertsSinkAdapter implements AlertSinkInterface
       AlertsRuntime runtime = AlertsRuntime.find(QContext.getQInstance());
       if(runtime != null)
       {
-         runtime.sink().notify(signal);
+         runtime.getSink().notify(signal);
       }
    }
 }

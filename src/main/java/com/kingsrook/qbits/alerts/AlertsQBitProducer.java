@@ -27,11 +27,11 @@ import com.kingsrook.qbits.alerts.engine.QbitAlertsSink;
 import com.kingsrook.qbits.alerts.metadata.AlertsTableMetaDataHelper;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertsInstanceMetaData;
-import com.kingsrook.qbits.alerts.spi.DetailLevel;
-import com.kingsrook.qbits.alerts.spi.QAlertTypeMetaData;
-import com.kingsrook.qbits.alerts.spi.ResolveMode;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertsInstanceMetaData;
+import com.kingsrook.qqq.backend.core.alerts.DetailLevel;
+import com.kingsrook.qqq.backend.core.alerts.QAlertTypeMetaData;
+import com.kingsrook.qqq.backend.core.alerts.ResolveMode;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.metadata.MetaDataProducerMultiOutput;
@@ -197,7 +197,7 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
       AlertsRuntime previous = qBitConfig.getRuntime();
       if(previous != null)
       {
-         previous.sink().stop();
+         previous.getSink().stop();
       }
       AlertsRuntime runtime = new AlertsRuntime(qBitConfig, qInstance);
       qBitConfig.setRuntime(runtime);
@@ -211,12 +211,13 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
 
       if(Boolean.TRUE.equals(qBitConfig.getPreferencesSectionEnabled()) && isPreferencesAvailable())
       {
-         com.kingsrook.qbits.alerts.preferences.AlertsNotificationPreferencesProvider.register(qInstance);
+         com.kingsrook.qbits.alerts.preferences.AlertsNotificationPreferencesProvider.register(qInstance, qBitConfig);
       }
 
       boolean routes = false;
       if(Boolean.TRUE.equals(qBitConfig.getRegisterRoutes()) && isJavalinAvailable())
       {
+         com.kingsrook.qbits.alerts.api.AlertsUiApi.register(qInstance);
          com.kingsrook.qbits.alerts.api.AlertsRouteProvider.register(qInstance);
          routes = true;
       }

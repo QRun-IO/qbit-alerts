@@ -20,13 +20,13 @@ package com.kingsrook.qbits.alerts.model;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import com.kingsrook.qbits.alerts.spi.AlertMonitorKind;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.DetailLevel;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
-import com.kingsrook.qbits.alerts.spi.ResolveMode;
+import com.kingsrook.qqq.backend.core.alerts.AlertMonitorKind;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.DetailLevel;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
+import com.kingsrook.qqq.backend.core.alerts.ResolveMode;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValue;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSource;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSourceType;
@@ -63,6 +63,7 @@ public final class AlertsPossibleValues
    public static final String AUDIENCE_TYPE         = "alerts_audience_type";
    public static final String EMAIL_STATUS          = "alerts_email_status";
    public static final String EMAIL_MODE            = "alerts_email_mode";
+   public static final String SLACK_STATUS          = "alerts_slack_status";
 
 
 
@@ -132,7 +133,7 @@ public final class AlertsPossibleValues
     *******************************************************************************/
    public enum ScopeType
    {
-      ALL, GROUP, ALERT_TYPE, MONITOR, TABLE, RECORD, ATTRIBUTE
+      ALL, GROUP, ALERT_TYPE, MONITOR, TABLE, RECORD, ATTRIBUTE, ALERT
    }
 
 
@@ -223,7 +224,7 @@ public final class AlertsPossibleValues
     *******************************************************************************/
    public enum SuppressedReason
    {
-      QUIET_HOURS, MUTED, FLAPPING, RATE_LIMITED, NOT_VISIBLE, CHANNEL_DISABLED, DUPLICATE, USER_PAUSED, TYPE_SILENT, NO_ADDRESS
+      QUIET_HOURS, MUTED, FLAPPING, RATE_LIMITED, NOT_VISIBLE, CHANNEL_DISABLED, DUPLICATE, USER_PAUSED, TYPE_SILENT, NO_ADDRESS, MIN_SEVERITY
    }
 
 
@@ -251,7 +252,7 @@ public final class AlertsPossibleValues
          enumSource(MONITOR_KIND, AlertMonitorKind.values()),
          enumSource(MONITOR_STATUS, MonitorStatus.values()),
          enumSource(EVENT_TYPE, EventType.values()),
-         enumSource(RESOLUTION, Resolution.values()),
+         enumSource(RESOLUTION, new Resolution[] { Resolution.PRODUCER, Resolution.MONITOR, Resolution.QUIET_PERIOD, Resolution.MANUAL }),
          enumSource(SUBSCRIBER_TYPE, SubscriberType.values()),
          enumSource(SCOPE_TYPE, ScopeType.values()),
          enumSource(DELIVERY_MODE, DeliveryMode.values()),
@@ -268,7 +269,8 @@ public final class AlertsPossibleValues
          enumSource(NOTIFICATION_STATUS, NotificationStatus.values()),
          enumSource(AUDIENCE_TYPE, NotificationAudience.Type.values()),
          enumSource(EMAIL_STATUS, EmailStatus.values()),
-         enumSource(EMAIL_MODE, EmailMode.values())));
+         enumSource(EMAIL_MODE, EmailMode.values()),
+         enumSource(SLACK_STATUS, SlackStatus.values())));
    }
 
 
@@ -294,7 +296,17 @@ public final class AlertsPossibleValues
 
 
    /*******************************************************************************
-    ** How a user wants a category by email.
+    ** Whether (and how) a recipient was sent a Slack direct message.
+    *******************************************************************************/
+   public enum SlackStatus
+   {
+      NONE, PENDING, SENT, DIGESTED, SKIPPED, FAILED
+   }
+
+
+
+   /*******************************************************************************
+    ** How a user wants a category by email (also used for Slack: same modes).
     *******************************************************************************/
    public enum EmailMode
    {

@@ -19,9 +19,12 @@ package com.kingsrook.qbits.alerts;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
+import com.kingsrook.qbits.alerts.model.AlertsEscalationPolicy;
+import com.kingsrook.qbits.alerts.model.AlertsEscalationStep;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsHeartbeat;
@@ -36,7 +39,7 @@ import com.kingsrook.qbits.alerts.model.AlertsTeam;
 import com.kingsrook.qbits.alerts.model.AlertsTeamMember;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitConfig;
@@ -74,10 +77,13 @@ public class AlertsQBitConfig implements QBitConfig
 
    public static final String APP_NAME = "alerts";
 
+   private Boolean legacyAlertmanagerPath = false;
+
    private String backendName;
    private String schedulerName;
    private String messagingProviderName;
    private String fromAddress;
+   private String slackProviderName = "slack";
    private String publicBaseUrl;
 
    private Integer reopenWindowMinutes   = 30;
@@ -105,7 +111,31 @@ public class AlertsQBitConfig implements QBitConfig
    private Boolean        notifyFailedJobs          = true;
    private String         jobRunLinkPattern;
 
+   private transient AlertAudienceResolver audienceResolver;
+
    private transient AlertsRuntime runtime;
+
+
+
+   /*******************************************************************************
+    ** Optional host resolver for ROLE and IDP_GROUP team members.
+    *******************************************************************************/
+   @JsonIgnore
+   public AlertAudienceResolver getAudienceResolver()
+   {
+      return (audienceResolver);
+   }
+
+
+
+   /*******************************************************************************
+    ** Register the host resolver before producing the qbit's metadata.
+    *******************************************************************************/
+   public AlertsQBitConfig withAudienceResolver(AlertAudienceResolver audienceResolver)
+   {
+      this.audienceResolver = audienceResolver;
+      return (this);
+   }
 
 
 
@@ -152,7 +182,7 @@ public class AlertsQBitConfig implements QBitConfig
     *******************************************************************************/
    public static List<String> allTableNames()
    {
-      return (List.of(AlertsAlert.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsSubscription.TABLE_NAME,
+      return (List.of(AlertsEscalationPolicy.TABLE_NAME, AlertsEscalationStep.TABLE_NAME, AlertsAlert.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsSubscription.TABLE_NAME,
          AlertsUserPreference.TABLE_NAME, AlertsTeam.TABLE_NAME, AlertsTeamMember.TABLE_NAME, AlertsChannel.TABLE_NAME, AlertsMute.TABLE_NAME,
          AlertsDelivery.TABLE_NAME, AlertsEvent.TABLE_NAME, AlertsRecordRef.TABLE_NAME, AlertsHeartbeat.TABLE_NAME, AlertsNotification.TABLE_NAME,
          AlertsNotificationRecipient.TABLE_NAME, AlertsNotificationPreference.TABLE_NAME));
@@ -310,6 +340,29 @@ public class AlertsQBitConfig implements QBitConfig
    public AlertsQBitConfig withMessagingProviderName(String messagingProviderName)
    {
       this.messagingProviderName = messagingProviderName;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for slackProviderName
+    *******************************************************************************/
+   public String getSlackProviderName()
+   {
+      return (this.slackProviderName);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for slackProviderName: the core messaging provider that
+    ** sends per-user Slack direct messages (default "slack", registered by
+    ** qbit-slack). Without a provider of that name Slack is skipped.
+    *******************************************************************************/
+   public AlertsQBitConfig withSlackProviderName(String slackProviderName)
+   {
+      this.slackProviderName = slackProviderName;
       return (this);
    }
 
@@ -611,7 +664,7 @@ public class AlertsQBitConfig implements QBitConfig
    /*******************************************************************************
     ** Fluent setter for alertmanagerIngestTokenSecretRef: the reference (an
     ** environment variable name or ${...} expression, never the value) of the
-    ** bearer token Alertmanager sends to POST /qqq/v1/alerts/ingest/alertmanager.
+    ** bearer token Alertmanager sends to POST /qqq/hooks/alerts/alertmanager.
     ** Null (the default) turns ingest off.
     *******************************************************************************/
    public AlertsQBitConfig withAlertmanagerIngestTokenSecretRef(String alertmanagerIngestTokenSecretRef)
@@ -623,8 +676,11 @@ public class AlertsQBitConfig implements QBitConfig
 
 
    /*******************************************************************************
-    ** Getter for runtime (built by the producer)
+    ** Getter for runtime (built by the producer). Never serialized: the runtime
+    ** points back at this config, and QQQ meta-data JSON (e.g. a child-list
+    ** widget's table meta-data) can include the qbit config.
     *******************************************************************************/
+   @JsonIgnore
    public AlertsRuntime getRuntime()
    {
       return (this.runtime);
@@ -813,6 +869,28 @@ public class AlertsQBitConfig implements QBitConfig
    public AlertsQBitConfig withPreferencesSectionEnabled(Boolean enabled)
    {
       preferencesSectionEnabled = enabled;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether to expose the deprecated UI-path webhook alias (default false).
+    ** Requires non-strict UI route mode; remove after one minor release.
+    *******************************************************************************/
+   public Boolean getLegacyAlertmanagerPath()
+   {
+      return (this.legacyAlertmanagerPath);
+   }
+
+
+
+   /*******************************************************************************
+    ** Opt in to the deprecated alias while migrating Alertmanager receivers.
+    *******************************************************************************/
+   public AlertsQBitConfig withLegacyAlertmanagerPath(Boolean legacyAlertmanagerPath)
+   {
+      this.legacyAlertmanagerPath = legacyAlertmanagerPath;
       return (this);
    }
 }

@@ -24,9 +24,13 @@ import com.kingsrook.qbits.alerts.metadata.AlertsProcessesMetaDataProducer;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsHeartbeat;
 import com.kingsrook.qbits.alerts.processes.AlertsScheduledSteps;
-import com.kingsrook.qbits.alerts.spi.AlertResolution;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
 import com.kingsrook.qqq.backend.core.actions.processes.RunProcessAction;
+import com.kingsrook.qqq.backend.core.alerts.AlertResolution;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertsInstanceMetaData;
+import com.kingsrook.qqq.backend.core.alerts.QAlertTypeMetaData;
+import com.kingsrook.qqq.backend.core.alerts.QAlerts;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessInput;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessOutput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
@@ -40,6 +44,38 @@ import static org.assertj.core.api.Assertions.assertThat;
  *******************************************************************************/
 class SinkAndScheduleTest extends BaseAlertsTest
 {
+
+   /*******************************************************************************
+    ** A host using only core reaches the qbit through instance metadata and
+    ** the loadable adapter, including the asynchronous queue and persistence.
+    *******************************************************************************/
+   @Test
+   void testCoreProducerReachesInstalledSink() throws Exception
+   {
+      AlertsInstanceMetaData metadata = AlertsInstanceMetaData.of(qInstance);
+      assertThat(metadata.getSink().getName()).isEqualTo(AlertsSinkAdapter.class.getName());
+      assertThat(qInstance.getSupplementalMetaData("alertsQBitStandIn")).isNull();
+      metadata.withAlertType(new QAlertTypeMetaData().withName("host.backup.failed").withDefaultSeverity(AlertSeverity.ERROR));
+      long failures = QAlerts.getProducerFailureCount();
+
+      QAlerts.raise(new AlertSignal("host.backup.failed").withDedupKey("nightly").withTitle("Nightly backup failed"));
+      QAlerts.heartbeat("host.backup.nightly");
+      runtime.getSink().stop();
+
+      List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
+      assertThat(alerts).hasSize(1);
+      assertThat(alerts.get(0).getValueString("title")).isEqualTo("Nightly backup failed");
+      assertThat(alerts.get(0).getValueString("severity")).isEqualTo("ERROR");
+      assertThat(alerts.get(0).getValueString("status")).isEqualTo("OPEN");
+      assertThat(all(AlertsHeartbeat.TABLE_NAME)).hasSize(1);
+
+      QAlerts.resolve("host.backup.failed", "nightly", "Retry succeeded");
+      runtime.getSink().stop();
+      assertThat(all(AlertsAlert.TABLE_NAME).get(0).getValueString("status")).isEqualTo("RESOLVED");
+      assertThat(QAlerts.getProducerFailureCount()).isEqualTo(failures);
+   }
+
+
 
    /*******************************************************************************
     ** Process signals on the background queue in these tests.
@@ -66,9 +102,9 @@ class SinkAndScheduleTest extends BaseAlertsTest
       {
          String type = "test.stop.thing" + i;
          adapter.raise(new AlertSignal(type).withTitle("Stop " + i));
-         runtime.sink().stop();
+         runtime.getSink().stop();
          adapter.resolve(new AlertResolution(type, null, "done"));
-         runtime.sink().stop();
+         runtime.getSink().stop();
       }
 
       List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
@@ -87,7 +123,7 @@ class SinkAndScheduleTest extends BaseAlertsTest
       AlertsSinkAdapter adapter = new AlertsSinkAdapter();
       adapter.raise(new AlertSignal("test.queue.thing").withTitle("Queued"));
       adapter.heartbeat("queue.beat", null);
-      runtime.sink().flush();
+      runtime.getSink().flush();
       for(int i = 0; i < 50 && all(AlertsAlert.TABLE_NAME).isEmpty(); i++)
       {
          Thread.sleep(50);
@@ -95,7 +131,7 @@ class SinkAndScheduleTest extends BaseAlertsTest
       assertThat(all(AlertsAlert.TABLE_NAME)).hasSize(1);
 
       adapter.resolve(new AlertResolution("test.queue.thing", null, "done"));
-      runtime.sink().stop();
+      runtime.getSink().stop();
       List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
       assertThat(alerts.get(0).getValueString("status")).isEqualTo("RESOLVED");
       assertThat(all(AlertsHeartbeat.TABLE_NAME)).hasSize(1);
@@ -111,10 +147,10 @@ class SinkAndScheduleTest extends BaseAlertsTest
    {
       for(int i = 0; i < 1005; i++)
       {
-         runtime.sink().raise(new AlertSignal("test.flood.thing").withDedupKey("same"));
+         runtime.getSink().raise(new AlertSignal("test.flood.thing").withDedupKey("same"));
       }
-      assertThat(runtime.sink().getDroppedCount()).isEqualTo(5);
-      runtime.sink().stop();
+      assertThat(runtime.getSink().getDroppedCount()).isEqualTo(5);
+      runtime.getSink().stop();
    }
 
 

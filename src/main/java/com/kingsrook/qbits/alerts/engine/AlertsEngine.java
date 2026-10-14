@@ -38,10 +38,10 @@ import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Resolution;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Status;
 import com.kingsrook.qbits.alerts.model.AlertsRecordRef;
 import com.kingsrook.qbits.alerts.model.AlertsType;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.AlertRecordRef;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.AlertRecordRef;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.exceptions.QUserFacingException;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
@@ -568,6 +568,8 @@ public class AlertsEngine
          .withValue("severity", severity.name())
          .withValue("lastRaisedAt", now)
          .withValue("occurrenceCount", (resolved.getValueInteger("occurrenceCount") == null ? 0 : resolved.getValueInteger("occurrenceCount")) + 1)
+         .withValue("escalationLevel", 0)
+         .withValue("timedNotificationCheckedAt", null)
          .withValue("reopenCount", (resolved.getValueInteger("reopenCount") == null ? 0 : resolved.getValueInteger("reopenCount")) + 1)
          .withValue("resolvedAt", null)
          .withValue("resolvedByUserId", null)
@@ -824,7 +826,7 @@ public class AlertsEngine
    /*******************************************************************************
     ** What a subscription or mute scope is matched against.
     *******************************************************************************/
-   public record AlertTarget(Integer typeId, String typeName, Integer groupId, Integer monitorId, String subjectTableName, Set<String> recordKeys, Map<String, String> attributes)
+   public record AlertTarget(Integer typeId, String typeName, Integer groupId, Integer monitorId, String subjectTableName, Set<String> recordKeys, Map<String, String> attributes, String alertKey)
    {
       /***************************************************************************
        ** From a type row and a signal (before the alert exists).
@@ -837,7 +839,7 @@ public class AlertsEngine
             keys.add(ref.getTableName() + ":" + ref.getPrimaryKey());
          }
          return (new AlertTarget(type.getValueInteger("id"), signal.getAlertTypeName(), type.getValueInteger("groupId"), monitorId,
-            type.getValueString("subjectTableName"), keys, signal.getAttributes()));
+            type.getValueString("subjectTableName"), keys, signal.getAttributes(), openKey(signal.getAlertTypeName(), signal.getEffectiveDedupKey())));
       }
 
 
@@ -851,6 +853,10 @@ public class AlertsEngine
          for(QRecord ref : AlertsDb.query(AlertsRecordRef.TABLE_NAME, AlertsDb.eq("alertId", alert.getValue("id")).withCriteria("active", QCriteriaOperator.EQUALS, true)))
          {
             keys.add(ref.getValueString("tableName") + ":" + ref.getValueString("recordId"));
+         }
+         if(StringUtils.hasContent(alert.getValueString("subjectTableName")) && StringUtils.hasContent(alert.getValueString("subjectRecordId")))
+         {
+            keys.add(alert.getValueString("subjectTableName") + ":" + alert.getValueString("subjectRecordId"));
          }
          Map<String, String> attributes = new HashMap<>();
          String              json       = alert.getValueString("attributes");
@@ -867,7 +873,7 @@ public class AlertsEngine
             }
          }
          return (new AlertTarget(alert.getValueInteger("alertTypeId"), alert.getValueString("alertTypeName"), alert.getValueInteger("groupId"), alert.getValueInteger("monitorId"),
-            alert.getValueString("subjectTableName"), keys, attributes));
+            alert.getValueString("subjectTableName"), keys, attributes, openKey(alert.getValueString("alertTypeName"), alert.getValueString("dedupKey"))));
       }
    }
 }

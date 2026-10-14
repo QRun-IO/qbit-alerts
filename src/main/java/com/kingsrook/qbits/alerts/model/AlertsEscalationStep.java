@@ -14,397 +14,412 @@
  * limitations under the License.
  */
 
+package com.kingsrook.qbits.alerts.model;
 
-package com.kingsrook.qbits.alerts.spi;
 
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
-import com.kingsrook.qqq.backend.core.model.metadata.TopLevelMetaDataInterface;
-import com.kingsrook.qqq.backend.core.model.metadata.qbits.SourceQBitAware;
+import java.time.Instant;
+import com.kingsrook.qqq.backend.core.model.data.QField;
+import com.kingsrook.qqq.backend.core.model.data.QRecord;
+import com.kingsrook.qqq.backend.core.model.data.QRecordEntity;
 
 
 /*******************************************************************************
- ** Declares a kind of problem a qbit or app can report (e.g. cdn.purge.dead),
- ** so the system "knows about" every alert source.  An alerts implementation
- ** syncs these into a table at startup, where admins can see and tune them.
- **
- ** Add it to an instance like any top-level meta-data (qInstance.add(...), or
- ** from a MetaDataProducer); it lands in AlertsInstanceMetaData.alertTypes.
- ** Names are lowercase and dotted: ^[a-z0-9]+(\.[a-z0-9-]+)+$
+ ** One ordered destination in an escalation policy.
  *******************************************************************************/
-public class QAlertTypeMetaData implements TopLevelMetaDataInterface, SourceQBitAware
+public class AlertsEscalationStep extends QRecordEntity
 {
-   private String                    name;
-   private String                    label;
-   private String                    sourceName;
-   private String                    sourceQBitName;
-   private String                    groupName;
-   private AlertSeverity             defaultSeverity       = AlertSeverity.WARNING;
-   private String                    description;
-   private String                    howToFix;
-   private String                    subjectTableName;
-   private String                    visibilityPermission;
-   private ResolveMode               resolveMode           = ResolveMode.PRODUCER;
-   private Duration                  quietPeriod;
-   private List<AlertDefaultMonitor> defaultMonitors       = new ArrayList<>();
-   private DetailLevel               externalDetailCeiling = DetailLevel.STANDARD;
+   public static final String TABLE_NAME = "alerts_escalation_step";
+
+   @QField(isEditable = false, isPrimaryKey = true)
+   private Integer id;
+
+   @QField(isRequired = true, possibleValueSourceName = "alerts_escalation_policy")
+   private Integer policyId;
+
+   @QField(isRequired = true)
+   private Integer stepOrder;
+
+   @QField(isRequired = true)
+   private Integer afterMinutes;
+
+   @QField(isRequired = true, maxLength = 16, possibleValueSourceName = "alerts_subscriber_type")
+   private String targetType;
+
+   @QField(maxLength = 100)
+   private String userId;
+
+   @QField(possibleValueSourceName = "alerts_team")
+   private Integer teamId;
+
+   @QField(possibleValueSourceName = "alerts_channel")
+   private Integer channelId;
+
+   @QField(isRequired = true, maxLength = 16, possibleValueSourceName = "alerts_status")
+   private String onlyIfStatus;
+
+   @QField(isEditable = false)
+   private Instant createDate;
+
+   @QField(isEditable = false)
+   private Instant modifyDate;
 
 
 
    /*******************************************************************************
-    ** Find a declared alert type by name, or null.
+    ** Default constructor.
     *******************************************************************************/
-   public static QAlertTypeMetaData of(QInstance qInstance, String name)
+   public AlertsEscalationStep()
    {
-      AlertsInstanceMetaData alertsInstanceMetaData = AlertsInstanceMetaData.of(qInstance);
-      return (alertsInstanceMetaData == null ? null : alertsInstanceMetaData.getAlertType(name));
    }
 
 
 
    /*******************************************************************************
-    ** Adds this type to the instance's AlertsInstanceMetaData (creating it).
+    ** Populate from a QRecord.
     *******************************************************************************/
-   @Override
-   public void addSelfToInstance(QInstance qInstance)
+   public AlertsEscalationStep(QRecord record)
    {
-      AlertsInstanceMetaData.ofOrWithNew(qInstance).withAlertType(this);
+      populateFromQRecord(record);
    }
 
 
 
    /*******************************************************************************
-    ** The source shown to people: sourceName if set, otherwise the qbit that
-    ** produced this meta-data.
+    ** Getter for id
     *******************************************************************************/
-   public String getEffectiveSourceName()
+   public Integer getId()
    {
-      return (sourceName != null ? sourceName : sourceQBitName);
+      return (this.id);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for name
+    ** Setter for id
     *******************************************************************************/
-   @Override
-   public String getName()
+   public void setId(Integer id)
    {
-      return (this.name);
+      this.id = id;
    }
 
 
 
    /*******************************************************************************
-    ** Setter for name
+    ** Fluent setter for id
     *******************************************************************************/
-   public void setName(String name)
+   public AlertsEscalationStep withId(Integer id)
    {
-      this.name = name;
-   }
-
-
-
-   /*******************************************************************************
-    ** Fluent setter for name
-    *******************************************************************************/
-   public QAlertTypeMetaData withName(String name)
-   {
-      this.name = name;
+      this.id = id;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for label
+    ** Getter for policyId
     *******************************************************************************/
-   public String getLabel()
+   public Integer getPolicyId()
    {
-      return (this.label);
+      return (this.policyId);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for label
+    ** Setter for policyId
     *******************************************************************************/
-   public QAlertTypeMetaData withLabel(String label)
+   public void setPolicyId(Integer policyId)
    {
-      this.label = label;
+      this.policyId = policyId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for policyId
+    *******************************************************************************/
+   public AlertsEscalationStep withPolicyId(Integer policyId)
+   {
+      this.policyId = policyId;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for sourceName
+    ** Getter for stepOrder
     *******************************************************************************/
-   public String getSourceName()
+   public Integer getStepOrder()
    {
-      return (this.sourceName);
+      return (this.stepOrder);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for sourceName
+    ** Setter for stepOrder
     *******************************************************************************/
-   public QAlertTypeMetaData withSourceName(String sourceName)
+   public void setStepOrder(Integer stepOrder)
    {
-      this.sourceName = sourceName;
+      this.stepOrder = stepOrder;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for stepOrder
+    *******************************************************************************/
+   public AlertsEscalationStep withStepOrder(Integer stepOrder)
+   {
+      this.stepOrder = stepOrder;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for sourceQBitName
+    ** Getter for afterMinutes
     *******************************************************************************/
-   @Override
-   public String getSourceQBitName()
+   public Integer getAfterMinutes()
    {
-      return (this.sourceQBitName);
+      return (this.afterMinutes);
    }
 
 
 
    /*******************************************************************************
-    ** Setter for sourceQBitName
+    ** Setter for afterMinutes
     *******************************************************************************/
-   @Override
-   public void setSourceQBitName(String sourceQBitName)
+   public void setAfterMinutes(Integer afterMinutes)
    {
-      this.sourceQBitName = sourceQBitName;
+      this.afterMinutes = afterMinutes;
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for sourceQBitName
+    ** Fluent setter for afterMinutes
     *******************************************************************************/
-   @Override
-   public QAlertTypeMetaData withSourceQBitName(String sourceQBitName)
+   public AlertsEscalationStep withAfterMinutes(Integer afterMinutes)
    {
-      this.sourceQBitName = sourceQBitName;
+      this.afterMinutes = afterMinutes;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for groupName
+    ** Getter for targetType
     *******************************************************************************/
-   public String getGroupName()
+   public String getTargetType()
    {
-      return (this.groupName);
+      return (this.targetType);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for groupName (the default group; created if missing)
+    ** Setter for targetType
     *******************************************************************************/
-   public QAlertTypeMetaData withGroupName(String groupName)
+   public void setTargetType(String targetType)
    {
-      this.groupName = groupName;
+      this.targetType = targetType;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for targetType
+    *******************************************************************************/
+   public AlertsEscalationStep withTargetType(String targetType)
+   {
+      this.targetType = targetType;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for defaultSeverity
+    ** Getter for userId
     *******************************************************************************/
-   public AlertSeverity getDefaultSeverity()
+   public String getUserId()
    {
-      return (this.defaultSeverity);
+      return (this.userId);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for defaultSeverity
+    ** Setter for userId
     *******************************************************************************/
-   public QAlertTypeMetaData withDefaultSeverity(AlertSeverity defaultSeverity)
+   public void setUserId(String userId)
    {
-      this.defaultSeverity = defaultSeverity;
+      this.userId = userId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for userId
+    *******************************************************************************/
+   public AlertsEscalationStep withUserId(String userId)
+   {
+      this.userId = userId;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for description
+    ** Getter for teamId
     *******************************************************************************/
-   public String getDescription()
+   public Integer getTeamId()
    {
-      return (this.description);
+      return (this.teamId);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for description
+    ** Setter for teamId
     *******************************************************************************/
-   public QAlertTypeMetaData withDescription(String description)
+   public void setTeamId(Integer teamId)
    {
-      this.description = description;
+      this.teamId = teamId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for teamId
+    *******************************************************************************/
+   public AlertsEscalationStep withTeamId(Integer teamId)
+   {
+      this.teamId = teamId;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for howToFix
+    ** Getter for channelId
     *******************************************************************************/
-   public String getHowToFix()
+   public Integer getChannelId()
    {
-      return (this.howToFix);
+      return (this.channelId);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for howToFix
+    ** Setter for channelId
     *******************************************************************************/
-   public QAlertTypeMetaData withHowToFix(String howToFix)
+   public void setChannelId(Integer channelId)
    {
-      this.howToFix = howToFix;
+      this.channelId = channelId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for channelId
+    *******************************************************************************/
+   public AlertsEscalationStep withChannelId(Integer channelId)
+   {
+      this.channelId = channelId;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for subjectTableName
+    ** Getter for onlyIfStatus
     *******************************************************************************/
-   public String getSubjectTableName()
+   public String getOnlyIfStatus()
    {
-      return (this.subjectTableName);
+      return (this.onlyIfStatus);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for subjectTableName (drives visibility and the record panel)
+    ** Setter for onlyIfStatus
     *******************************************************************************/
-   public QAlertTypeMetaData withSubjectTableName(String subjectTableName)
+   public void setOnlyIfStatus(String onlyIfStatus)
    {
-      this.subjectTableName = subjectTableName;
+      this.onlyIfStatus = onlyIfStatus;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for onlyIfStatus
+    *******************************************************************************/
+   public AlertsEscalationStep withOnlyIfStatus(String onlyIfStatus)
+   {
+      this.onlyIfStatus = onlyIfStatus;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for visibilityPermission
+    ** Getter for createDate
     *******************************************************************************/
-   public String getVisibilityPermission()
+   public Instant getCreateDate()
    {
-      return (this.visibilityPermission);
+      return (this.createDate);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for visibilityPermission (an extra gate on who may see it)
+    ** Setter for createDate
     *******************************************************************************/
-   public QAlertTypeMetaData withVisibilityPermission(String visibilityPermission)
+   public void setCreateDate(Instant createDate)
    {
-      this.visibilityPermission = visibilityPermission;
+      this.createDate = createDate;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for createDate
+    *******************************************************************************/
+   public AlertsEscalationStep withCreateDate(Instant createDate)
+   {
+      this.createDate = createDate;
       return (this);
    }
 
 
 
    /*******************************************************************************
-    ** Getter for resolveMode
+    ** Getter for modifyDate
     *******************************************************************************/
-   public ResolveMode getResolveMode()
+   public Instant getModifyDate()
    {
-      return (this.resolveMode);
+      return (this.modifyDate);
    }
 
 
 
    /*******************************************************************************
-    ** Fluent setter for resolveMode
+    ** Setter for modifyDate
     *******************************************************************************/
-   public QAlertTypeMetaData withResolveMode(ResolveMode resolveMode)
+   public void setModifyDate(Instant modifyDate)
    {
-      this.resolveMode = resolveMode;
-      return (this);
+      this.modifyDate = modifyDate;
    }
 
 
 
    /*******************************************************************************
-    ** Resolve automatically after this long with no raise (sets the mode to
-    ** QUIET_PERIOD).
+    ** Fluent setter for modifyDate
     *******************************************************************************/
-   public QAlertTypeMetaData withQuietPeriod(Duration quietPeriod)
+   public AlertsEscalationStep withModifyDate(Instant modifyDate)
    {
-      this.quietPeriod = quietPeriod;
-      this.resolveMode = ResolveMode.QUIET_PERIOD;
-      return (this);
-   }
-
-
-
-   /*******************************************************************************
-    ** Getter for quietPeriod
-    *******************************************************************************/
-   public Duration getQuietPeriod()
-   {
-      return (this.quietPeriod);
-   }
-
-
-
-   /*******************************************************************************
-    ** Getter for defaultMonitors
-    *******************************************************************************/
-   public List<AlertDefaultMonitor> getDefaultMonitors()
-   {
-      return (this.defaultMonitors);
-   }
-
-
-
-   /*******************************************************************************
-    ** Add a seeded monitor for this type.
-    *******************************************************************************/
-   public QAlertTypeMetaData withDefaultMonitor(AlertDefaultMonitor defaultMonitor)
-   {
-      if(defaultMonitor != null)
-      {
-         this.defaultMonitors.add(defaultMonitor);
-      }
-      return (this);
-   }
-
-
-
-   /*******************************************************************************
-    ** Getter for externalDetailCeiling
-    *******************************************************************************/
-   public DetailLevel getExternalDetailCeiling()
-   {
-      return (this.externalDetailCeiling);
-   }
-
-
-
-   /*******************************************************************************
-    ** Fluent setter for externalDetailCeiling (the most any channel may include)
-    *******************************************************************************/
-   public QAlertTypeMetaData withExternalDetailCeiling(DetailLevel externalDetailCeiling)
-   {
-      this.externalDetailCeiling = externalDetailCeiling;
+      this.modifyDate = modifyDate;
       return (this);
    }
 }

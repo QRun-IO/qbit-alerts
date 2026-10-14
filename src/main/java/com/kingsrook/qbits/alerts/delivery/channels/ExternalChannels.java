@@ -391,7 +391,7 @@ public final class ExternalChannels
 
 
    /*******************************************************************************
-    ** The message's entries (a TEST message gets one stand-in entry).
+    ** The message's entries (a TEST message gets one sample entry).
     *******************************************************************************/
    static List<AlertMessage.Entry> entries(AlertMessage message)
    {

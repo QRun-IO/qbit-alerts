@@ -35,13 +35,13 @@ import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Resolution;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Status;
 import com.kingsrook.qbits.alerts.model.AlertsRecordRef;
 import com.kingsrook.qbits.alerts.model.AlertsType;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.AlertRecordRef;
-import com.kingsrook.qbits.alerts.spi.AlertResolution;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
-import com.kingsrook.qbits.alerts.spi.AlertsInstanceMetaData;
-import com.kingsrook.qbits.alerts.spi.QAlertTypeMetaData;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.AlertRecordRef;
+import com.kingsrook.qqq.backend.core.alerts.AlertResolution;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertsInstanceMetaData;
+import com.kingsrook.qqq.backend.core.alerts.QAlertTypeMetaData;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.exceptions.QUserFacingException;
@@ -340,11 +340,11 @@ class AlertsEngineTest extends BaseAlertsTest
    @Test
    void testSink() throws Exception
    {
-      runtime.sink().raise(signal("k1"));
-      runtime.sink().heartbeat("sink.beat", null);
-      runtime.sink().resolve(new AlertResolution(TYPE, "k1", "gone"));
-      runtime.sink().raise(null);
-      runtime.sink().resolve(null);
+      runtime.getSink().raise(signal("k1"));
+      runtime.getSink().heartbeat("sink.beat", null);
+      runtime.getSink().resolve(new AlertResolution(TYPE, "k1", "gone"));
+      runtime.getSink().raise(null);
+      runtime.getSink().resolve(null);
       List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
       assertThat(alerts).hasSize(1);
       assertThat(alerts.get(0).getValueString("status")).isEqualTo("RESOLVED");
