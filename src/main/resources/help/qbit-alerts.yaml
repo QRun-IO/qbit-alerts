@@ -1,0 +1,108 @@
+bundle: qbit-alerts
+version: 1
+layer: QBIT
+# Help for the Alerts app and every alerts_* table, in the QQQ help-bundle format
+# (qqq#1198). Each table entry says what the table is for and how its rows get
+# created, so an empty table explains itself. AlertsHelp applies it until the core
+# HelpBundles registry ships in a QQQ release (a stand-in until core #1198 ships).
+# Summaries stay under 120 characters (AlertsTablesGuardrailTest).
+entries:
+  - key: app:alerts;slot:help
+    summary: "Manage by exception: alerts, who hears about them, how they are delivered, and the checks that raise them."
+    content: |
+      The Setup card on the home (alerts admins) lists every part of Alerts with its status and the next step. A new installation starts with the in-app and email channels and two groups; alert types and their default monitors appear as soon as the first person opens Alerts, because the installed qbits declare them. Nobody is notified until someone subscribes (the first alerts admin gets an in-app subscription to errors and worse automatically) or a group has an owner team.
+
+  - key: table:alerts_alert;slot:help
+    summary: "One problem, open or closed, identified by its type and dedup key. Repeats update it; they never duplicate it."
+    content: |
+      **How rows get created:** never by hand. A producer (QAlerts.raise), a monitor that finds its condition true, a failed process, or an Alertmanager webhook raises the alert; the same condition updates the same row. People change its state with the actions Acknowledge, Snooze, Resolve, Reopen, Assign, Comment and Mute. Empty means nothing is wrong right now, or nothing is reporting yet: check Monitors and Alert Types.
+
+  - key: table:alerts_type;slot:help
+    summary: "A kind of problem a source can report (such as cdn.purge.dead): its severity, group, quiet period and escalation."
+    content: |
+      **How rows get created:** from the alert types that the installed qbits and the host declare in code (QAlertTypeMetaData). They are synced the first time someone opens Alerts after a start, and when the first alert of a type is raised. You tune a row here (turn it off, override its severity, move it to a group, set a reminder interval or escalation policy); you do not add types by hand. Empty means the first sync has not run yet: open the Alerts home.
+
+  - key: table:alerts_group;slot:help
+    summary: "A category of alerts (Backups, CDN), optionally nested: used to organize the home, subscriptions and owners."
+    content: |
+      **How rows get created:** the qbit seeds Alerts and Other, and every alert type that names a group creates it on first sync. Add your own to organize types, and nest one inside another. Set an Owner Team on a group: an alert in that group that no subscription matches goes to the owner team's members, so a problem with an owner is never silent. Set an escalation policy on a group to apply it to every type in it that has none.
+
+  - key: table:alerts_monitor;slot:help
+    summary: "A configured check that raises alerts of a type: a table query, a threshold, a heartbeat or a failed process."
+    content: |
+      **How rows get created:** qbits ship default monitors for their alert types; they are added on first sync and can be tuned or turned off, not deleted. To add your own, use Create monitor on an alert type, or New here. Run check now tests a monitor on demand. If a monitor cannot run three times in a row, an alert says so. Empty means no installed qbit ships a default monitor; alerts then come only from code that raises them.
+
+  - key: table:alerts_record_ref;slot:help
+    summary: "A record an alert is about, so the alert shows on that record and is hidden from people who cannot see it."
+    content: |
+      **How rows get created:** written by the engine when a signal names records (AlertRecordRef) or a table-query monitor finds rows. Never edited by hand. Empty means no alert has been about a specific record yet.
+
+  - key: table:alerts_event;slot:help
+    summary: "The alert timeline: raised, repeated, acknowledged, snoozed, resolved, reopened, notified, commented."
+    content: |
+      **How rows get created:** written by the engine and the record actions whenever an alert changes. Read-only history. Empty means no alert exists yet.
+
+  - key: table:alerts_subscription;slot:help
+    summary: "Who hears about what: a user, team or channel, scoped to everything, a group, type, monitor, table or record."
+    content: |
+      **How rows get created:** use Subscribe me on an alert type, group or monitor, or New here (pick who, the scope, the minimum severity, which events and how to deliver). The first alerts admin who opens Alerts gets one in-app subscription to errors and worse. Without a subscription an alert reaches nobody, unless its group has an owner team. A subscription can name channels; otherwise the person's default channels apply.
+
+  - key: table:alerts_user_preference;slot:help
+    summary: "Your alert settings: email address, quiet hours, digest hour, time zone, default channels and a vacation pause."
+    content: |
+      **How rows get created:** one row per person, created automatically with defaults the first time they open Alerts (in-app on, email on once an address is added). Edit yours here. Quiet hours and the pause hold email and other push channels, never the bell; an alert at or above your bypass severity (CRITICAL by default) still gets through. Default Channels, when set, replace the built-in email choice for subscriptions that name no channels; the bell stays unless you turn In-App off.
+
+  - key: table:alerts_team;slot:help
+    summary: "A named set of people who can be subscribed together, or own a group of alerts."
+    content: |
+      **How rows get created:** an administrator adds teams with New, then adds Team Members, or sets a member source (a role or IdP group, which needs the host's audience resolver). Subscribe a team to a scope, or make it the Owner Team of an alert group so unsubscribed alerts reach it. Empty is normal until you decide who answers for what; the Setup card says what is missing.
+
+  - key: table:alerts_team_member;slot:help
+    summary: "One person in a team, with an optional role. Teams combine these with any role or IdP-group source."
+    content: |
+      **How rows get created:** add members from a team's Members list, or New here. A team with no members and no member source notifies nobody. Empty means no team has members yet.
+
+  - key: table:alerts_channel;slot:help
+    summary: "A configured destination for alerts: the bell, email, an email list, Slack, Teams, a webhook, PagerDuty."
+    content: |
+      **How rows get created:** the qbit seeds In-App (the bell) and Email (a person's own address) so alerts can be delivered from the first alert. Add Slack, Teams, a webhook or PagerDuty with New: its settings go in the row and its secret stays in your secret store, referenced by name (Secret Ref), never typed here. Use Send test notification to check a channel; Health shows whether recent deliveries worked.
+
+  - key: table:alerts_mute;slot:help
+    summary: "A maintenance window or mute that silences notifications, or suppresses alerts, for a scope and a time."
+    content: |
+      **How rows get created:** use Mute on an alert, an alert type, a group or a monitor, or New here for a planned maintenance window (scope, start, end, effect). Silence notifications keeps recording alerts; suppress alerts stops raising them. Empty means nothing is muted, which is normal.
+
+  - key: table:alerts_delivery;slot:help
+    summary: "The delivery log: one attempt per person and channel, with status, retries and, when held back, the reason."
+    content: |
+      **How rows get created:** written by the router when an alert is sent, and updated by the delivery worker (retries, failures). Suppressed deliveries are logged too, with why (muted, quiet hours, not visible, no address). Retry delivery re-queues a failed one. Empty means no alert has been routed to anyone yet: check Subscriptions.
+
+  - key: table:alerts_notification;slot:help
+    summary: "A message for people: an announcement an admin writes, or one a producer sends (failed job, share, release)."
+    content: |
+      **How rows get created:** an administrator writes one with New, previews the audience, and sends or schedules it; producers create them with QAlerts.notify (failed jobs, shares, security notices, releases). Each reaches people through the bell and, by their settings, email or Slack. Empty means nothing has been announced and no producer has sent one.
+
+  - key: table:alerts_notification_recipient;slot:help
+    summary: "One notification for one person: when it reached them and whether they read, dismissed or were emailed it."
+    content: |
+      **How rows get created:** written when a notification is sent, one per person it reaches. Read-only; people change read and dismissed from the bell. Empty means no notification has been sent.
+
+  - key: table:alerts_notification_preference;slot:help
+    summary: "Your settings for one notification category: mute it in-app, and email or Slack off, immediate or daily digest."
+    content: |
+      **How rows get created:** each person adds a row per category (job, share, security, release...) from My Notification Settings when they want to change the default. Without a row the defaults apply: in-app on, email and Slack off. Security notices cannot be muted in-app. Empty means everyone is using the defaults.
+
+  - key: table:alerts_heartbeat;slot:help
+    summary: "The last time each dead-man's switch beat, watched by heartbeat monitors."
+    content: |
+      **How rows get created:** written when code calls QAlerts.heartbeat(key) or a watched process completes. A Heartbeat monitor raises an alert when a key stops beating. Empty means nothing has beaten yet, which is fine until you add a heartbeat monitor.
+
+  - key: table:alerts_escalation_policy;slot:help
+    summary: "A reusable escalation plan: how long to wait, who to tell next, and how often to repeat."
+    content: |
+      **How rows get created:** an administrator adds a policy with New, adds ordered Escalation Steps, then picks it on an alert type or group (a type's policy overrides its group's). Policies name real people, teams and channels, so the qbit cannot seed them. Empty means alerts are not escalated, only reminded.
+
+  - key: table:alerts_escalation_step;slot:help
+    summary: "One step of an escalation policy: after how many minutes, tell this user, team or channel."
+    content: |
+      **How rows get created:** add steps from a policy's Steps list. Each has an order, a delay in minutes and one target (a user, a team or a channel). Acknowledging, snoozing or resolving an alert stops the steps. Empty means no policy has steps yet.

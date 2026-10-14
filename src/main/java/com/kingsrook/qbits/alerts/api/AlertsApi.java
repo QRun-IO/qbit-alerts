@@ -56,6 +56,7 @@ import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QBadRequestException;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.exceptions.QPermissionDeniedException;
+import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.actions.AbstractActionInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy;
@@ -76,6 +77,8 @@ import com.kingsrook.qqq.middleware.javalin.specs.extensions.MiddlewareSpecExten
  *******************************************************************************/
 public class AlertsApi
 {
+   private static final QLogger LOG = QLogger.getLogger(AlertsApi.class);
+
    static final int INBOX_ITEMS        = 10;
    static final int MAX_BANNERS        = 3;
    static final int SCAN_LIMIT         = 1000;
@@ -103,7 +106,9 @@ public class AlertsApi
 
 
    /*******************************************************************************
-    ** Check alerts.view and set up the session (keys, settings).
+    ** Check alerts.view and set up the session (keys, settings, and the first-visit
+    ** sync of alert types, groups and default monitors, so those tables are never
+    ** empty on a running install).
     *******************************************************************************/
    public String requireViewer() throws QException
    {
@@ -114,6 +119,17 @@ public class AlertsApi
       }
       AlertsSecurity.ensureSessionKeys(runtime.getQInstance(), session);
       AlertsPreferences.ensure(runtime, session);
+      try
+      {
+         runtime.getTypeSync().syncIfNeeded();
+      }
+      catch(Exception e)
+      {
+         ////////////////////////////////////////////////////////////////////////
+         // best effort: the bell must work even if the sync fails; next call retries //
+         ////////////////////////////////////////////////////////////////////////
+         LOG.warn("Alert type sync failed on the first visit; will retry on the next request", e);
+      }
       return (AlertsSecurity.userId(session));
    }
 
