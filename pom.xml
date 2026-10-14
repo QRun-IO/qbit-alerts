@@ -24,6 +24,8 @@
       <jacoco.version>0.8.15</jacoco.version>
       <!-- qbit-email from Maven Central -->
       <qbit-email.version>0.1.0-RC.2</qbit-email.version>
+      <liquibase.version>4.33.0</liquibase.version>
+      <testcontainers.version>2.0.5</testcontainers.version>
       <qbit.guardrails.enforce>true</qbit.guardrails.enforce>
       <qbit.guardrails.strictUiApiRoutes>true</qbit.guardrails.strictUiApiRoutes>
    </properties>
@@ -102,6 +104,31 @@
          <groupId>com.h2database</groupId>
          <artifactId>h2</artifactId>
          <version>2.2.220</version>
+         <scope>test</scope>
+      </dependency>
+      <!-- AlertsForeignKeysTest applies the shipped changelog with Liquibase to a real PostgreSQL (Testcontainers) -->
+      <dependency>
+         <groupId>org.liquibase</groupId>
+         <artifactId>liquibase-core</artifactId>
+         <version>${liquibase.version}</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.postgresql</groupId>
+         <artifactId>postgresql</artifactId>
+         <version>42.7.14</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.testcontainers</groupId>
+         <artifactId>testcontainers-postgresql</artifactId>
+         <version>${testcontainers.version}</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.testcontainers</groupId>
+         <artifactId>testcontainers-junit-jupiter</artifactId>
+         <version>${testcontainers.version}</version>
          <scope>test</scope>
       </dependency>
 
