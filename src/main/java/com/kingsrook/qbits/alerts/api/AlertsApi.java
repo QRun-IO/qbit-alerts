@@ -102,7 +102,9 @@ public class AlertsApi
 
 
    /*******************************************************************************
-    ** Check alerts.view and set up the session (keys, settings).
+    ** Check alerts.view and set up the session (keys, settings, and the first-visit
+    ** sync of alert types, groups and default monitors, so those tables are never
+    ** empty on a running install).
     *******************************************************************************/
    public String requireViewer() throws QException
    {
@@ -113,6 +115,7 @@ public class AlertsApi
       }
       AlertsSecurity.ensureSessionKeys(runtime.getQInstance(), session);
       AlertsPreferences.ensure(runtime, session);
+      runtime.getTypeSync().syncIfNeeded();
       return (AlertsSecurity.userId(session));
    }
 

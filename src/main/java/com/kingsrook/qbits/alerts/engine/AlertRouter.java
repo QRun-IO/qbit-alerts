@@ -415,11 +415,14 @@ public class AlertRouter
     ** Every destination for an alert: subscribed users (directly or through a
     ** team) with their in-app and email channels (or the subscription's
     ** chosen channels), subscribed channels, and readable record followers.
+    ** An alert that no subscription matches (at WARNING or above) goes to the
+    ** members of its group's owner team, so an unowned problem is not silent.
     *******************************************************************************/
    List<Destination> destinations(AlertTarget target, AlertSeverity severity, DeliveryKind kind) throws QException
    {
       Map<Integer, List<String>> groupNames   = new HashMap<>();
       Map<String, Destination>   destinations = new LinkedHashMap<>();
+      boolean                    subscribed   = false;
       for(QRecord subscription : AlertsDb.query(AlertsSubscription.TABLE_NAME, AlertsDb.eq("enabled", true)))
       {
          AlertSeverity min = AlertSeverity.fromLabel(subscription.getValueString("minSeverity"), AlertSeverity.WARNING);
@@ -429,6 +432,7 @@ public class AlertRouter
             continue;
          }
 
+         subscribed = true;
          Integer subscriptionId = subscription.getValueInteger("id");
          String  minName        = subscription.getValueString("minSeverity");
          String  subscriberType = subscription.getValueString("subscriberType");
@@ -465,6 +469,10 @@ public class AlertRouter
             }
          }
       }
+      if(!subscribed && severity.isAtLeast(AlertSeverity.WARNING))
+      {
+         addOwnerTeam(destinations, target);
+      }
       for(String recordKey : kind == DeliveryKind.REMINDER ? java.util.Set.<String>of() : target.recordKeys())
       {
          String[] parts = recordKey.split(":", 2);
@@ -484,6 +492,60 @@ public class AlertRouter
          }
       }
       return (new ArrayList<>(destinations.values()));
+   }
+
+
+
+   /*******************************************************************************
+    ** The fallback for an alert nobody subscribed to: the members of the owner
+    ** team of its group (or of the nearest parent group that has one), through
+    ** their normal channels and the usual suppression checks.
+    *******************************************************************************/
+   private void addOwnerTeam(Map<String, Destination> destinations, AlertTarget target) throws QException
+   {
+      Integer teamId = ownerTeamId(target.groupId());
+      if(teamId == null)
+      {
+         return;
+      }
+      for(String userId : teamMembers(teamId))
+      {
+         if(!StringUtils.hasContent(userId))
+         {
+            continue;
+         }
+         QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
+         for(QRecord channel : userChannels(null, preference))
+         {
+            destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, null, null, preference, "IMMEDIATE"));
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** The owner team of a group, or of the nearest parent that has one (null:
+    ** none).
+    *******************************************************************************/
+   Integer ownerTeamId(Integer groupId) throws QException
+   {
+      Integer current = groupId;
+      int     depth   = 0;
+      while(current != null && depth++ < 10)
+      {
+         QRecord group = AlertsDb.byId(AlertsGroup.TABLE_NAME, current);
+         if(group == null)
+         {
+            return (null);
+         }
+         if(group.getValueInteger("ownerTeamId") != null)
+         {
+            return (group.getValueInteger("ownerTeamId"));
+         }
+         current = group.getValueInteger("parentGroupId");
+      }
+      return (null);
    }
 
 
@@ -544,8 +606,9 @@ public class AlertRouter
 
 
    /*******************************************************************************
-    ** A user's channels for a subscription: the ones it names, else in-app
-    ** (unless turned off) and email (when enabled in their settings).
+    ** A user's channels for a subscription: the ones it names, else the user's
+    ** own default channels (My Alert Settings), else in-app (unless turned off)
+    ** and email (when enabled in their settings).
     *******************************************************************************/
    private List<QRecord> userChannels(QRecord subscription, QRecord preference) throws QException
    {
@@ -553,18 +616,17 @@ public class AlertRouter
       String        overrides = subscription == null ? null : subscription.getValueString("channelOverrideIds");
       if(StringUtils.hasContent(overrides))
       {
-         for(String id : overrides.split("[,\\s]+"))
+         return (channelsById(overrides));
+      }
+
+      String defaults = preference == null ? null : preference.getValueString("defaultChannelIds");
+      if(StringUtils.hasContent(defaults))
+      {
+         channels.addAll(channelsById(defaults));
+         if(!channels.isEmpty())
          {
-            if(!id.isBlank())
-            {
-               QRecord channel = AlertsDb.byId(AlertsChannel.TABLE_NAME, Integer.valueOf(id.trim()));
-               if(channel != null)
-               {
-                  channels.add(channel);
-               }
-            }
+            return (channels);
          }
-         return (channels);
       }
 
       if(preference == null || !Boolean.FALSE.equals(preference.getValueBoolean("inAppEnabled")))
@@ -574,6 +636,37 @@ public class AlertRouter
       if(preference != null && Boolean.TRUE.equals(preference.getValueBoolean("emailEnabled")) && StringUtils.hasContent(preference.getValueString("emailAddress")))
       {
          channels.add(runtime.getChannels().defaultChannel(ChannelType.EMAIL));
+      }
+      return (channels);
+   }
+
+
+
+   /*******************************************************************************
+    ** The channel rows for a list of ids ("3, 5"); ids that are not numbers or
+    ** no longer exist are skipped.
+    *******************************************************************************/
+   private List<QRecord> channelsById(String ids) throws QException
+   {
+      List<QRecord> channels = new ArrayList<>();
+      for(String id : ids.split("[,\\s]+"))
+      {
+         if(id.isBlank())
+         {
+            continue;
+         }
+         try
+         {
+            QRecord channel = AlertsDb.byId(AlertsChannel.TABLE_NAME, Integer.valueOf(id.trim()));
+            if(channel != null)
+            {
+               channels.add(channel);
+            }
+         }
+         catch(NumberFormatException e)
+         {
+            LOG.debug("Ignoring a channel id that is not a number", logPair("id", id));
+         }
       }
       return (channels);
    }
