@@ -27,13 +27,11 @@ import java.util.Locale;
 import java.util.Map;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
-import com.kingsrook.qbits.email.EmailRuntime;
-import com.kingsrook.qbits.email.outbox.EmailCategory;
-import com.kingsrook.qbits.email.outbox.EmailRequest;
-import com.kingsrook.qbits.email.outbox.EmailSendResult;
-import com.kingsrook.qbits.email.outbox.EmailService;
-import com.kingsrook.qbits.email.template.EmailTemplateDefinition;
-import com.kingsrook.qbits.email.template.EmailTemplates;
+import com.kingsrook.qbits.email.api.EmailApi;
+import com.kingsrook.qbits.email.api.EmailApiCategory;
+import com.kingsrook.qbits.email.api.EmailApiRequest;
+import com.kingsrook.qbits.email.api.EmailApiResult;
+import com.kingsrook.qbits.email.api.EmailApiTemplate;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 
@@ -42,7 +40,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
  ** The one place that names qbit-email classes. Callers reach it only after
  ** {@link AlertsEmail#isActive()}. It registers the alerts templates on first
  ** use (never overwriting people's edits) and sends one message per recipient
- ** through {@code EmailService}, all in the NOTIFICATION category:
+ ** through {@code EmailApi}, all in the NOTIFICATION category:
  ** - alerts_alert: an alert channel email (one alert or a batch);
  ** - alerts_notification: one user notification;
  ** - alerts_digest: a user's daily digest of notifications.
@@ -96,7 +94,7 @@ public final class AlertsEmailSender
     *******************************************************************************/
    static boolean isInstalled(QInstance qInstance)
    {
-      return (EmailRuntime.config(qInstance) != null);
+      return (EmailApi.isInstalled(qInstance));
    }
 
 
@@ -126,7 +124,7 @@ public final class AlertsEmailSender
       String        idPart = ids.isEmpty() ? "test" : String.join("-", ids.stream().map(String::valueOf).toList());
       String        key   = "alerts:alert:" + idPart + ":" + hash(to) + ":" + messageKind + ":" + (now.getEpochSecond() / 60);
 
-      EmailRequest request = base(to, process, key)
+      EmailApiRequest request = base(to, process, key)
          .withTemplateName(TEMPLATE_ALERT)
          .withVariable("subject", subject)
          .withVariable("severity", severity)
@@ -138,7 +136,7 @@ public final class AlertsEmailSender
       }
       withUrl(request, "link", link);
       withUrl(request, "settings_url", settingsUrl);
-      return (result(EmailService.send(request)));
+      return (result(EmailApi.send(request)));
    }
 
 
@@ -155,7 +153,7 @@ public final class AlertsEmailSender
    public static Result sendNotification(String to, String process, Integer notificationId, Map<String, Serializable> item, String settingsUrl) throws QException
    {
       ensure(TEMPLATE_NOTIFICATION);
-      EmailRequest request = base(to, process, "alerts:notification:" + notificationId + ":" + hash(to))
+      EmailApiRequest request = base(to, process, "alerts:notification:" + notificationId + ":" + hash(to))
          .withTemplateName(TEMPLATE_NOTIFICATION)
          .withLinkedRecord(AlertsNotification.TABLE_NAME, notificationId);
       for(Map.Entry<String, Serializable> entry : item.entrySet())
@@ -170,7 +168,7 @@ public final class AlertsEmailSender
          }
       }
       withUrl(request, "settings_url", settingsUrl);
-      return (result(EmailService.send(request)));
+      return (result(EmailApi.send(request)));
    }
 
 
@@ -190,13 +188,13 @@ public final class AlertsEmailSender
                                    String settingsUrl) throws QException
    {
       ensure(TEMPLATE_DIGEST);
-      EmailRequest request = base(to, process, "alerts:digest:" + userId + ":" + windowStart)
+      EmailApiRequest request = base(to, process, "alerts:digest:" + userId + ":" + windowStart)
          .withTemplateName(TEMPLATE_DIGEST)
          .withVariable("count", items.size())
          .withVariable("items", (Serializable) items)
          .withLinkedRecord(AlertsNotification.TABLE_NAME, firstNotificationId);
       withUrl(request, "settings_url", settingsUrl);
-      return (result(EmailService.send(request)));
+      return (result(EmailApi.send(request)));
    }
 
 
@@ -204,9 +202,9 @@ public final class AlertsEmailSender
    /*******************************************************************************
     ** The parts every message has: one recipient, the sender and the key.
     *******************************************************************************/
-   private static EmailRequest base(String to, String process, String idempotencyKey)
+   private static EmailApiRequest base(String to, String process, String idempotencyKey)
    {
-      return (new EmailRequest().withTo(to).withCategory(EmailCategory.NOTIFICATION).withSender(SENDER_QBIT, process).withIdempotencyKey(idempotencyKey));
+      return (new EmailApiRequest().withTo(to).withCategory(EmailApiCategory.NOTIFICATION).withSender(SENDER_QBIT, process).withIdempotencyKey(idempotencyKey));
    }
 
 
@@ -215,7 +213,7 @@ public final class AlertsEmailSender
     ** Pass a URL only when it is absolute http(s); the template schema refuses
     ** relative links, and they are useless in a mail anyway.
     *******************************************************************************/
-   private static void withUrl(EmailRequest request, String name, String url)
+   private static void withUrl(EmailApiRequest request, String name, String url)
    {
       if(url != null && (url.startsWith("https://") || url.startsWith("http://")))
       {
@@ -228,7 +226,7 @@ public final class AlertsEmailSender
    /*******************************************************************************
     ** Translate qbit-email's result.
     *******************************************************************************/
-   private static Result result(EmailSendResult sent)
+   private static Result result(EmailApiResult sent)
    {
       String detail = sent.reasons() == null || sent.reasons().isEmpty() ? null : String.join("; ", sent.reasons());
       return (new Result(Status.valueOf(sent.status().name()), sent.messageId(), detail));
@@ -266,10 +264,10 @@ public final class AlertsEmailSender
     *******************************************************************************/
    private static void ensure(String name) throws QException
    {
-      EmailTemplates.ensure(switch(name)
+      EmailApi.ensureTemplate(switch(name)
       {
-         case TEMPLATE_ALERT -> new EmailTemplateDefinition()
-            .withName(TEMPLATE_ALERT).withLabel("Alerts: alert").withCategory(EmailCategory.NOTIFICATION).withKind("MARKDOWN").withOwnerQbit(SENDER_QBIT)
+         case TEMPLATE_ALERT -> new EmailApiTemplate()
+            .withName(TEMPLATE_ALERT).withLabel("Alerts: alert").withCategory(EmailApiCategory.NOTIFICATION).withKind("MARKDOWN").withOwnerQbit(SENDER_QBIT)
             .withSubject("{{subject}}")
             .withBody("""
                {{#each items}}**{{this.title}}**
@@ -293,8 +291,8 @@ public final class AlertsEmailSender
             .withVariable("settings_url", "Settings link", "URL", false, null)
             .withSampleVariables("{\"subject\":\"[ERROR] Export failed\",\"severity\":\"ERROR\",\"kind\":\"RAISED\",\"items\":[{\"title\":\"Export failed\",\"severity\":\"ERROR\","
                + "\"typeLabel\":\"Jobs\",\"summary\":\"3 records\"}],\"link\":\"https://example.com/app/alerts_alert/1\",\"settings_url\":\"https://example.com/app/alerts_subscription\"}");
-         case TEMPLATE_NOTIFICATION -> new EmailTemplateDefinition()
-            .withName(TEMPLATE_NOTIFICATION).withLabel("Alerts: notification").withCategory(EmailCategory.NOTIFICATION).withKind("MARKDOWN").withOwnerQbit(SENDER_QBIT)
+         case TEMPLATE_NOTIFICATION -> new EmailApiTemplate()
+            .withName(TEMPLATE_NOTIFICATION).withLabel("Alerts: notification").withCategory(EmailApiCategory.NOTIFICATION).withKind("MARKDOWN").withOwnerQbit(SENDER_QBIT)
             .withSubject("{{title}}")
             .withBody("""
                {{#if body}}{{body}}
@@ -309,8 +307,8 @@ public final class AlertsEmailSender
             .withVariable("settings_url", "Settings link", "URL", false, null)
             .withSampleVariables("{\"title\":\"Export failed\",\"body\":\"The nightly export did not finish.\",\"link\":\"https://example.com/app/widget\",\"linkLabel\":\"Open\","
                + "\"settings_url\":\"https://example.com/app/alerts_notification_preference\"}");
-         case TEMPLATE_DIGEST -> new EmailTemplateDefinition()
-            .withName(TEMPLATE_DIGEST).withLabel("Alerts: daily digest").withCategory(EmailCategory.NOTIFICATION).withKind("MARKDOWN").withOwnerQbit(SENDER_QBIT)
+         case TEMPLATE_DIGEST -> new EmailApiTemplate()
+            .withName(TEMPLATE_DIGEST).withLabel("Alerts: daily digest").withCategory(EmailApiCategory.NOTIFICATION).withKind("MARKDOWN").withOwnerQbit(SENDER_QBIT)
             .withSubject("{{count}} new notifications")
             .withBody("""
                {{#each items}}**{{this.title}}**

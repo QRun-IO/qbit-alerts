@@ -30,7 +30,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
  *******************************************************************************/
 public final class AlertsEmail
 {
-   private static final String EMAIL_SERVICE_CLASS = "com.kingsrook.qbits.email.outbox.EmailService";
+   private static final String EMAIL_API_CLASS = "com.kingsrook.qbits.email.api.EmailApi";
 
 
 
@@ -64,7 +64,7 @@ public final class AlertsEmail
       }
       try
       {
-         Class.forName(EMAIL_SERVICE_CLASS);
+         Class.forName(EMAIL_API_CLASS);
       }
       catch(ClassNotFoundException | LinkageError e)
       {
