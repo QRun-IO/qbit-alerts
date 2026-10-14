@@ -32,6 +32,7 @@ import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
 import com.kingsrook.qbits.alerts.spi.NotificationCategory;
+import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.actions.permissions.CorePermissionEnforcer;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QBadRequestException;
@@ -153,13 +154,21 @@ public class AlertsNotificationPreferencesProvider implements UserPreferenceProv
          {
             values.put(field, preference == null ? QContext.getQInstance().getTable(AlertsNotificationPreference.TABLE_NAME).getField(field).getDefaultValue() : preference.getValue(field));
          }
+
+         ///////////////////////////////////////////////////////////////////////
+         // no in-app threshold means everything; show it as the lowest level //
+         ///////////////////////////////////////////////////////////////////////
+         if(values.get("inAppMinSeverity") == null)
+         {
+            values.put("inAppMinSeverity", NotificationSeverity.INFO.name());
+         }
          String label = QContext.getQInstance().getPossibleValueSource("alerts_notification_category").getEnumValues().stream()
             .filter(value -> category.name().equals(value.getId())).findFirst().orElseThrow().getLabel();
          UserPreferenceRow row = new UserPreferenceRow().withKey(category.name()).withLabel(label).withValues(values);
          if(category == NotificationCategory.SECURITY)
          {
             values.put("inApp", true);
-            values.put("inAppMinSeverity", null);
+            values.put("inAppMinSeverity", NotificationSeverity.INFO.name());
             row.withReadOnlyFieldNames(List.of("inApp", "inAppMinSeverity")).withReadOnlyReason(SECURITY_REASON);
          }
          categories.add(row);

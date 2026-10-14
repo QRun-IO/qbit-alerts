@@ -81,7 +81,7 @@ class NotificationPreferencesTest extends BaseAlertsTest
       assertThat(defaults.getValues().getValues()).containsEntry("digestHour", 8).containsEntry("alertInAppEnabled", true).containsEntry("alertEmailEnabled", true);
       assertThat(defaults.getValues().getLists().get("categories")).hasSize(7).allSatisfy(category ->
       {
-         assertThat(category.getValues()).containsEntry("inApp", true).containsEntry("inAppMinSeverity", null).containsEntry("emailMode", "OFF").containsEntry("emailMinSeverity", "WARNING");
+         assertThat(category.getValues()).containsEntry("inApp", true).containsEntry("inAppMinSeverity", "INFO").containsEntry("emailMode", "OFF").containsEntry("emailMinSeverity", "WARNING");
       });
       assertThat(defaults.getValues().getLists().get("subscriptions")).singleElement().satisfies(rule -> assertThat(rule.getLabel()).isEqualTo("All alerts"));
       action.patchSection("notifications", Map.of("values", Map.of("pausedUntil", "2026-11-01T12:00:00Z", "digestHour", 22, "timeZone", "America/Chicago",
@@ -102,7 +102,7 @@ class NotificationPreferencesTest extends BaseAlertsTest
       clearMinimum.put("inAppMinSeverity", null);
       action.patchSection("notifications", Map.of("lists", Map.of("categories", List.of(row("JOB", clearMinimum)))));
       assertThat(action.getSection("notifications").getValues().getLists().get("categories")).filteredOn(row -> row.getKey().equals("JOB"))
-         .singleElement().satisfies(row -> assertThat(row.getValues()).containsEntry("inAppMinSeverity", null).containsEntry("inApp", false));
+         .singleElement().satisfies(row -> assertThat(row.getValues()).containsEntry("inAppMinSeverity", "INFO").containsEntry("inApp", false));
       assertThat(where(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", "viewer-2")).get(0).getValues()).isEqualTo(otherSettings);
       assertThat(where(AlertsNotificationPreference.TABLE_NAME, AlertsDb.eq("userId", "viewer-2")).get(0).getValues()).isEqualTo(otherCategory);
       loginAs("viewer-2");
