@@ -5,7 +5,13 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Changed
-- Build against the released QQQ 4.1.0-RC.5 BOM. Alert types and sink registration now use core's alerts SPI; host `QAlerts.raise/resolve/heartbeat` calls reach the installed qbit through core instance metadata (qbit-alerts#15, F3).
+- Target QQQ `4.1.0-RC.6` for the UI extension API; local verification uses a command-line version override only.
+- Register six JSON UI specs as extension `alerts` at the established `/alerts` prefix, preserving methods, paths and existing payload fields. Publish the OpenAPI fragment with a regeneration/contract test and strict server coverage (#13, F2).
+- Add summary `inboxHref`, notification operation actions, alert process actions with complete hrefs, and record-panel `follow.available` (#13, F20). Follow discovery reads core extension metadata without a collaboration dependency or URL.
+- Remove the record-panel watch route and handler. Existing RECORD subscriptions and the deprecated `watching` response remain readable without a migration; new panel follows belong to collaboration. Follower fan-out waits for core #1164 (#16, F12).
+- Move Alertmanager ingest to `/qqq/hooks/alerts/alertmanager`. The old path is an opt-in alias (`legacyAlertmanagerPath`, default false) for one minor release, incompatible with strict raw-route mode. Each alias call carries deprecation/sunset headers and logs a warning; authentication is shared (#14, F7).
+- Run Checkstyle 14.3.0 in Maven validate (including tests); align the license template with this repository's existing headers and correct pre-existing switch/import formatting so the style check passes.
+- Alert types and sink registration use core's alerts SPI (introduced in QQQ 4.1.0-RC.5); host `QAlerts.raise/resolve/heartbeat` calls reach the installed qbit through core instance metadata (qbit-alerts#15, F3).
 - Removed alert SPI copies. Retained `spi.NotificationSignal`, `NotificationAudience`, `NotificationCategory`, `NotificationSeverity`, `AlertLink`, and the binary-compatible `AlertsRuntime.sink().notify(...)` entry point for qbit-easypost-tracking 0.1.x until QRun-IO/qqq#1125 ships in RC.6.
 - Webhook signing delegates to core `WebhookSigner`/`WebhookSecret` (qbit-alerts#15, F11). Headers, `v1,` signatures and `whsec_` encoding are unchanged. A thin adapter preserves legacy keys shorter than core's 16-byte minimum using equivalent HMAC zero-padding.
 
@@ -16,7 +22,7 @@ All notable changes to this project are documented here. The format follows Keep
   - a generic webhook, signed with Standard Webhooks headers through core's `WebhookSigner` (QRun-IO/qqq#1109)
   - PagerDuty (Events API v2: trigger, acknowledge and resolve)
   - an Alertmanager sink (`/api/v2/alerts`, with the qqq labels and the origin guard)
-- Prometheus Alertmanager ingest at `POST /qqq/v1/alerts/ingest/alertmanager`. It takes a bearer token, creates EXTERNAL types with notifications off, and keeps a loop guard.
+- Prometheus Alertmanager ingest at `POST /qqq/hooks/alerts/alertmanager`. It takes a bearer token, creates EXTERNAL types with notifications off, and keeps a loop guard.
 - Tables (`alerts_*`), with the Liquibase changelog `db/liquibase/qbit-alerts/alerts.changelog.sql`:
   - alerts, their timeline and records
   - types, groups and monitors

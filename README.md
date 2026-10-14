@@ -26,7 +26,7 @@ Any qbit or app reports exceptional conditions ("a person should do something").
   - Prometheus Alertmanager, as a sink
 
   Any channel another qbit registers works too. Every suppressed notification is logged with its reason.
-- **Ingests Prometheus Alertmanager** at `POST /qqq/v1/alerts/ingest/alertmanager`, with notifications off for those types, so infrastructure alerts are triaged in one place.
+- **Ingests Prometheus Alertmanager** at `POST /qqq/hooks/alerts/alertmanager`, with notifications off for those types, so infrastructure alerts are triaged in one place.
 - **Owns the Alerts home:** open alerts by severity, my alerts, needs action, by group, a 30-day trend, the noisiest types, delivery health and recently resolved. Other pages get link-only summaries from `AlertSummaryLoader`.
 
 All data is in standard QQQ tables named `alerts_*`. People change alerts through record actions, never by editing rows.
@@ -48,10 +48,26 @@ Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions i
 
 **Upgrading from 0.1.0-RC.1:** changeset 16 renames the delivery log `alerts_notification` to `alerts_delivery`, and changeset 17 drops `alerts_inbox_item` (bell state only). Both are guarded, so a fresh schema and an RC.1 schema both end up the same.
 
+The UI routes are published as the `alerts` extension (`1.0.0`, established prefix `/alerts`), with
+[the OpenAPI fragment](src/main/resources/openapi/qqq-v1/alerts.yaml) and a contract test.
+See [UI API and webhook migration](docs/UI-API.md) for operation IDs and the complete Next handoff.
+Summary `inboxHref`, item/alert `actions`, and panel `follow.available` are additive. Existing
+hrefs, `notificationsHref`, `alertsHref`, `canManage` and deprecated `watching` remain.
+
+Record following belongs to collaboration: `POST /alerts/record-panel/watch` is removed. Old
+RECORD subscriptions remain readable without migration. The panel creates no subscriptions;
+Next uses its collaboration module when `follow.available` is true. Follower fan-out waits
+for core QRun-IO/qqq#1164.
+
+The old Alertmanager path is available for one minor release only via
+`withLegacyAlertmanagerPath(true)` (default false). It requires non-strict UI route mode,
+returns `Deprecation: true` and `Sunset: Tue, 13 Apr 2027 00:00:00 GMT` on every call, and logs
+a warning. Both paths use the same bearer-token check. Strict hosts use the canonical hook.
+
 ## Requirements
 
 - Java 21.
-- QQQ 4.1 (built against `4.1.0-RC.5`).
+- QQQ 4.1 (targets `4.1.0-RC.6`; release pending).
 - An RDBMS backend.
 - A scheduler, for monitors and email delivery.
 - A messaging provider, for email.
@@ -95,7 +111,7 @@ QAlerts.raise(new AlertSignal("cdn.purge.dead")
 
 `QAlerts.resolve(...)` and `QAlerts.heartbeat(...)` reach the same sink. Declare types with core's `QAlertTypeMetaData`. Calls through `QAlerts.raise/resolve` defer to transaction commit when a transaction is present; without this qbit installed, core uses its logging sink.
 
-User notifications remain on `AlertsRuntime.get(qInstance).sink().notify(...)`: core's notification API ([QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)) is expected in RC.6 and is not in RC.5. The four `spi.Notification*` types and `spi.AlertLink` retain their binary signatures for released qbit-easypost-tracking 0.1.x. Use core `AlertLink` for alert signals and `spi.AlertLink` for notification signals until that migration.
+User notifications remain on `AlertsRuntime.get(qInstance).sink().notify(...)`: core's notification API ([QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)) ships in RC.6; wiring the retained notification adapter to that API is a separate migration. The four `spi.Notification*` types and `spi.AlertLink` retain their binary signatures for released qbit-easypost-tracking 0.1.x. Use core `AlertLink` for alert signals and `spi.AlertLink` for notification signals until that migration.
 
 ## Endpoints (for the Next UI)
 
@@ -107,8 +123,7 @@ User notifications remain on `AlertsRuntime.get(qInstance).sink().notify(...)`: 
 | POST | `/qqq/v1/alerts/inbox/unread` | `{"id": n}` or `{"ids": [..]}` |
 | POST | `/qqq/v1/alerts/inbox/dismiss` | `{"id": n}`, `{"ids": [..]}` or `{"all": true}` |
 | GET | `/qqq/v1/alerts/record-panel?tableName=t&recordId=id` | The "Open alerts" panel for a record (`visible: false` when there is nothing to show) |
-| POST | `/qqq/v1/alerts/record-panel/watch` | `{"tableName": t, "recordId": id}`: a RECORD subscription for the user |
-| POST | `/qqq/v1/alerts/ingest/alertmanager` | Alertmanager's webhook receiver (version 4). It takes a bearer token whose reference is set by `withAlertmanagerIngestTokenSecretRef`, and is off without one. |
+| POST | `/qqq/hooks/alerts/alertmanager` | Alertmanager's webhook receiver (version 4). It takes a bearer token whose reference is set by `withAlertmanagerIngestTokenSecretRef`, and is off without one. |
 
 ## External channels
 

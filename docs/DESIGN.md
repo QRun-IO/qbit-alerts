@@ -3,6 +3,7 @@
 The design for this qbit is tracked in [QRun-IO/qqq#1090](https://github.com/QRun-IO/qqq/pull/1090). This repository implements it. Phases P1 to P3 are built (see README.md); P4 to P6 remain.
 
 Deviations from the design, and why:
+- **UI API and record following:** the RC.6 alerts extension, collaboration ownership of follow, and machine webhook migration are specified in [UI-API.md](UI-API.md). Existing RECORD watch subscriptions remain readable without migration.
 - **Alerts use core's RC.5 SPI** (QRun-IO/qqq#1108), including sink registration in core instance metadata. Only notification types and their `AlertLink` signature dependency remain in `spi/`, preserving released producers until QRun-IO/qqq#1125 ships in RC.6.
 - **Visibility checks 1 to 3 (section 7.2)** are enforced by record security locks on session keys (`alerts_permission`, `alerts_readable_table`), not by a pre-query customizer. QQQ has no pre-query customizer, and locks also apply to counts, exports and the API.
 - **Heartbeats** are stored in an extra table, `alerts_heartbeat`.

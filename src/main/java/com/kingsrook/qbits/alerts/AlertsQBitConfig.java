@@ -74,6 +74,8 @@ public class AlertsQBitConfig implements QBitConfig
 
    public static final String APP_NAME = "alerts";
 
+   private Boolean legacyAlertmanagerPath = false;
+
    private String backendName;
    private String schedulerName;
    private String messagingProviderName;
@@ -610,7 +612,7 @@ public class AlertsQBitConfig implements QBitConfig
    /*******************************************************************************
     ** Fluent setter for alertmanagerIngestTokenSecretRef: the reference (an
     ** environment variable name or ${...} expression, never the value) of the
-    ** bearer token Alertmanager sends to POST /qqq/v1/alerts/ingest/alertmanager.
+    ** bearer token Alertmanager sends to POST /qqq/hooks/alerts/alertmanager.
     ** Null (the default) turns ingest off.
     *******************************************************************************/
    public AlertsQBitConfig withAlertmanagerIngestTokenSecretRef(String alertmanagerIngestTokenSecretRef)
@@ -791,6 +793,28 @@ public class AlertsQBitConfig implements QBitConfig
    public AlertsQBitConfig withJobRunLinkPattern(String jobRunLinkPattern)
    {
       this.jobRunLinkPattern = jobRunLinkPattern;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether to expose the deprecated UI-path webhook alias (default false).
+    ** Requires non-strict UI route mode; remove after one minor release.
+    *******************************************************************************/
+   public Boolean getLegacyAlertmanagerPath()
+   {
+      return (this.legacyAlertmanagerPath);
+   }
+
+
+
+   /*******************************************************************************
+    ** Opt in to the deprecated alias while migrating Alertmanager receivers.
+    *******************************************************************************/
+   public AlertsQBitConfig withLegacyAlertmanagerPath(Boolean legacyAlertmanagerPath)
+   {
+      this.legacyAlertmanagerPath = legacyAlertmanagerPath;
       return (this);
    }
 }
