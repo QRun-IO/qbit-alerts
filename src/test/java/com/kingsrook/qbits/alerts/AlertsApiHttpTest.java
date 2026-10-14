@@ -200,7 +200,7 @@ class AlertsApiHttpTest extends BaseAlertsTest
       start();
       String base = "/qqq/v1/alerts";
       Map<String, Object> summary = json(request("GET", base + "/inbox/summary", null, ADMIN, null));
-      assertThat(summary).containsEntry("inboxHref", "/app/notifications").containsEntry("notificationsHref", "/app/notifications");
+      assertThat(summary).containsEntry("inboxHref", "/app/notifications").containsEntry("notificationsHref", "/app/notifications").containsEntry("preferencesSection", "notifications");
       List<Map<String, Object>> items = (List<Map<String, Object>>) summary.get("items");
       assertThat(items).hasSize(1);
       Map<String, Object> item = items.get(0);

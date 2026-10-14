@@ -25,7 +25,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.ValueTooLongBehavior
 
 
 /*******************************************************************************
- ** A user's settings for one notification category: muted in-app (never for security), and email off, immediate or in a daily digest, from a minimum severity.
+ ** A user's settings for one notification category: in-app minimum severity (never for security), and email/Slack off, immediate or in a daily digest, from a minimum severity.
  **
  ** Generated from the qbit-alerts schema (one definition for the entity,
  ** the Liquibase changelog and the test DDL).
@@ -45,6 +45,9 @@ public class AlertsNotificationPreference extends QRecordEntity
 
    @QField(label = "Muted In-App")
    private Boolean inAppMuted;
+
+   @QField(maxLength = 16, possibleValueSourceName = "alerts_notification_severity", label = "In-App From Severity")
+   private String inAppMinSeverity;
 
    @QField(maxLength = 16, possibleValueSourceName = "alerts_email_mode", label = "Email")
    private String emailMode;
@@ -305,6 +308,35 @@ public class AlertsNotificationPreference extends QRecordEntity
       this.modifyDate = modifyDate;
       return (this);
    }
+
+
+   /*******************************************************************************
+    ** Getter for inAppMinSeverity
+    *******************************************************************************/
+   public String getInAppMinSeverity()
+   {
+      return (this.inAppMinSeverity);
+   }
+
+
+   /*******************************************************************************
+    ** Setter for inAppMinSeverity
+    *******************************************************************************/
+   public void setInAppMinSeverity(String inAppMinSeverity)
+   {
+      this.inAppMinSeverity = inAppMinSeverity;
+   }
+
+
+   /*******************************************************************************
+    ** Fluent setter for inAppMinSeverity
+    *******************************************************************************/
+   public AlertsNotificationPreference withInAppMinSeverity(String inAppMinSeverity)
+   {
+      this.inAppMinSeverity = inAppMinSeverity;
+      return (this);
+   }
+
 
 
    /*******************************************************************************

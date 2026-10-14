@@ -307,7 +307,7 @@ class AlertsForeignKeysTest
       }
       Path file = tempDir.resolve(CHANGELOG);
       Files.createDirectories(file.getParent());
-      Files.writeString(file, changelog.substring(0, changelog.indexOf("-- changeset qbit-alerts:30")));
+      Files.writeString(file, changelog.substring(0, changelog.indexOf("-- changeset qbit-alerts:31")));
       return (new DirectoryResourceAccessor(tempDir));
    }
 

@@ -54,6 +54,7 @@ import com.kingsrook.qqq.backend.core.model.actions.messaging.SendMessageInput;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.email.EmailContentRole;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.email.EmailPartyRole;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
+import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
@@ -141,40 +142,55 @@ public class NotificationEmailer
             return (new Result(0, 0, 0, 0));
          }
 
-         List<QRecord> recipients = AlertsDb.query(AlertsNotificationRecipient.TABLE_NAME, new QQueryFilter()
-            .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
-            .withCriteria("emailStatus", QCriteriaOperator.IN, List.of(EmailStatus.NONE.name(), EmailStatus.PENDING.name()))
-            .withCriteria("deliveredAt", QCriteriaOperator.GREATER_THAN_OR_EQUALS, now.minus(1, ChronoUnit.DAYS))
-            .withLimit(SCAN));
-         Map<Integer, QRecord> notifications = notifications(recipients, now);
-         Map<String, QRecord>  settings      = userSettings(preferences.keySet());
-
-         int                         sent    = 0;
-         int                         skipped = 0;
-         int                         failed  = 0;
+         Map<String, QRecord> settings = userSettings(preferences.keySet());
+         int sent = 0;
+         int skipped = 0;
+         int failed = 0;
          Map<String, List<QRecord[]>> digests = new LinkedHashMap<>();
-         for(QRecord recipient : recipients)
+         int afterId = 0;
+         while(true)
          {
-            QRecord notification = notifications.get(recipient.getValueInteger("notificationId"));
-            String  userId       = recipient.getValueString("userId");
-            QRecord preference   = notification == null ? null : preferences.get(userId).get(notification.getValueString("category"));
-            if(notification == null || preference == null || NotificationCategory.ALERT.name().equals(notification.getValueString("category"))
-               || !atLeast(notification.getValueString("severity"), preference.getValueString("emailMinSeverity")))
+            List<QRecord> recipients = AlertsDb.query(AlertsNotificationRecipient.TABLE_NAME, new QQueryFilter()
+               .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
+               .withCriteria("emailStatus", QCriteriaOperator.IN, List.of(EmailStatus.NONE.name(), EmailStatus.PENDING.name()))
+               .withCriteria("id", QCriteriaOperator.GREATER_THAN, afterId)
+               .withOrderBy(new QFilterOrderBy("id", true)).withLimit(SCAN));
+            if(recipients.isEmpty())
             {
-               mark(recipient, EmailStatus.SKIPPED, null);
-               skipped++;
+               break;
             }
-            else if(EmailMode.IMMEDIATE.name().equals(preference.getValueString("emailMode")))
+            afterId = recipients.get(recipients.size() - 1).getValueInteger("id");
+            Map<Integer, QRecord> notifications = notifications(recipients, now);
+            for(QRecord recipient : recipients)
             {
-               EmailStatus status = sendImmediate(address(settings.get(userId)), notification);
-               mark(recipient, status, status == EmailStatus.SENT ? now : null);
-               sent += status == EmailStatus.SENT ? 1 : 0;
-               skipped += status == EmailStatus.SKIPPED ? 1 : 0;
-               failed += status == EmailStatus.FAILED ? 1 : 0;
-            }
-            else if(recipient.getValue("readAt") == null)
-            {
-               digests.computeIfAbsent(userId, k -> new ArrayList<>()).add(new QRecord[] {recipient, notification});
+               QRecord notification = notifications.get(recipient.getValueInteger("notificationId"));
+               String  userId       = recipient.getValueString("userId");
+               QRecord preference   = notification == null ? null : preferences.get(userId).get(notification.getValueString("category"));
+               if(notification == null || preference == null || NotificationCategory.ALERT.name().equals(notification.getValueString("category"))
+                  || !atLeast(notification.getValueString("severity"), preference.getValueString("emailMinSeverity")))
+               {
+                  mark(recipient, EmailStatus.SKIPPED, null);
+                  skipped++;
+               }
+               else if(!NotificationCategory.SECURITY.name().equals(notification.getValueString("category"))
+                  && settings.get(userId) != null && settings.get(userId).getValueInstant("pausedUntil") != null
+                  && settings.get(userId).getValueInstant("pausedUntil").isAfter(now))
+               {
+                  // Leave the recipient pending so a later run can deliver it.
+                  skipped++;
+               }
+               else if(EmailMode.IMMEDIATE.name().equals(preference.getValueString("emailMode")))
+               {
+                  EmailStatus status = sendImmediate(address(settings.get(userId)), notification);
+                  mark(recipient, status, status == EmailStatus.SENT ? now : null);
+                  sent += status == EmailStatus.SENT ? 1 : 0;
+                  skipped += status == EmailStatus.SKIPPED ? 1 : 0;
+                  failed += status == EmailStatus.FAILED ? 1 : 0;
+               }
+               else if(recipient.getValue("readAt") == null)
+               {
+                  digests.computeIfAbsent(userId, k -> new ArrayList<>()).add(new QRecord[] {recipient, notification});
+               }
             }
          }
 

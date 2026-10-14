@@ -279,6 +279,10 @@ public class AlertsDemoServer extends AbstractQQQApplication
       {
          QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", ADMIN));
          AlertsDb.update(AlertsUserPreference.TABLE_NAME, new QRecord().withValue("id", preference.getValue("id")).withValue("emailAddress", "dana@example.com"));
+         AlertsDb.insert("alerts_notification_preference", new QRecord().withValue("userId", ADMIN).withValue("category", "JOB")
+            .withValue("inAppMinSeverity", "WARNING").withValue("emailMode", "IMMEDIATE").withValue("emailMinSeverity", "ERROR"));
+         AlertsDb.insert("alerts_notification_preference", new QRecord().withValue("userId", ADMIN).withValue("category", "RELEASE")
+            .withValue("emailMode", "DAILY_DIGEST").withValue("emailMinSeverity", "INFO"));
          QRecord list = AlertsDb.insert(AlertsChannel.TABLE_NAME, new QRecord().withValue("name", "ops-list").withValue("label", "Ops email list").withValue("channelType", "EMAIL_LIST")
             .withValue("enabled", true).withValue("settings", JsonUtils.toJson(Map.of("addresses", List.of("ops@example.com")))).withValue("detailLevel", "MINIMAL")
             .withValue("minSeverity", "ERROR").withValue("rateLimitPerHour", 60).withValue("healthStatus", "HEALTHY").withValue("consecutiveFailures", 0));
