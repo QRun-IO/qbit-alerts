@@ -82,6 +82,7 @@ public class AlertsQBitConfig implements QBitConfig
    private String schedulerName;
    private String messagingProviderName;
    private String fromAddress;
+   private String slackProviderName = "slack";
    private String publicBaseUrl;
 
    private Integer reopenWindowMinutes   = 30;
@@ -336,6 +337,29 @@ public class AlertsQBitConfig implements QBitConfig
    public AlertsQBitConfig withMessagingProviderName(String messagingProviderName)
    {
       this.messagingProviderName = messagingProviderName;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for slackProviderName
+    *******************************************************************************/
+   public String getSlackProviderName()
+   {
+      return (this.slackProviderName);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for slackProviderName: the core messaging provider that
+    ** sends per-user Slack direct messages (default "slack", registered by
+    ** qbit-slack). Without a provider of that name Slack is skipped.
+    *******************************************************************************/
+   public AlertsQBitConfig withSlackProviderName(String slackProviderName)
+   {
+      this.slackProviderName = slackProviderName;
       return (this);
    }
 

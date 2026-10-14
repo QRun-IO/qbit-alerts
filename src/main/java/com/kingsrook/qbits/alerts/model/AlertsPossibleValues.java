@@ -63,6 +63,7 @@ public final class AlertsPossibleValues
    public static final String AUDIENCE_TYPE         = "alerts_audience_type";
    public static final String EMAIL_STATUS          = "alerts_email_status";
    public static final String EMAIL_MODE            = "alerts_email_mode";
+   public static final String SLACK_STATUS          = "alerts_slack_status";
 
 
 
@@ -268,7 +269,8 @@ public final class AlertsPossibleValues
          enumSource(NOTIFICATION_STATUS, NotificationStatus.values()),
          enumSource(AUDIENCE_TYPE, NotificationAudience.Type.values()),
          enumSource(EMAIL_STATUS, EmailStatus.values()),
-         enumSource(EMAIL_MODE, EmailMode.values())));
+         enumSource(EMAIL_MODE, EmailMode.values()),
+         enumSource(SLACK_STATUS, SlackStatus.values())));
    }
 
 
@@ -294,7 +296,17 @@ public final class AlertsPossibleValues
 
 
    /*******************************************************************************
-    ** How a user wants a category by email.
+    ** Whether (and how) a recipient was sent a Slack direct message.
+    *******************************************************************************/
+   public enum SlackStatus
+   {
+      NONE, PENDING, SENT, DIGESTED, SKIPPED, FAILED
+   }
+
+
+
+   /*******************************************************************************
+    ** How a user wants a category by email (also used for Slack: same modes).
     *******************************************************************************/
    public enum EmailMode
    {

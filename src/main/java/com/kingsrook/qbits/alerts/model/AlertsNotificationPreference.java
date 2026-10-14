@@ -52,6 +52,12 @@ public class AlertsNotificationPreference extends QRecordEntity
    @QField(maxLength = 16, possibleValueSourceName = "alerts_notification_severity", label = "Email From Severity")
    private String emailMinSeverity;
 
+   @QField(maxLength = 16, possibleValueSourceName = "alerts_email_mode", label = "Slack")
+   private String slackMode;
+
+   @QField(maxLength = 16, possibleValueSourceName = "alerts_notification_severity", label = "Slack From Severity")
+   private String slackMinSeverity;
+
    @QField(isEditable = false)
    private Instant createDate;
 
@@ -297,6 +303,66 @@ public class AlertsNotificationPreference extends QRecordEntity
    public AlertsNotificationPreference withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for slackMode
+    *******************************************************************************/
+   public String getSlackMode()
+   {
+      return (this.slackMode);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for slackMode
+    *******************************************************************************/
+   public void setSlackMode(String slackMode)
+   {
+      this.slackMode = slackMode;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for slackMode
+    *******************************************************************************/
+   public AlertsNotificationPreference withSlackMode(String slackMode)
+   {
+      this.slackMode = slackMode;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for slackMinSeverity
+    *******************************************************************************/
+   public String getSlackMinSeverity()
+   {
+      return (this.slackMinSeverity);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for slackMinSeverity
+    *******************************************************************************/
+   public void setSlackMinSeverity(String slackMinSeverity)
+   {
+      this.slackMinSeverity = slackMinSeverity;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for slackMinSeverity
+    *******************************************************************************/
+   public AlertsNotificationPreference withSlackMinSeverity(String slackMinSeverity)
+   {
+      this.slackMinSeverity = slackMinSeverity;
       return (this);
    }
 }

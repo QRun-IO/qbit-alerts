@@ -445,6 +445,7 @@ public final class AlertsTableMetaDataHelper
          .withRecordSecurityLock(AlertsSecurity.recipientLock("userId"))
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "notificationId", "userId", "deliveredAt", "readAt", "dismissedAt")))
          .withSection(new QFieldSection("email", "Email", new QIcon("mail"), Tier.T2, List.of("emailStatus", "emailedAt")))
+         .withSection(new QFieldSection("slack", "Slack", new QIcon("chat"), Tier.T2, List.of("slackStatus", "slackMessageId")))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
       table.withoutCapabilities(Capability.TABLE_INSERT, Capability.TABLE_DELETE);
       return (notificationCustomizer(table, true));
@@ -463,12 +464,14 @@ public final class AlertsTableMetaDataHelper
          .withUniqueKey(new UniqueKey("userId", "category"))
          .withRecordSecurityLock(AlertsSecurity.ownerLock("userId"))
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
-         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "category", "inAppMuted", "emailMode", "emailMinSeverity")))
+         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "category", "inAppMuted", "emailMode", "emailMinSeverity", "slackMode", "slackMinSeverity")))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("userId", "createDate", "modifyDate")));
       table.getField("category").setDefaultValue(NotificationCategory.SYSTEM.name());
       table.getField("inAppMuted").setDefaultValue(false);
       table.getField("emailMode").setDefaultValue(AlertsPossibleValues.EmailMode.OFF.name());
       table.getField("emailMinSeverity").setDefaultValue(NotificationSeverity.WARNING.name());
+      table.getField("slackMode").setDefaultValue(AlertsPossibleValues.EmailMode.OFF.name());
+      table.getField("slackMinSeverity").setDefaultValue(NotificationSeverity.WARNING.name());
       return (notificationCustomizer(table, false));
    }
 
@@ -628,7 +631,7 @@ public final class AlertsTableMetaDataHelper
       widgets.add(ChildRecordListRenderer.widgetMetaDataBuilder(joins.get(JOIN_TEAM_MEMBER)).withLabel("Members").withCanAddChildRecord(true).withMaxRows(100)
          .withOnlyIncludeFieldNames(List.of("userId", "role")).getWidgetMetaData());
       widgets.add(childList(joins.get(JOIN_CHANNEL_DELIVERY), "Notifications", 25, new QFilterOrderBy("id", false), List.of("kind", "status", "recipientLabel", "sentAt")));
-      widgets.add(childList(joins.get(JOIN_NOTIFICATION_RECIPIENT), "Recipients", 25, new QFilterOrderBy("id", true), List.of("userId", "deliveredAt", "readAt", "dismissedAt", "emailStatus")));
+      widgets.add(childList(joins.get(JOIN_NOTIFICATION_RECIPIENT), "Recipients", 25, new QFilterOrderBy("id", true), List.of("userId", "deliveredAt", "readAt", "dismissedAt", "emailStatus", "slackStatus")));
       return (widgets);
    }
 

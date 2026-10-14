@@ -579,7 +579,7 @@ public class NotificationService
     *******************************************************************************/
    private static QRecord newRecipient(Integer notificationId, String userId, Instant now)
    {
-      return (new QRecord().withValue("notificationId", notificationId).withValue("userId", userId).withValue("deliveredAt", now).withValue("emailStatus", "NONE"));
+      return (new QRecord().withValue("notificationId", notificationId).withValue("userId", userId).withValue("deliveredAt", now).withValue("emailStatus", "NONE").withValue("slackStatus", "NONE"));
    }
 
 

@@ -765,7 +765,7 @@ public class AlertRouter
    /*******************************************************************************
     ** Whether the user paused notifications (vacation) until after now.
     *******************************************************************************/
-   private static boolean isPaused(QRecord preference, Instant now)
+   public static boolean isPaused(QRecord preference, Instant now)
    {
       return (preference != null && preference.getValueInstant("pausedUntil") != null && preference.getValueInstant("pausedUntil").isAfter(now));
    }
