@@ -108,7 +108,30 @@ public class AlertsQBitConfig implements QBitConfig
    private Boolean        notifyFailedJobs          = true;
    private String         jobRunLinkPattern;
 
+   private transient AlertAudienceResolver audienceResolver;
+
    private transient AlertsRuntime runtime;
+
+
+
+   /*******************************************************************************
+    ** Optional host resolver for ROLE and IDP_GROUP team members.
+    *******************************************************************************/
+   public AlertAudienceResolver getAudienceResolver()
+   {
+      return (audienceResolver);
+   }
+
+
+
+   /*******************************************************************************
+    ** Register the host resolver before producing the qbit's metadata.
+    *******************************************************************************/
+   public AlertsQBitConfig withAudienceResolver(AlertAudienceResolver audienceResolver)
+   {
+      this.audienceResolver = audienceResolver;
+      return (this);
+   }
 
 
 

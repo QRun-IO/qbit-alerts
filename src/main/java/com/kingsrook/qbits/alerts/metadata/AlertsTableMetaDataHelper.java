@@ -65,6 +65,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.AdornmentType;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.FieldAdornment;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
+import com.kingsrook.qqq.backend.core.model.metadata.help.QHelpContent;
 import com.kingsrook.qqq.backend.core.model.metadata.joins.JoinOn;
 import com.kingsrook.qqq.backend.core.model.metadata.joins.JoinType;
 import com.kingsrook.qqq.backend.core.model.metadata.joins.QJoinMetaData;
@@ -308,6 +309,10 @@ public final class AlertsTableMetaDataHelper
          .withSection(new QFieldSection("details", new QIcon("description"), Tier.T2, List.of("description")))
          .withSection(widgetSection(JOIN_TEAM_MEMBER, "Members", "person"))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
+      if(config.getAudienceResolver() == null)
+      {
+         table.getField("memberSource").withHelpContent(new QHelpContent("ROLE and IdP Group members need a host resolver; none is configured"));
+      }
       table.getField("memberSource").setDefaultValue(AlertsPossibleValues.MemberSource.MANUAL.name());
       return (table);
    }
@@ -326,6 +331,10 @@ public final class AlertsTableMetaDataHelper
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "teamId", "userId", "role")))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
+      if(config.getAudienceResolver() == null)
+      {
+         table.getField("teamId").withHelpContent(new QHelpContent("ROLE and IdP Group members need a host resolver; none is configured"));
+      }
       table.getField("role").setDefaultValue(AlertsPossibleValues.TeamRole.MEMBER.name());
       return (table);
    }
@@ -368,7 +377,7 @@ public final class AlertsTableMetaDataHelper
          .withRecordLabelFields("name")
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "name", "enabled", "effect")))
-         .withSection(new QFieldSection("scope", "What and When", new QIcon("filter_alt"), Tier.T2, List.of("scopeType", "scopeValue", "startsAt", "endsAt", "reason")))
+         .withSection(new QFieldSection("scope", "What and When", new QIcon("filter_alt"), Tier.T2, List.of("scopeType", "scopeValue", "scopeRecordId", "startsAt", "endsAt", "reason")))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createdByUserId", "createDate", "modifyDate")));
       table.getField("effect").setDefaultValue(AlertsPossibleValues.MuteEffect.SILENCE_NOTIFICATIONS.name());
       table.getField("enabled").setDefaultValue(true);

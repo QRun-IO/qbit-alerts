@@ -47,8 +47,11 @@ public class AlertsMute extends QRecordEntity
    @QField(isRequired = true, maxLength = 20, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, possibleValueSourceName = "alerts_scope_type")
    private String scopeType;
 
-   @QField(maxLength = 300, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS)
+   @QField(maxLength = 520, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS)
    private String scopeValue;
+
+   @QField(maxLength = 100, valueTooLongBehavior = ValueTooLongBehavior.TRUNCATE_ELLIPSIS, label = "Scope Record")
+   private String scopeRecordId;
 
    @QField(isRequired = true)
    private Instant startsAt;
@@ -242,6 +245,37 @@ public class AlertsMute extends QRecordEntity
    public AlertsMute withScopeValue(String scopeValue)
    {
       this.scopeValue = scopeValue;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for scopeRecordId
+    *******************************************************************************/
+   public String getScopeRecordId()
+   {
+      return (this.scopeRecordId);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for scopeRecordId
+    *******************************************************************************/
+   public void setScopeRecordId(String scopeRecordId)
+   {
+      this.scopeRecordId = scopeRecordId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for scopeRecordId
+    *******************************************************************************/
+   public AlertsMute withScopeRecordId(String scopeRecordId)
+   {
+      this.scopeRecordId = scopeRecordId;
       return (this);
    }
 

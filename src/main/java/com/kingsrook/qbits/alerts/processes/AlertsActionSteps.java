@@ -26,6 +26,7 @@ import java.util.Objects;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
+import com.kingsrook.qbits.alerts.engine.AlertsEngine;
 import com.kingsrook.qbits.alerts.engine.MonitorEvaluator;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
@@ -302,7 +303,8 @@ public final class AlertsActionSteps
             case MUTE_TYPE -> mute(ScopeType.ALERT_TYPE, record.getValueString("name"), "type " + record.getValueString("label"), input, actor);
             case MUTE_GROUP -> mute(ScopeType.GROUP, record.getValueString("name"), "group " + record.getValueString("label"), input, actor);
             case MUTE_MONITOR -> mute(ScopeType.MONITOR, String.valueOf(id), "monitor " + record.getValueString("name"), input, actor);
-            case MUTE_ALERT -> mute(ScopeType.ALERT_TYPE, record.getValueString("alertTypeName"), "alert type " + record.getValueString("alertTypeName"), input, actor);
+            case MUTE_ALERT -> muteAlert(record, input, actor);
+            case MUTE_ALERT_TYPE -> mute(ScopeType.ALERT_TYPE, record.getValueString("alertTypeName"), "alert type " + record.getValueString("alertTypeName"), input, actor);
             case RUN_CHECK ->
             {
                MonitorEvaluator.Plan plan = runtime.getEvaluator().runNow(id);
@@ -421,9 +423,34 @@ public final class AlertsActionSteps
 
 
    /*******************************************************************************
-    ** Create a silence-notifications mute from now (through the table).
+    ** Mute the subject record when present, otherwise this type and dedup key.
+    *******************************************************************************/
+   private static boolean muteAlert(QRecord alert, RunBackendStepInput input, String actor) throws QException
+   {
+      if(StringUtils.hasContent(alert.getValueString("subjectTableName")) && StringUtils.hasContent(alert.getValueString("subjectRecordId")))
+      {
+         return (mute(ScopeType.RECORD, alert.getValueString("subjectTableName"), alert.getValueString("subjectRecordId"), "alert " + alert.getValue("id"), input, actor));
+      }
+      return (mute(ScopeType.ALERT, AlertsEngine.openKey(alert.getValueString("alertTypeName"), alert.getValueString("dedupKey")), null,
+         "alert " + alert.getValue("id"), input, actor));
+   }
+
+
+
+   /*******************************************************************************
+    ** Create a mute without a subject record ID.
     *******************************************************************************/
    private static boolean mute(ScopeType scopeType, String scopeValue, String what, RunBackendStepInput input, String actor) throws QException
+   {
+      return (mute(scopeType, scopeValue, null, what, input, actor));
+   }
+
+
+
+   /*******************************************************************************
+    ** Create a silence-notifications mute from now (through the table).
+    *******************************************************************************/
+   private static boolean mute(ScopeType scopeType, String scopeValue, String scopeRecordId, String what, RunBackendStepInput input, String actor) throws QException
    {
       Integer minutes = input.getValueInteger(AlertsAction.FIELD_MUTE_MINUTES);
       String  reason  = input.getValueString(AlertsAction.FIELD_NOTE);
@@ -437,6 +464,7 @@ public final class AlertsActionSteps
          .withValue("reason", reason)
          .withValue("scopeType", scopeType.name())
          .withValue("scopeValue", scopeValue)
+         .withValue("scopeRecordId", scopeRecordId)
          .withValue("startsAt", now)
          .withValue("endsAt", now.plus(minutes == null || minutes < 1 ? 60 : minutes, ChronoUnit.MINUTES))
          .withValue("effect", MuteEffect.SILENCE_NOTIFICATIONS.name())
@@ -586,7 +614,7 @@ public final class AlertsActionSteps
          case ASSIGN -> "assigned";
          case COMMENT -> "commented on";
          case SUBSCRIBE_TYPE, SUBSCRIBE_GROUP, SUBSCRIBE_MONITOR -> "subscribed to";
-         case MUTE_ALERT, MUTE_TYPE, MUTE_GROUP, MUTE_MONITOR -> "muted";
+         case MUTE_ALERT, MUTE_ALERT_TYPE, MUTE_TYPE, MUTE_GROUP, MUTE_MONITOR -> "muted";
          case RUN_CHECK -> "checked";
          case ENABLE_MONITOR -> "enabled";
          case DISABLE_MONITOR -> "disabled";

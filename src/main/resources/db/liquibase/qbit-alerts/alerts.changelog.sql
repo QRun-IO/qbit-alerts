@@ -428,6 +428,18 @@ CREATE TABLE IF NOT EXISTS alerts_notification_preference (
    CONSTRAINT uq_alerts_notification_preference UNIQUE (user_id, category)
 );
 
+-- changeset qbit-alerts:21
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE LOWER(TABLE_NAME) = 'alerts_mute' AND LOWER(COLUMN_NAME) = 'scope_record_id'
+-- comment: Record mutes store the subject record ID separately from its table name.
+ALTER TABLE alerts_mute ADD COLUMN scope_record_id VARCHAR(100);
+
+-- changeset qbit-alerts:22
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:1 SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE LOWER(TABLE_NAME) = 'alerts_mute' AND LOWER(COLUMN_NAME) = 'scope_value' AND CHARACTER_MAXIMUM_LENGTH < 520
+-- comment: ALERT mutes hold the complete type and dedup key, including long keys.
+ALTER TABLE alerts_mute ALTER COLUMN scope_value SET DATA TYPE VARCHAR(520);
+
 -- changeset qbit-alerts:23
 -- comment: Admin escalation policies and their ordered destinations.
 CREATE TABLE IF NOT EXISTS alerts_escalation_policy (

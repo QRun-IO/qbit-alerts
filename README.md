@@ -31,6 +31,40 @@ Any qbit or app reports exceptional conditions ("a person should do something").
 
 All data is in standard QQQ tables named `alerts_*`. People change alerts through record actions, never by editing rows.
 
+## Team audiences and mutes
+
+Teams keep their source in `alerts_team.memberSource` and `memberSourceValue`.
+Rows in `alerts_team_member` are explicit user memberships. A team's ROLE or
+IDP_GROUP source adds users to those explicit members at routing time. Register
+`com.kingsrook.qbits.alerts.AlertAudienceResolver` before producing the qbit:
+
+```java
+config.withAudienceResolver((sourceType, sourceValue) -> hostDirectory.resolveUserIds(sourceType, sourceValue));
+```
+
+The host implements that directory lookup through its role or identity-provider
+public API; this qbit has no dependency on either implementation. Return a
+`Set<String>` of user IDs (an empty set for an unknown source/value), bounded by
+`maxAudienceSize` (50,000 by default). Users are deduplicated across explicit
+members, resolved members and subscriptions, and each still passes the router's
+visibility checks. Missing or failing resolvers contribute no users and log a
+clear reason; explicit members still receive alerts. Team and member screens
+show the missing-resolver help text only when no resolver was configured.
+
+The alert's **Mute** record action silences its subject table and record ID when
+there is one. Without a subject record, it silences only that alert's type and
+dedup key, including later occurrences of the same problem. **Mute this alert
+type** is a separate record action on alerts and alert types. Both use the usual
+Review and Result summaries and require a reason and a duration. Mutes remain
+shared rules, not personal notification preferences.
+
+RECORD mutes store the table in `scopeValue` and its record ID in `scopeRecordId`.
+ALERT mutes store the engine's full `type|dedupKey` in `scopeValue`. Apply guarded
+Liquibase changesets 21–22 before running this version: they add the record ID
+column and widen mute scope values to 520 characters. Existing type-wide mutes
+remain type-wide; historical RECORD mutes need their intended record ID filled
+in because previous versions did not store it.
+
 ## User notifications
 
 The qbit also carries ordinary notifications for people (design: [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)):
