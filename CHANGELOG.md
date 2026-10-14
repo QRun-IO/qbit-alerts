@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows Keep
 
 ## [0.1.0] - Unreleased
 
+### Fixed
+- Record-view child lists (e.g. a notification's Recipients) failed with "Error in JSON Serialization": the child table's meta-data includes the qbit config, and `AlertsQBitConfig.getRuntime()` points at a runtime that points back at the config, so Jackson recursed to its 1000-level nesting limit. `getRuntime()` and `getAudienceResolver()` are now `@JsonIgnore`, as in the other qbits' configs. A regression test renders and serializes every child-list widget.
+
 ### Changed
 - Keep reminders and escalations immediate for digest subscribers while applying pause and quiet hours to their push channels. Preserve team audience resolution, mute scopes, both scheduled jobs and changesets 21-27.
 - Apply user pause and local quiet hours to personal push channels (email, email lists and other non-IN_APP channels), including team members, with logged suppression reasons and a configurable quiet-hours severity bypass. The in-app bell remains unaffected, including digest delivery. Channel subscriptions are unaffected.
