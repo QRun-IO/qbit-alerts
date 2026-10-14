@@ -534,4 +534,37 @@ class NotificationsTest extends BaseAlertsTest
       new DeleteAction().execute(new DeleteInput(AlertsNotification.TABLE_NAME).withPrimaryKeys(List.of(other)));
       assertThat(runtime.asSystem(() -> all(AlertsNotificationRecipient.TABLE_NAME))).isEmpty();
    }
+
+
+
+   /*******************************************************************************
+    ** In-app severity is inclusive; null means all, and SECURITY always arrives.
+    *******************************************************************************/
+   @Test
+   void testInAppMinimumSeverity() throws Exception
+   {
+      runtime.asSystem(() ->
+      {
+         AlertsDb.insert(AlertsNotificationPreference.TABLE_NAME, new QRecord().withValue("userId", VIEWER).withValue("category", "JOB").withValue("inAppMinSeverity", "ERROR"));
+         AlertsDb.insert(AlertsNotificationPreference.TABLE_NAME, new QRecord().withValue("userId", VIEWER).withValue("category", "SECURITY")
+            .withValue("inAppMuted", true).withValue("inAppMinSeverity", "CRITICAL"));
+         return (null);
+      });
+      for(NotificationSeverity severity : List.of(NotificationSeverity.WARNING, NotificationSeverity.ERROR, NotificationSeverity.CRITICAL))
+      {
+         runtime.getNotifications().notify(new NotificationSignal("Job " + severity).withSeverity(severity).withCategory(NotificationCategory.JOB)
+            .withAudience(NotificationAudience.users(VIEWER, "viewer-2")));
+      }
+      runtime.getNotifications().notify(new NotificationSignal("Security info").withCategory(NotificationCategory.SECURITY).withAudience(NotificationAudience.user(VIEWER)));
+      assertThat(where(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("userId", VIEWER))).hasSize(3);
+      assertThat(where(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("userId", "viewer-2"))).hasSize(3);
+      loginAs(VIEWER);
+      QRecord preference = where(AlertsNotificationPreference.TABLE_NAME, AlertsDb.eq("userId", VIEWER)).stream()
+         .filter(row -> "JOB".equals(row.getValueString("category"))).findFirst().orElseThrow();
+      assertThat(new UpdateAction().execute(new UpdateInput(AlertsNotificationPreference.TABLE_NAME).withRecord(new QRecord().withValue("id", preference.getValue("id"))
+         .withValue("category", "SECURITY"))).getRecords().get(0).getErrors()).isNotEmpty();
+      AlertsDb.update(AlertsNotificationPreference.TABLE_NAME, new QRecord().withValue("id", preference.getValue("id")).withValue("inAppMinSeverity", null));
+      runtime.getNotifications().notify(new NotificationSignal("Job info").withCategory(NotificationCategory.JOB).withAudience(NotificationAudience.user(VIEWER)));
+      assertThat(where(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("userId", VIEWER))).hasSize(4);
+   }
 }

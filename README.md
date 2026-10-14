@@ -60,7 +60,7 @@ shared rules, not personal notification preferences.
 
 RECORD mutes store the table in `scopeValue` and its record ID in `scopeRecordId`.
 ALERT mutes store the engine's full `type|dedupKey` in `scopeValue`. Apply guarded
-Liquibase changesets 21–22 before running this version: they add the record ID
+Liquibase changesets 21â€“22 before running this version: they add the record ID
 column and widen mute scope values to 520 characters. Existing type-wide mutes
 remain type-wide; historical RECORD mutes need their intended record ID filled
 in because previous versions did not store it.
@@ -76,7 +76,8 @@ The qbit also carries ordinary notifications for people (design: [docs/NOTIFICAT
 - **Email** is opt-in per user and category (IMMEDIATE, or DAILY_DIGEST at the digest hour in My Alert Settings), through the configured messaging provider; without one it is off. ALERT notifications are not emailed here (alert subscriptions already do), and SECURITY emails carry only the title and link.
 - **Failed and partial jobs** notify the person who started them (`notifyFailedJobs`, `jobRunLinkPattern`).
 - **Links** must be app paths with one leading slash, or https URLs; backslashes, whitespace and control characters are refused.
-- **People** see them in the Next UI bell and notifications page, and choose per-category settings in My Notification Settings (security notices can't be muted).
+- **Preferences:** the Notifications section combines pause, digest time and zone, alert switches, per-category in-app/email/Slack settings, and the user's own subscriptions. It uses existing tables and FIELD audits; SECURITY cannot be muted in-app. Slack controls appear when the configured per-user Slack provider is registered before Alerts is produced; SECURITY Slack settings stay editable. Uses core's released user-preferences contract in QQQ `4.1.0-RC.7`; disable with `withPreferencesSectionEnabled(false)`. See [Notification settings in Preferences](docs/NOTIFICATIONS.md#34-notification-settings-in-preferences).
+- **People** see them in the Next UI bell and notifications page, and choose settings in Preferences > Notifications or the standard My Notification Settings table (security notices can't be muted).
 
 Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions include their own recipient rows and settings.
 
@@ -104,7 +105,7 @@ a warning. Both paths use the same bearer-token check. Strict hosts use the cano
 ## Requirements
 
 - Java 21.
-- QQQ `4.1.0-RC.6` (released on Maven Central).
+- QQQ `4.1.0-RC.7` (released on Maven Central).
 - An RDBMS backend.
 - A scheduler, for monitors and email delivery.
 - For email, either [qbit-email](https://github.com/QRun-IO/qbit-email) produced in the same instance, or a messaging provider.
@@ -113,7 +114,7 @@ a warning. Both paths use the same bearer-token check. Strict hosts use the cano
 The build uses `qbit-build-parent:2.1.0` with architecture guardrails and strict UI API route
 tests enabled. Run `./mvnw -B verify` (`.\mvnw.cmd -B verify` on Windows), without a snapshot
 override. The default-active `qqq-snapshot` profile retains its historical name but selects
-the released RC.6 BOM ahead of the parent's QQQ 4.0 BOM.
+the released RC.7 BOM ahead of the parent's QQQ 4.0 BOM.
 
 ## Install
 
@@ -161,7 +162,7 @@ User notifications use core `QAlerts.notify(NotificationSignal)` (RC.6, QRun-IO/
 
 | Method | Path | What |
 |---|---|---|
-| GET | `/qqq/v1/alerts/inbox/summary` | Unread count, highest unread severity, the latest 10 notifications and sticky banners (the bell) |
+| GET | `/qqq/v1/alerts/inbox/summary` | Unread count, highest unread severity, the latest 10 notifications and sticky banners (the bell), plus `inboxHref` and `preferencesSection` (`"notifications"` when registered, otherwise null; see [API contract](docs/NOTIFICATIONS.md#81-api-qqqv1alerts-session-authenticated-alertsview)) |
 | GET | `/qqq/v1/alerts/inbox` | The notifications page: `status` (all, unread), `category`, `severity`, `offset`, `limit` |
 | POST | `/qqq/v1/alerts/inbox/read` | `{"id": n}`, `{"ids": [..]}`, `{"all": true}`, or `{"alertId": n}` |
 | POST | `/qqq/v1/alerts/inbox/unread` | `{"id": n}` or `{"ids": [..]}` |

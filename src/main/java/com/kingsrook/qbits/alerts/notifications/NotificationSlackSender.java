@@ -19,7 +19,6 @@ package com.kingsrook.qbits.alerts.notifications;
 
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -45,6 +44,7 @@ import com.kingsrook.qqq.backend.core.model.actions.messaging.ContentRole;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.Party;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.SendMessageInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
+import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
@@ -114,47 +114,61 @@ public class NotificationSlackSender
             return (new Result(0, 0, 0, 0, 0));
          }
 
-         List<QRecord> recipients = AlertsDb.query(AlertsNotificationRecipient.TABLE_NAME, new QQueryFilter()
-            .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
-            .withCriteria("slackStatus", QCriteriaOperator.IN, List.of(SlackStatus.NONE.name(), SlackStatus.PENDING.name()))
-            .withCriteria("deliveredAt", QCriteriaOperator.GREATER_THAN_OR_EQUALS, now.minus(1, ChronoUnit.DAYS))
-            .withLimit(NotificationEmailer.SCAN));
-         Map<Integer, QRecord> notifications = NotificationEmailer.notifications(recipients, now);
-         Map<String, QRecord>  settings      = NotificationEmailer.userSettings(preferences.keySet());
-         boolean               available     = isAvailable();
+         Map<String, QRecord> settings = NotificationEmailer.userSettings(preferences.keySet());
+         boolean available = isAvailable();
 
          int                          sent    = 0;
          int                          held    = 0;
          int                          skipped = 0;
          int                          failed  = 0;
          Map<String, List<QRecord[]>> digests = new LinkedHashMap<>();
-         for(QRecord recipient : recipients)
+         int afterId = 0;
+         while(true)
          {
-            QRecord notification = notifications.get(recipient.getValueInteger("notificationId"));
-            String  userId       = recipient.getValueString("userId");
-            QRecord preference   = notification == null ? null : preferences.get(userId).get(notification.getValueString("category"));
-            if(notification == null || preference == null || NotificationCategory.ALERT.name().equals(notification.getValueString("category"))
-               || !NotificationEmailer.atLeast(notification.getValueString("severity"), preference.getValueString("slackMinSeverity")) || !available)
+            List<QRecord> recipients = AlertsDb.query(AlertsNotificationRecipient.TABLE_NAME, new QQueryFilter()
+               .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
+               .withCriteria("slackStatus", QCriteriaOperator.IN, List.of(SlackStatus.NONE.name(), SlackStatus.PENDING.name()))
+               .withCriteria("id", QCriteriaOperator.GREATER_THAN, afterId)
+               .withOrderBy(new QFilterOrderBy("id", true))
+               .withLimit(NotificationEmailer.SCAN));
+            if(recipients.isEmpty())
             {
-               mark(recipient, SlackStatus.SKIPPED);
-               skipped++;
+               break;
             }
-            else if(EmailMode.IMMEDIATE.name().equals(preference.getValueString("slackMode")))
+            afterId = recipients.get(recipients.size() - 1).getValueInteger("id");
+            Map<Integer, QRecord> notifications = NotificationEmailer.notifications(recipients, now);
+            for(QRecord recipient : recipients)
             {
-               if(isHeld(settings.get(userId), notification, now))
+               QRecord notification = notifications.get(recipient.getValueInteger("notificationId"));
+               String  userId       = recipient.getValueString("userId");
+               QRecord preference   = notification == null ? null : preferences.get(userId).get(notification.getValueString("category"));
+               if(notification == null || preference == null || NotificationCategory.ALERT.name().equals(notification.getValueString("category"))
+                  || !NotificationEmailer.atLeast(notification.getValueString("severity"), preference.getValueString("slackMinSeverity")) || !available)
+               {
+                  mark(recipient, SlackStatus.SKIPPED);
+                  skipped++;
+               }
+               else if(!NotificationCategory.SECURITY.name().equals(notification.getValueString("category")) && AlertRouter.isPaused(settings.get(userId), now))
                {
                   held++;
-                  continue;
                }
-               SlackStatus status = sendExternal(userId, notification.getValueString("title"), List.of(notification), notification.getValueInteger("id"));
-               mark(recipient, status);
-               sent += status == SlackStatus.SENT ? 1 : 0;
-               skipped += status == SlackStatus.SKIPPED ? 1 : 0;
-               failed += status == SlackStatus.FAILED ? 1 : 0;
-            }
-            else if(recipient.getValue("readAt") == null)
-            {
-               digests.computeIfAbsent(userId, k -> new ArrayList<>()).add(new QRecord[] {recipient, notification});
+               else if(EmailMode.IMMEDIATE.name().equals(preference.getValueString("slackMode")))
+               {
+                  if(isHeld(settings.get(userId), notification, now))
+                  {
+                     held++;
+                     continue;
+                  }
+                  SlackStatus status = sendExternal(userId, notification.getValueString("title"), List.of(notification), notification.getValueInteger("id"));
+                  mark(recipient, status);
+                  sent += status == SlackStatus.SENT ? 1 : 0;
+                  skipped += status == SlackStatus.SKIPPED ? 1 : 0;
+                  failed += status == SlackStatus.FAILED ? 1 : 0;
+               }
+               else if(recipient.getValue("readAt") == null)
+               {
+                  digests.computeIfAbsent(userId, k -> new ArrayList<>()).add(new QRecord[] {recipient, notification});
+               }
             }
          }
 
@@ -200,11 +214,12 @@ public class NotificationSlackSender
 
    /*******************************************************************************
     ** Whether a push is held for now: the user paused notifications, or it is
-    ** their quiet hours (CRITICAL bypasses). The bell is never held.
+    ** their quiet hours (CRITICAL bypasses). SECURITY bypasses the pause.
+    ** The bell is never held.
     *******************************************************************************/
    private static boolean isHeld(QRecord setting, QRecord notification, Instant now)
    {
-      return (AlertRouter.isPaused(setting, now)
+      return ((!NotificationCategory.SECURITY.name().equals(notification.getValueString("category")) && AlertRouter.isPaused(setting, now))
          || AlertTiming.isQuiet(setting, AlertSeverity.fromLabel(notification.getValueString("severity"), AlertSeverity.WARNING), now));
    }
 

@@ -49,7 +49,7 @@ public final class AlertsSchemas
          Map.entry("AlertsInboxItemV1", new AlertsInboxItemV1(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null).toSchema()),
          Map.entry("AlertsPanelAlertV1", new AlertsPanelAlertV1(null, null, null, null, null, null, null, null, null).toSchema()),
          Map.entry("AlertsFollowV1", new AlertsFollowV1(null).toSchema()),
-         Map.entry("AlertsInboxSummaryV1", new AlertsInboxSummaryV1(null, null, null, null, null, null, null, null).toSchema()),
+         Map.entry("AlertsInboxSummaryV1", new AlertsInboxSummaryV1(null, null, null, null, null, null, null, null, null).toSchema()),
          Map.entry("AlertsInboxPageV1", new AlertsInboxPageV1(null, null, null, null).toSchema()),
          Map.entry("AlertsRecordPanelV1", new AlertsRecordPanelV1(null, null, null, null, null, null, null, null).toSchema()),
          Map.entry("AlertsMutationResultV1", new AlertsMutationResultV1(null).toSchema()),
@@ -161,7 +161,7 @@ public final class AlertsSchemas
    /*******************************************************************************
     ** Bell summary, latest ten items and up to three sticky banners.
     *******************************************************************************/
-   public record AlertsInboxSummaryV1(Integer unreadCount, String highestUnreadSeverity, List<AlertsInboxItemV1> items, List<AlertsInboxItemV1> banners, String notificationsHref, String inboxHref, String alertsHref, Integer pollSeconds) implements ToSchema
+   public record AlertsInboxSummaryV1(Integer unreadCount, String highestUnreadSeverity, List<AlertsInboxItemV1> items, List<AlertsInboxItemV1> banners, String notificationsHref, String inboxHref, String preferencesSection, String alertsHref, Integer pollSeconds) implements ToSchema
    {
       /*******************************************************************************
        ** Describe the public JSON shape.
@@ -175,6 +175,7 @@ public final class AlertsSchemas
             Map.entry("items", new Schema().withType(Type.ARRAY).withItems(new Schema().withRefToSchema("AlertsInboxItemV1"))),
             Map.entry("banners", new Schema().withType(Type.ARRAY).withItems(new Schema().withRefToSchema("AlertsInboxItemV1"))),
             Map.entry("notificationsHref", new Schema().withType(Type.STRING).withDescription("Existing notifications page link; retained for compatibility.")),
+            Map.entry("preferencesSection", new Schema().withType(Type.STRING).withNullable(true).withDescription("Name of the user Preferences section for notification settings (/qqq/v1/preferences/{name}), or null when not registered.")),
             Map.entry("inboxHref", new Schema().withType(Type.STRING).withDescription("Canonical inbox navigation link.")),
             Map.entry("alertsHref", new Schema().withType(Type.STRING)),
             Map.entry("pollSeconds", new Schema().withType(Type.INTEGER))))));

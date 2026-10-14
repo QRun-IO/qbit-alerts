@@ -236,7 +236,7 @@ public class AlertsNotificationCustomizer implements TableCustomizerInterface
     *******************************************************************************/
    static void checkPreference(QRecord record)
    {
-      if(NotificationCategory.SECURITY.name().equals(record.getValueString("category")) && Boolean.TRUE.equals(record.getValueBoolean("inAppMuted")))
+      if(NotificationCategory.SECURITY.name().equals(record.getValueString("category")) && (Boolean.TRUE.equals(record.getValueBoolean("inAppMuted")) || record.getValue("inAppMinSeverity") != null))
       {
          record.addError(new PermissionDeniedMessage("Security notices can't be muted in-app; you can still choose how they are emailed."));
       }
