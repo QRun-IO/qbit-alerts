@@ -45,12 +45,12 @@ import com.kingsrook.qbits.alerts.model.AlertsRecordRef;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.notifications.NotificationService;
 import com.kingsrook.qbits.alerts.processes.AlertsAction;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.actions.permissions.PermissionsHelper;
 import com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
 import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QBadRequestException;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -137,7 +137,7 @@ public class AlertsApi
          if(entry.unread())
          {
             unread++;
-            NotificationSeverity severity = NotificationSeverity.fromName(entry.notification().getValueString("severity"), NotificationSeverity.INFO);
+            NotificationSeverity severity = NotificationService.severityOf(entry.notification().getValueString("severity"), NotificationSeverity.INFO);
             highest = highest == null || severity.compareTo(highest) > 0 ? severity : highest;
          }
          if(latest.size() < INBOX_ITEMS)

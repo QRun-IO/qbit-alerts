@@ -138,10 +138,9 @@ notification admins. The home stays the only Alerts dashboard.
 
 ## 6. Producer SPI
 
-The notification API below is planned in [QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)
-for 4.1.0-RC.6. This branch now targets 4.1.0-RC.6 for the UI extension API. The retained qbit notification
-adapter still needs a separate migration to core `QAlerts.notify`; the following remains the
-target integration shape:
+The notification API from [QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)
+ships in 4.1.0-RC.6. This branch targets that release and delivers core `QAlerts.notify`
+calls through the installed qbit sink:
 
 ```java
 QAlerts.notify(new NotificationSignal("Your export failed")
@@ -153,17 +152,26 @@ QAlerts.notify(new NotificationSignal("Your export failed")
    .withAudience(NotificationAudience.user(userId)));
 ```
 
-- `AlertSinkInterface` gets a default method, `notify(NotificationSignal)`, that logs; existing sinks keep
-  working. `LoggingAlertSink` logs at INFO. The qbit's sink queues the signal like an alert signal.
+- `AlertSinkInterface` has a default method, `notify(NotificationSignal)`, that logs; existing sinks keep
+  working. `LoggingAlertSink` logs at INFO (WARN for ERROR/CRITICAL). The qbit's sink queues the signal like an alert signal.
 - The guarantees match `raise`: it never throws or blocks, it waits for the commit when a transaction is
   open, and bad input is counted.
 - `NotificationAudience`: `allUsers()`, `roles(...)`, `permission(p)`, `users(...)`, `user(id)`.
-- Until RC.6 ships, the qbit keeps `spi.NotificationSignal`, `NotificationAudience`,
-  `NotificationCategory`, `NotificationSeverity` and `AlertLink`, and hosts call
-  `AlertsRuntime.get(qInstance).sink().notify(...)`. Their binary signatures remain unchanged for
-  released qbit-easypost-tracking 0.1.x. The return type of `sink()` remains `QbitAlertsSink`;
-  there is no local sink interface. This direct notification path queues immediately; the
-  transaction-aware `QAlerts.notify` guarantees above describe the planned core API.
+- All producer types, including `AlertLink`, are from `com.kingsrook.qqq.backend.core.alerts`.
+  The qbit implements core's `notify` override in `AlertsSinkAdapter` and `QbitAlertsSink`;
+  signals use the existing bounded queue and `NotificationService` for audience resolution,
+  inbox recipients, scheduling and category/email preferences. Alert subscription channels
+  and their quiet-hour suppression keep their existing behavior.
+- **Breaking migration:** the local `spi` package and `AlertsRuntime.sink()` are removed.
+  Change imports to core, call `QAlerts.notify(signal)` in the producer's `QContext`, and
+  rebuild. qbit-easypost-tracking#16 uses core. The runtime's `getSink()` supports adapter
+  delegation and queue lifecycle operations; producers use `QAlerts`.
+- Stored audience types and comma/newline-separated values remain readable. The service
+  retains trimming, duplicate removal and null storage for empty audiences, so existing
+  notification dedup keys and rows need no migration. Core types do not own database parsing.
+- Verification covers core producer calls through the asynchronous queue to the strict HTTP
+  inbox, all audience factories, commit/rollback, category mutes, immediate email and digests.
+  The UI fragment and all six HTTP operations are unchanged by this notification migration.
 
 ### 6.1 Automatic sources
 
@@ -237,7 +245,7 @@ recipients) whose `expireAt` is more than 7 days past, plus SENT or RETRACTED no
 |---|---|
 | a | Tables, the rename and retirement, admin screens and actions, audiences and recipients, the bell API, ALERT notifications |
 | b | Next UI: badge, popover, page, banner |
-| c | Producer SPI (core PR plus the stand-in), job failures |
+| c | Core RC.6 producer SPI and sink integration, job failures |
 | d | Security notices, shares, release and marketing producers |
 | e | Email: immediate and daily digest |
 

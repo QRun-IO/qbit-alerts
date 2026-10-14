@@ -60,7 +60,7 @@ class SinkAndScheduleTest extends BaseAlertsTest
 
       QAlerts.raise(new AlertSignal("host.backup.failed").withDedupKey("nightly").withTitle("Nightly backup failed"));
       QAlerts.heartbeat("host.backup.nightly");
-      runtime.sink().stop();
+      runtime.getSink().stop();
 
       List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
       assertThat(alerts).hasSize(1);
@@ -70,7 +70,7 @@ class SinkAndScheduleTest extends BaseAlertsTest
       assertThat(all(AlertsHeartbeat.TABLE_NAME)).hasSize(1);
 
       QAlerts.resolve("host.backup.failed", "nightly", "Retry succeeded");
-      runtime.sink().stop();
+      runtime.getSink().stop();
       assertThat(all(AlertsAlert.TABLE_NAME).get(0).getValueString("status")).isEqualTo("RESOLVED");
       assertThat(QAlerts.getProducerFailureCount()).isEqualTo(failures);
    }
@@ -102,9 +102,9 @@ class SinkAndScheduleTest extends BaseAlertsTest
       {
          String type = "test.stop.thing" + i;
          adapter.raise(new AlertSignal(type).withTitle("Stop " + i));
-         runtime.sink().stop();
+         runtime.getSink().stop();
          adapter.resolve(new AlertResolution(type, null, "done"));
-         runtime.sink().stop();
+         runtime.getSink().stop();
       }
 
       List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
@@ -123,7 +123,7 @@ class SinkAndScheduleTest extends BaseAlertsTest
       AlertsSinkAdapter adapter = new AlertsSinkAdapter();
       adapter.raise(new AlertSignal("test.queue.thing").withTitle("Queued"));
       adapter.heartbeat("queue.beat", null);
-      runtime.sink().flush();
+      runtime.getSink().flush();
       for(int i = 0; i < 50 && all(AlertsAlert.TABLE_NAME).isEmpty(); i++)
       {
          Thread.sleep(50);
@@ -131,7 +131,7 @@ class SinkAndScheduleTest extends BaseAlertsTest
       assertThat(all(AlertsAlert.TABLE_NAME)).hasSize(1);
 
       adapter.resolve(new AlertResolution("test.queue.thing", null, "done"));
-      runtime.sink().stop();
+      runtime.getSink().stop();
       List<QRecord> alerts = all(AlertsAlert.TABLE_NAME);
       assertThat(alerts.get(0).getValueString("status")).isEqualTo("RESOLVED");
       assertThat(all(AlertsHeartbeat.TABLE_NAME)).hasSize(1);
@@ -147,10 +147,10 @@ class SinkAndScheduleTest extends BaseAlertsTest
    {
       for(int i = 0; i < 1005; i++)
       {
-         runtime.sink().raise(new AlertSignal("test.flood.thing").withDedupKey("same"));
+         runtime.getSink().raise(new AlertSignal("test.flood.thing").withDedupKey("same"));
       }
-      assertThat(runtime.sink().getDroppedCount()).isEqualTo(5);
-      runtime.sink().stop();
+      assertThat(runtime.getSink().getDroppedCount()).isEqualTo(5);
+      runtime.getSink().stop();
    }
 
 

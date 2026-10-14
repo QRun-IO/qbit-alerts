@@ -73,7 +73,7 @@ public final class AlertsScheduledSteps
       public void run(RunBackendStepInput input, RunBackendStepOutput output) throws QException
       {
          AlertsRuntime runtime = AlertsRuntime.get();
-         runtime.sink().flush();
+         runtime.getSink().flush();
          runtime.getNotifications().sendDue();
          runtime.getNotifications().purge();
          new NotificationEmailer(runtime).run();

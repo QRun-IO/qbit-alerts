@@ -94,6 +94,15 @@ The alias is supported for the 0.1 minor line only and scheduled for removal in 
 published calendar sunset is 13 April 2027. Move receivers before either retirement boundary.
 No automatic runtime cutoff is applied by these informational headers.
 
+## Core notification migration (#15 part 2)
+
+Core `QAlerts.notify` now feeds the same inbox service through the registered sink. This
+migration changes Java imports and producer entry points only: no methods, paths,
+operation IDs, request fields, response fields or schemas change relative to PR #19.
+The earlier client changes above still apply when adopting the full stacked branch.
+The supplied Next `main` checkout still has no alerts client; the
+`feature/notification-center:src/lib/api/alerts.ts` client was checked again for this work.
+
 ## Verification
 
 Use the Maven wrapper. The committed BOM version is RC.6; while it is unreleased, verify with

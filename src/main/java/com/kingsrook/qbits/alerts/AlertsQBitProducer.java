@@ -197,7 +197,7 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
       AlertsRuntime previous = qBitConfig.getRuntime();
       if(previous != null)
       {
-         previous.sink().stop();
+         previous.getSink().stop();
       }
       AlertsRuntime runtime = new AlertsRuntime(qBitConfig, qInstance);
       qBitConfig.setRuntime(runtime);

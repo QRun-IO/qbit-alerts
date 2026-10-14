@@ -37,7 +37,7 @@ The qbit also carries ordinary notifications for people (design: [docs/NOTIFICAT
 
 - **Admins** with `alerts.notification.admin` write notifications in the Notifications table (title, markdown body, severity, category, link, audience, publish and expire times, a sticky banner flag), then use the record actions Preview audience, Send now, Schedule and Retract. Edits after sending show at once; retracting hides it.
 - **Audiences** are resolved when sent: all users, roles or groups, holders of a permission, or named users. Each user gets one `alerts_notification_recipient` row, so read, unread and dismissed are per user. Roles need a user directory (`AlertsQBitConfig.withUserDirectory`, an `AlertsUserDirectoryInterface`); without one, "all users" means everyone who has used Alerts.
-- **Producers** send with `AlertsRuntime.get(qInstance).sink().notify(new NotificationSignal(...))` (core: `QAlerts.notify`). Alerts a user subscribes to arrive in the bell as ALERT notifications.
+- **Producers** send with `QAlerts.notify(new NotificationSignal(...))` using `com.kingsrook.qqq.backend.core.alerts` types (RC.6). Alerts a user subscribes to arrive in the bell as ALERT notifications.
 - **Ready-made notices** in `AlertsNotices`: `newSignIn`, `apiKeyCreated`, `apiKeyExpiring`, `permissionChanged` (SECURITY), `shared` (SHARE) and `release` (RELEASE, all users). Core has no sign-in or API key events yet, so hosts call these from their authentication customizer and API key screens.
 - **Email** is opt-in per user and category (IMMEDIATE, or DAILY_DIGEST at the digest hour in My Alert Settings), through the configured messaging provider; without one it is off. ALERT notifications are not emailed here (alert subscriptions already do), and SECURITY emails carry only the title and link.
 - **Failed and partial jobs** notify the person who started them (`notifyFailedJobs`, `jobRunLinkPattern`).
@@ -111,7 +111,9 @@ QAlerts.raise(new AlertSignal("cdn.purge.dead")
 
 `QAlerts.resolve(...)` and `QAlerts.heartbeat(...)` reach the same sink. Declare types with core's `QAlertTypeMetaData`. Calls through `QAlerts.raise/resolve` defer to transaction commit when a transaction is present; without this qbit installed, core uses its logging sink.
 
-User notifications remain on `AlertsRuntime.get(qInstance).sink().notify(...)`: core's notification API ([QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)) ships in RC.6; wiring the retained notification adapter to that API is a separate migration. The four `spi.Notification*` types and `spi.AlertLink` retain their binary signatures for released qbit-easypost-tracking 0.1.x. Use core `AlertLink` for alert signals and `spi.AlertLink` for notification signals until that migration.
+User notifications use core `QAlerts.notify(NotificationSignal)` (RC.6, QRun-IO/qqq#1125). Core dispatches through `AlertsSinkAdapter` into the same bounded queue, notification service, audience resolution and email preferences. Calls wait for an explicit or ambient transaction to commit and are dropped on rollback.
+
+**Breaking Java API migration:** the entire `com.kingsrook.qbits.alerts.spi` package and `AlertsRuntime.sink()` are removed. Replace notification and `AlertLink` imports with `com.kingsrook.qqq.backend.core.alerts`, and replace `AlertsRuntime.get(qInstance).sink().notify(signal)` with `QAlerts.notify(signal)` in the producer's `QContext`. Rebuild callers; qbit-easypost-tracking#16 already moved to core. `getSink()` is for adapter delegation and queue lifecycle management, not a producer API. Notification tables and HTTP contracts are unchanged by this migration.
 
 ## Endpoints (for the Next UI)
 

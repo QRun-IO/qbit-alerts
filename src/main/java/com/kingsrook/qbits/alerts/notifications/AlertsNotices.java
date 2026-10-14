@@ -21,30 +21,26 @@ package com.kingsrook.qbits.alerts.notifications;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import com.kingsrook.qbits.alerts.AlertsRuntime;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
-import com.kingsrook.qbits.alerts.spi.NotificationSignal;
-import com.kingsrook.qqq.backend.core.context.QContext;
-import com.kingsrook.qqq.backend.core.logging.QLogger;
-import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.QAlerts;
 
 
 /*******************************************************************************
  ** Ready-made notifications for the automatic sources hosts wire up
  ** (docs/NOTIFICATIONS.md 6.1): security notices, shares and assignments,
  ** and release announcements. Each one is a NotificationSignal sent through
- ** the alerts sink (queued; it never throws into the caller). With no Alerts
- ** qbit installed they do nothing.
+ ** core QAlerts (queued; it never throws into the caller). With no Alerts
+ ** qbit installed core uses its logging sink.
  **
  ** Core has no sign-in or API key events yet, so a host calls the security
  ** notices from its authentication customizer or API key screens.
  *******************************************************************************/
 public final class AlertsNotices
 {
-   private static final QLogger           LOG  = QLogger.getLogger(AlertsNotices.class);
    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneOffset.UTC);
 
 
@@ -114,7 +110,7 @@ public final class AlertsNotices
     *******************************************************************************/
    public static void shared(String userId, String title, AlertLink link, String sourceName)
    {
-      sendSignal(new NotificationSignal(title).withCategory(NotificationCategory.SHARE).withSourceName(sourceName).withLink(link)
+      QAlerts.notify(new NotificationSignal(title).withCategory(NotificationCategory.SHARE).withSourceName(sourceName).withLink(link)
          .withAudience(NotificationAudience.user(userId)));
    }
 
@@ -125,7 +121,7 @@ public final class AlertsNotices
     *******************************************************************************/
    public static void release(String version, String notesMarkdown, AlertLink link)
    {
-      sendSignal(new NotificationSignal("Version " + version + " is out").withBody(notesMarkdown).withSeverity(NotificationSeverity.SUCCESS)
+      QAlerts.notify(new NotificationSignal("Version " + version + " is out").withBody(notesMarkdown).withSeverity(NotificationSeverity.SUCCESS)
          .withCategory(NotificationCategory.RELEASE).withSourceName("release").withSourceKey("release:" + version).withLink(link)
          .withAudience(NotificationAudience.allUsers()));
    }
@@ -141,29 +137,7 @@ public final class AlertsNotices
       {
          return;
       }
-      sendSignal(signal.withCategory(NotificationCategory.SECURITY).withSourceName("security").withSourceKey(sourceKey)
+      QAlerts.notify(signal.withCategory(NotificationCategory.SECURITY).withSourceName("security").withSourceKey(sourceKey)
          .withAudience(NotificationAudience.user(userId)));
-   }
-
-
-
-   /*******************************************************************************
-    ** Through the installed qbit's sink (nothing when it isn't installed).
-    *******************************************************************************/
-   private static void sendSignal(NotificationSignal signal)
-   {
-      try
-      {
-         QInstance     qInstance = QContext.getQInstance();
-         AlertsRuntime runtime   = AlertsRuntime.find(qInstance);
-         if(runtime != null && signal.getAudience() != null)
-         {
-            runtime.sink().notify(signal);
-         }
-      }
-      catch(Exception e)
-      {
-         LOG.warn("Could not send a notification", e);
-      }
    }
 }
