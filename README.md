@@ -152,7 +152,7 @@ They create the `in-app` and `email` channels and the `alerts` and `other` group
 
 Every table has help that says what it is for and **how its rows get created**, shown on the table screen and when it is empty (`help/qbit-alerts.yaml`). Alerts admins also get a **Setup** card first on the home that lists each configuration table, whether it is set up, and the next step.
 
-Routing details worth knowing: an alert that no subscription matches goes to the owner team of its group (or the nearest parent group that has one), at WARNING and above; a person's **Default Channels** (My Alert Settings) are used for subscriptions that name no channels.
+Routing details worth knowing: an alert that no subscription matches goes to the owner team of its group (or the nearest parent group that has one), at WARNING and above; a person's **Default Channels** (My Alert Settings) replace the built-in email choice for subscriptions that name no channels (the bell stays unless turned off). Follow-ups go to the owner team only if it was told about the raise.
 
 ## Raising alerts
 

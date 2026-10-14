@@ -15,7 +15,7 @@ All notable changes to this project are documented here. The format follows Keep
 
 ### Fixed
 - A group's `ownerTeamId` was stored but never read. An alert that no subscription matches (WARNING and above) now goes to the owner team of its group, or of the nearest parent group that has one.
-- A user's `defaultChannelIds` was stored but never read. It now decides the channels for subscriptions that name none.
+- A user's `defaultChannelIds` was stored but never read. It now adds the chosen external channels to the bell (unless In-App is off) for subscriptions that name none.
 - Alert types, groups and default monitors also sync on the first bell request, so those tables are not empty on a running install.
 
 ### Changed

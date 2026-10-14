@@ -779,6 +779,6 @@ public final class AlertsHome
     *******************************************************************************/
    static Set<String> kinds()
    {
-      return (Set.of(KIND_SEVERITY, KIND_MINE, KIND_ACTION, KIND_BY_GROUP, KIND_TREND, KIND_NOISY, KIND_DELIVERY, KIND_RESOLVED));
+      return (Set.of(KIND_SETUP, KIND_SEVERITY, KIND_MINE, KIND_ACTION, KIND_BY_GROUP, KIND_TREND, KIND_NOISY, KIND_DELIVERY, KIND_RESOLVED));
    }
 }

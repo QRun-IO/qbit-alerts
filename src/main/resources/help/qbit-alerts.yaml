@@ -4,7 +4,7 @@ layer: QBIT
 # Help for the Alerts app and every alerts_* table, in the QQQ help-bundle format
 # (qqq#1198). Each table entry says what the table is for and how its rows get
 # created, so an empty table explains itself. AlertsHelp applies it until the core
-# HelpBundles registry ships in a QQQ release (STAND-IN(core=#1198)).
+# HelpBundles registry ships in a QQQ release (a stand-in until core #1198 ships).
 # Summaries stay under 120 characters (AlertsTablesGuardrailTest).
 entries:
   - key: app:alerts;slot:help
@@ -50,7 +50,7 @@ entries:
   - key: table:alerts_user_preference;slot:help
     summary: "Your alert settings: email address, quiet hours, digest hour, time zone, default channels and a vacation pause."
     content: |
-      **How rows get created:** one row per person, created automatically with defaults the first time they open Alerts (in-app on, email on once an address is added). Edit yours here. Quiet hours and the pause hold email and other push channels, never the bell; an alert at or above your bypass severity (CRITICAL by default) still gets through. Default Channels, when set, replace the built-in in-app and email choice for subscriptions that name no channels.
+      **How rows get created:** one row per person, created automatically with defaults the first time they open Alerts (in-app on, email on once an address is added). Edit yours here. Quiet hours and the pause hold email and other push channels, never the bell; an alert at or above your bypass severity (CRITICAL by default) still gets through. Default Channels, when set, replace the built-in email choice for subscriptions that name no channels; the bell stays unless you turn In-App off.
 
   - key: table:alerts_team;slot:help
     summary: "A named set of people who can be subscribed together, or own a group of alerts."
