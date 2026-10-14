@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
@@ -61,6 +62,8 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  ** - IMMEDIATE: one email per notification at or above the minimum severity;
  ** - DAILY_DIGEST: one email at the user's digest hour (in their time zone,
  **   from My Alert Settings) listing the day's unread notifications.
+ ** An explicit REQUESTED recipient is emailed immediately without a standing
+ ** category preference or minimum severity.
  ** Inert without a messaging provider and a From address. ALERT
  ** notifications are never emailed here (alert subscriptions already email
  ** them). SECURITY emails carry the title and link only. Runs as the system
@@ -124,18 +127,25 @@ public class NotificationEmailer
          {
             preferences.computeIfAbsent(preference.getValueString("userId"), k -> new HashMap<>()).put(preference.getValueString("category"), preference);
          }
-         if(preferences.isEmpty())
+         QQueryFilter eligible = new QQueryFilter().withBooleanOperator(QQueryFilter.BooleanOperator.OR)
+            .withCriteria("emailStatus", QCriteriaOperator.EQUALS, EmailStatus.REQUESTED.name());
+         if(!preferences.isEmpty())
          {
-            return (new Result(0, 0, 0, 0));
+            eligible.withSubFilter(new QQueryFilter()
+               .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
+               .withCriteria("emailStatus", QCriteriaOperator.IN, List.of(EmailStatus.NONE.name(), EmailStatus.PENDING.name())));
          }
 
          List<QRecord> recipients = AlertsDb.query(AlertsNotificationRecipient.TABLE_NAME, new QQueryFilter()
-            .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
-            .withCriteria("emailStatus", QCriteriaOperator.IN, List.of(EmailStatus.NONE.name(), EmailStatus.PENDING.name()))
+            .withSubFilter(eligible)
             .withCriteria("deliveredAt", QCriteriaOperator.GREATER_THAN_OR_EQUALS, now.minus(1, ChronoUnit.DAYS))
             .withLimit(SCAN));
+         if(recipients.isEmpty())
+         {
+            return (new Result(0, 0, 0, 0));
+         }
          Map<Integer, QRecord> notifications = notifications(recipients, now);
-         Map<String, QRecord>  settings      = userSettings(preferences.keySet());
+         Map<String, QRecord>  settings      = userSettings(recipients.stream().map(recipient -> recipient.getValueString("userId")).collect(Collectors.toSet()));
 
          int                         sent    = 0;
          int                         skipped = 0;
@@ -145,14 +155,16 @@ public class NotificationEmailer
          {
             QRecord notification = notifications.get(recipient.getValueInteger("notificationId"));
             String  userId       = recipient.getValueString("userId");
-            QRecord preference   = notification == null ? null : preferences.get(userId).get(notification.getValueString("category"));
-            if(notification == null || preference == null || NotificationCategory.ALERT.name().equals(notification.getValueString("category"))
-               || !atLeast(notification.getValueString("severity"), preference.getValueString("emailMinSeverity")))
+            QRecord preference   = notification == null ? null : preferences.getOrDefault(userId, Map.of()).get(notification.getValueString("category"));
+            boolean requested    = EmailStatus.REQUESTED.name().equals(recipient.getValueString("emailStatus"));
+            if(notification == null || NotificationCategory.ALERT.name().equals(notification.getValueString("category"))
+               || (!requested && (preference == null || !atLeast(notification.getValueString("severity"), preference.getValueString("emailMinSeverity"))))
+               || (requested && !StringUtils.hasContent(address(settings.get(userId)))))
             {
                mark(recipient, EmailStatus.SKIPPED, null);
                skipped++;
             }
-            else if(EmailMode.IMMEDIATE.name().equals(preference.getValueString("emailMode")))
+            else if(requested || EmailMode.IMMEDIATE.name().equals(preference.getValueString("emailMode")))
             {
                boolean ok = send(address(settings.get(userId)), notification.getValueString("title"), List.of(notification));
                mark(recipient, ok ? EmailStatus.SENT : EmailStatus.FAILED, ok ? now : null);

@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format follows Keep
 - Webhook signing delegates to core `WebhookSigner`/`WebhookSecret` (qbit-alerts#15, F11). Headers, `v1,` signatures and `whsec_` encoding are unchanged. A thin adapter preserves legacy keys shorter than core's 16-byte minimum using equivalent HMAC zero-padding.
 
 ### Added
+- Per-notification email opt-in via recipient email status `REQUESTED`: immediate delivery without a standing category preference, skipped when no address is known, and never emailed for ALERT notifications.
 - Optional external channels:
   - Slack (an Incoming Webhook, Block Kit)
   - Microsoft Teams (a Workflows webhook, an Adaptive Card)

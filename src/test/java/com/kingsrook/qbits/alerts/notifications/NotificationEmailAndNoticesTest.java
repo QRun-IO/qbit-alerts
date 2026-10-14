@@ -167,6 +167,162 @@ class NotificationEmailAndNoticesTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** A requested email does not require a standing category preference.
+    *******************************************************************************/
+   @Test
+   void testRequestedWithoutPreference() throws Exception
+   {
+      addressOnly();
+      requested("JOB");
+      assertThat(new NotificationEmailer(runtime).run().sent()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("SENT");
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** An explicit request and an immediate preference still send only once.
+    *******************************************************************************/
+   @Test
+   void testRequestedWithImmediatePreference() throws Exception
+   {
+      emailSettings("viewer-1", "JOB", "IMMEDIATE", "ERROR");
+      requested("JOB");
+      assertThat(new NotificationEmailer(runtime).run().sent()).isEqualTo(1);
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** A request overrides digest timing and category severity preferences.
+    *******************************************************************************/
+   @Test
+   void testRequestedWithDigestPreference() throws Exception
+   {
+      emailSettings("viewer-1", "JOB", "DAILY_DIGEST", "ERROR");
+      requested("JOB");
+      NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
+      assertThat(result.sent()).isEqualTo(1);
+      assertThat(result.digests()).isZero();
+      assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** Knowing an address alone does not opt a notification into email.
+    *******************************************************************************/
+   @Test
+   void testNotRequestedWithoutPreference() throws Exception
+   {
+      addressOnly();
+      runtime.getNotifications().notify(new NotificationSignal("Done").withCategory(NotificationCategory.JOB)
+         .withAudience(NotificationAudience.user("viewer-1")));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("NONE");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Missing addresses are skipped rather than counted as delivery failures.
+    *******************************************************************************/
+   @Test
+   void testRequestedWithoutAddress() throws Exception
+   {
+      requested("JOB");
+      NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
+      assertThat(result.skipped()).isEqualTo(1);
+      assertThat(result.failed()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("SKIPPED");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Alert subscriptions own alert emails, even with an explicit request.
+    *******************************************************************************/
+   @Test
+   void testRequestedAlertNeverEmailed() throws Exception
+   {
+      emailSettings("viewer-1", "ALERT", "IMMEDIATE", "INFO");
+      requested("ALERT");
+      assertThat(new NotificationEmailer(runtime).run().skipped()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("SKIPPED");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Requests older than the delivery window are not emailed.
+    *******************************************************************************/
+   @Test
+   void testRequestedOutsideDeliveryWindow() throws Exception
+   {
+      addressOnly();
+      requested("JOB");
+      clock.set(clock.instant().plusSeconds(86401));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("REQUESTED");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Provider failures remain terminal and do not cause repeated sends.
+    *******************************************************************************/
+   @Test
+   void testRequestedDeliveryFailure() throws Exception
+   {
+      addressOnly();
+      requested("JOB");
+      runtime.getConfig().withMessagingProviderName("missing-provider");
+      NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
+      assertThat(result.failed()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("FAILED");
+      assertThat(new NotificationEmailer(runtime).run().failed()).isZero();
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Store an address without opting into any category.
+    *******************************************************************************/
+   private void addressOnly() throws QException
+   {
+      runtime.asSystem(() -> AlertsDb.insert(AlertsUserPreference.TABLE_NAME,
+         new QRecord().withValue("userId", "viewer-1").withValue("emailAddress", "viewer-1@example.com")));
+   }
+
+
+
+   /*******************************************************************************
+    ** Set up a recipient explicitly requesting email for worker tests.
+    *******************************************************************************/
+   private void requested(String category) throws QException
+   {
+      Integer id = runtime.getNotifications().notify(new NotificationSignal("Done").withCategory(NotificationCategory.valueOf(category))
+         .withAudience(NotificationAudience.user("viewer-1")));
+      runtime.asSystem(() ->
+      {
+         QRecord recipient = AlertsDb.first(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("notificationId", id));
+         return (AlertsDb.update(AlertsNotificationRecipient.TABLE_NAME,
+            new QRecord().withValue("id", recipient.getValue("id")).withValue("emailStatus", "REQUESTED")));
+      });
+   }
+
+
+
+   /*******************************************************************************
     ** The daily digest waits for the user's hour, then lists the unread ones.
     *******************************************************************************/
    @Test
