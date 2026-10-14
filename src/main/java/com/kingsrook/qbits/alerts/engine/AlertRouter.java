@@ -45,14 +45,21 @@ import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsTeamMember;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
+import com.kingsrook.qqq.backend.core.actions.collaboration.RecordFollowers;
+import com.kingsrook.qqq.backend.core.actions.permissions.PermissionsHelper;
+import com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType;
 import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
 import com.kingsrook.qqq.backend.core.context.CapturedContext;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
+import com.kingsrook.qqq.backend.core.model.actions.AbstractActionInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.collaboration.FollowEvent;
+import com.kingsrook.qqq.backend.core.model.metadata.collaboration.RecordFollower;
+import com.kingsrook.qqq.backend.core.model.metadata.collaboration.RecordReference;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
 import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleDispatcher;
 import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleInterface;
@@ -303,7 +310,7 @@ public class AlertRouter
    /*******************************************************************************
     ** Every destination for an alert: subscribed users (directly or through a
     ** team) with their in-app and email channels (or the subscription's
-    ** chosen channels), and subscribed channels.
+    ** chosen channels), subscribed channels, and readable record followers.
     *******************************************************************************/
    List<Destination> destinations(AlertTarget target, AlertSeverity severity, DeliveryKind kind) throws QException
    {
@@ -353,8 +360,24 @@ public class AlertRouter
             }
          }
       }
-      // TODO STAND-IN(core=QRun-IO/qqq#1164, removeBy=4.1.0-RC.7): merge record followers
-      // from RecordFollowersProviderInterface here, before the existing visibility/suppression checks.
+      for(String recordKey : target.recordKeys())
+      {
+         String[] parts = recordKey.split(":", 2);
+         RecordReference reference = new RecordReference(parts[0], parts[1]);
+         for(RecordFollower follower : RecordFollowers.get(runtime.getQInstance(), reference, FollowEvent.ALERT))
+         {
+            String userId = follower == null ? null : follower.getUserId();
+            if(!StringUtils.hasContent(userId) || !canReadRecord(userId, reference))
+            {
+               continue;
+            }
+            QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
+            for(QRecord channel : userChannels(null, preference))
+            {
+               destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, null, null, preference));
+            }
+         }
+      }
       return (new ArrayList<>(destinations.values()));
    }
 
@@ -367,7 +390,7 @@ public class AlertRouter
    private List<QRecord> userChannels(QRecord subscription, QRecord preference) throws QException
    {
       List<QRecord> channels  = new ArrayList<>();
-      String        overrides = subscription.getValueString("channelOverrideIds");
+      String        overrides = subscription == null ? null : subscription.getValueString("channelOverrideIds");
       if(StringUtils.hasContent(overrides))
       {
          for(String id : overrides.split("[,\\s]+"))
@@ -514,6 +537,39 @@ public class AlertRouter
          LOG.debug("Could not build a session to check alert visibility", e, logPair("userId", userId));
       }
       return (Optional.empty());
+   }
+
+
+
+   /*******************************************************************************
+    ** Followers must be able to read the source record, including its record locks.
+    ** Reuse recipient sessions; unknown access fails closed before adding channels.
+    *******************************************************************************/
+   private boolean canReadRecord(String userId, RecordReference reference)
+   {
+      try
+      {
+         QSession session = automatedSession(userId);
+         if(session == null || !CollectionUtils.nullSafeHasContents(session.getPermissions()))
+         {
+            return (false);
+         }
+         QInstance instance = runtime.getQInstance();
+         AlertsSecurity.applyToSession(instance, session);
+         boolean[] readable = new boolean[1];
+         QContext.withTemporaryContext(new CapturedContext(instance, session), () ->
+         {
+            String primaryKey = instance.getTable(reference.tableName()).getPrimaryKeyField();
+            readable[0] = PermissionsHelper.hasTablePermission(new AbstractActionInput(), reference.tableName(), TablePermissionSubType.READ)
+               && AlertsDb.first(reference.tableName(), AlertsDb.eq(primaryKey, reference.primaryKey())) != null;
+         });
+         return (readable[0]);
+      }
+      catch(Exception e)
+      {
+         LOG.debug("Could not verify follower source-record access", e, logPair("userId", userId));
+         return (false);
+      }
    }
 
 

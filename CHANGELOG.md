@@ -5,10 +5,12 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Changed
-- Target QQQ `4.1.0-RC.6` for the UI extension API; local verification uses a command-line version override only.
+- Target released QQQ `4.1.0-RC.6`; verify normally with `./mvnw -B verify` (no version override).
+- Adopt `qbit-build-parent:2.1.0` with architecture guardrail enforcement and strict UI API routes enabled for tests. Dependency, extension contract and stand-in checks run in the normal build.
+- Add record followers to alert routing through core `RecordFollowers.get(instance, ref, FollowEvent.ALERT)` (#16, QRun-IO/qqq#1164). Deduplicate by user/channel with subscriptions and other record refs; require source-record read access under the follower's session, including record locks. Followers use the existing alert visibility, preferences and suppression pipeline without a dependency on qbit-collaboration. Missing/disabled/failing providers preserve subscription routing.
 - Register six JSON UI specs as extension `alerts` at the established `/alerts` prefix, preserving methods, paths and existing payload fields. Publish the OpenAPI fragment with a regeneration/contract test and strict server coverage (#13, F2).
 - Add summary `inboxHref`, notification operation actions, alert process actions with complete hrefs, and record-panel `follow.available` (#13, F20). Follow discovery reads core extension metadata without a collaboration dependency or URL.
-- Remove the record-panel watch route and handler. Existing RECORD subscriptions and the deprecated `watching` response remain readable without a migration; new panel follows belong to collaboration. Follower fan-out waits for core #1164 (#16, F12).
+- Remove the record-panel watch route and handler. Existing RECORD subscriptions and the deprecated `watching` response remain readable without a migration; new panel follows belong to collaboration (#16, F12).
 - Move Alertmanager ingest to `/qqq/hooks/alerts/alertmanager`. The old path is an opt-in alias (`legacyAlertmanagerPath`, default false) for one minor release, incompatible with strict raw-route mode. Each alias call carries deprecation/sunset headers and logs a warning; authentication is shared (#14, F7).
 - Run Checkstyle 14.3.0 in Maven validate (including tests); align the license template with this repository's existing headers and correct pre-existing switch/import formatting so the style check passes.
 - Alert types and sink registration use core's alerts SPI (introduced in QQQ 4.1.0-RC.5); host `QAlerts.raise/resolve/heartbeat` calls reach the installed qbit through core instance metadata (qbit-alerts#15, F3).

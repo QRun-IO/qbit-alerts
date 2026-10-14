@@ -161,7 +161,7 @@ QAlerts.notify(new NotificationSignal("Your export failed")
   The qbit implements core's `notify` override in `AlertsSinkAdapter` and `QbitAlertsSink`;
   signals use the existing bounded queue and `NotificationService` for audience resolution,
   inbox recipients, scheduling and category/email preferences. Alert subscription channels
-  and their quiet-hour suppression keep their existing behavior.
+  keep their existing behavior. Quiet-hour scheduling for alerts remains unimplemented (see README).
 - **Breaking migration:** the local `spi` package and `AlertsRuntime.sink()` are removed.
   Change imports to core, call `QAlerts.notify(signal)` in the producer's `QContext`, and
   rebuild. qbit-easypost-tracking#16 uses core. The runtime's `getSink()` supports adapter
@@ -265,3 +265,5 @@ recipients) whose `expireAt` is more than 7 days past, plus SENT or RETRACTED no
 The implemented UI routes and additive action/follow metadata are specified in [UI-API.md](UI-API.md),
 with the generated fragment at `src/main/resources/openapi/qqq-v1/alerts.yaml`. Record following
 belongs to collaboration; the old alerts panel watch route is removed.
+Record-linked alerts fan out through core's RC.6 followers provider with source-record access
+checks and the ordinary alert preference/suppression pipeline; see [record follower routing](UI-API.md#record-follower-routing).

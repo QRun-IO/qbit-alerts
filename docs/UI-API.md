@@ -58,9 +58,26 @@ and scope subscriptions; existing record-scoped watch rows are deprecated and re
 `watching` boolean is retained for compatibility and reports only those legacy rows; it must
 not be used as collaboration follow state.
 
-There is no follower fan-out yet. `AlertRouter.destinations` contains
-`STAND-IN(core=QRun-IO/qqq#1164, removeBy=4.1.0-RC.7)` at the point where follower destinations
-will join the existing recipient visibility and suppression pipeline.
+## Record follower routing
+
+For every active record ref on an alert, `AlertRouter.destinations` calls RC.6's
+`RecordFollowers.get(instance, ref, FollowEvent.ALERT)`. Register a core
+`RecordFollowersProviderInterface` through instance `RecordFeaturesMetaData.withFollowersProvider`
+and enable `RecordFeature.FOLLOW` for the source table (or by instance default). The provider
+selects followers for ALERT; core recommends treating ALERT like CHANGE unless the provider
+has a finer preference. The alerts qbit does not depend on qbit-collaboration.
+
+Each follower must have a known automated recipient session and be able to query the source
+record through its table permissions and record security locks. Missing records and unknown
+or denied access do not add follower destinations. The query uses the source table's configured
+primary key. Eligible followers join the existing destination map, deduplicated by user and
+channel across subscriptions and record refs. Existing subscription destinations take precedence.
+
+Followers use ordinary in-app/email settings, vacation pause for external delivery, alert
+visibility checks, type notification switches, mutes, flapping, channel limits and duplicate
+suppression. Quiet-hour scheduling remains unimplemented for all alert recipients, as listed
+in the README; follower routing does not introduce a separate delivery policy. With no provider,
+FOLLOW disabled, or a provider failure, existing subscription routing is unchanged.
 
 ## Alertmanager machine webhook
 
@@ -69,6 +86,10 @@ outside the UI API and has no UI operationId. It preserves the bearer token, sec
 JSON request and `{raised, resolved, ignored}` response. No QQQ user session is required.
 
 The previous **POST `/qqq/v1/alerts/ingest/alertmanager`** is an opt-in raw alias:
+
+The architecture guardrail's static G3 scan reports this intentional raw UI-prefix route
+as an advisory. Runtime strict-mode coverage rejects the alias; only the migration test
+starts a standalone Javalin instance with it enabled. Normal application tests remain strict.
 
 ```java
 new AlertsQBitConfig()

@@ -56,8 +56,11 @@ hrefs, `notificationsHref`, `alertsHref`, `canManage` and deprecated `watching` 
 
 Record following belongs to collaboration: `POST /alerts/record-panel/watch` is removed. Old
 RECORD subscriptions remain readable without migration. The panel creates no subscriptions;
-Next uses its collaboration module when `follow.available` is true. Follower fan-out waits
-for core QRun-IO/qqq#1164.
+Next uses its collaboration module when `follow.available` is true. Alerts with active record
+refs also reach followers supplied by core's instance-level followers provider (`FollowEvent.ALERT`),
+when FOLLOW is enabled and the follower can read the source record. Followers and subscribers
+share recipient deduplication, channel preferences and suppression. No collaboration qbit dependency
+is required; without a provider, subscription behavior is unchanged. See [follower routing](docs/UI-API.md#record-follower-routing).
 
 The old Alertmanager path is available for one minor release only via
 `withLegacyAlertmanagerPath(true)` (default false). It requires non-strict UI route mode,
@@ -67,11 +70,16 @@ a warning. Both paths use the same bearer-token check. Strict hosts use the cano
 ## Requirements
 
 - Java 21.
-- QQQ 4.1 (targets `4.1.0-RC.6`; release pending).
+- QQQ `4.1.0-RC.6` (released on Maven Central).
 - An RDBMS backend.
 - A scheduler, for monitors and email delivery.
 - A messaging provider, for email.
 - `qqq-middleware-javalin`, for the `/qqq/v1/alerts` routes (optional).
+
+The build uses `qbit-build-parent:2.1.0` with architecture guardrails and strict UI API route
+tests enabled. Run `./mvnw -B verify` (`.\mvnw.cmd -B verify` on Windows), without a snapshot
+override. The default-active `qqq-snapshot` profile retains its historical name but selects
+the released RC.6 BOM ahead of the parent's QQQ 4.0 BOM.
 
 ## Install
 
