@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Changed
+- Email goes through qbit-email when it is produced in the instance (optional dependency, `qbit-email.version` 0.1.0-RC.1): alert channel emails (template `alerts_alert`), notification emails (`alerts_notification`) and digests (`alerts_digest`), all NOTIFICATION, one recipient per message, with idempotency keys and the alert or notification as the linked record. `messagingProviderName` stays as the fallback when qbit-email is absent, and is not required when it is present.
 - Target released QQQ `4.1.0-RC.6`; verify normally with `./mvnw -B verify` (no version override).
 - Adopt `qbit-build-parent:2.1.0` with architecture guardrail enforcement and strict UI API routes enabled for tests. Dependency, extension contract and stand-in checks run in the normal build.
 - Add record followers to alert routing through core `RecordFollowers.get(instance, ref, FollowEvent.ALERT)` (#16, QRun-IO/qqq#1164). Deduplicate by user/channel with subscriptions and other record refs; require source-record read access under the follower's session, including record locks. Followers use the existing alert visibility, preferences and suppression pipeline without a dependency on qbit-collaboration. Missing/disabled/failing providers preserve subscription routing.

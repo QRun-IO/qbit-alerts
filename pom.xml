@@ -22,8 +22,15 @@
       <maven.compiler.source>21</maven.compiler.source>
       <maven.compiler.target>21</maven.compiler.target>
       <jacoco.version>0.8.15</jacoco.version>
+      <!-- qbit-email from Maven Central -->
+      <qbit-email.version>0.1.0-RC.1</qbit-email.version>
       <qbit.guardrails.enforce>true</qbit.guardrails.enforce>
       <qbit.guardrails.strictUiApiRoutes>true</qbit.guardrails.strictUiApiRoutes>
+      <!-- Optional email integration: only AlertsEmailSender references its API, -->
+      <!-- after classpath and EmailRuntime.config(instance) checks. EmailRuntime -->
+      <!-- lives in the root package; the guardrail accepts package prefixes.     -->
+      <qbit.guardrails.allowedQbitArtifacts>com.kingsrook.qbits:qbit-object-storage,com.kingsrook.qbits:*-api,com.kingsrook.qbits:qbit-email</qbit.guardrails.allowedQbitArtifacts>
+      <qbit.guardrails.allowedApiPackages>com.kingsrook.qbits.objectstorage.api,com.kingsrook.qbits.email</qbit.guardrails.allowedApiPackages>
    </properties>
 
    <parent>
@@ -79,6 +86,15 @@
       <dependency>
          <groupId>com.kingsrook.qqq</groupId>
          <artifactId>qqq-middleware-javalin</artifactId>
+         <optional>true</optional>
+      </dependency>
+
+      <!-- Email through qbit-email when it is produced in the same instance; -->
+      <!-- otherwise core SendMessageAction and messagingProviderName.        -->
+      <dependency>
+         <groupId>com.kingsrook.qbits</groupId>
+         <artifactId>qbit-email</artifactId>
+         <version>${qbit-email.version}</version>
          <optional>true</optional>
       </dependency>
 

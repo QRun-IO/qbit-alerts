@@ -18,10 +18,15 @@ package com.kingsrook.qbits.alerts.delivery;
 
 
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
+import com.kingsrook.qbits.alerts.email.AlertsEmail;
+import com.kingsrook.qbits.alerts.email.AlertsEmailSender;
+import com.kingsrook.qbits.alerts.metadata.AlertsProcessesMetaDataProducer;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
 import com.kingsrook.qqq.backend.core.actions.messaging.SendMessageAction;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.Content;
@@ -40,8 +45,10 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
  ** list (EMAIL_LIST: settings {"addresses": ["ops@example.com", ...]}), sent
  ** through QQQ's SendMessageAction and the configured messaging provider
  ** (SMTP or SES). Plain text plus simple HTML, with a link to change or stop
- ** the emails. Without a messaging provider the channel fails permanently and
- ** says why.
+ ** the emails. When qbit-email is produced in the instance, each recipient gets
+ ** their own message through it (template alerts_alert, NOTIFICATION); the
+ ** messaging provider is then not needed. Without either, the channel fails
+ ** permanently and says why.
  *******************************************************************************/
 public class EmailChannel implements AlertChannelInterface
 {
@@ -79,13 +86,16 @@ public class EmailChannel implements AlertChannelInterface
    public List<String> validate(QRecord channel, AlertSecretResolver secrets)
    {
       List<String> problems = new ArrayList<>();
-      if(!StringUtils.hasContent(config.getMessagingProviderName()))
+      if(!AlertsEmail.isActive())
       {
-         problems.add("Email is not configured: set messagingProviderName in the Alerts QBit config.");
-      }
-      if(!StringUtils.hasContent(config.getFromAddress()))
-      {
-         problems.add("Email has no From address: set fromAddress in the Alerts QBit config.");
+         if(!StringUtils.hasContent(config.getMessagingProviderName()))
+         {
+            problems.add("Email is not configured: set messagingProviderName in the Alerts QBit config.");
+         }
+         if(!StringUtils.hasContent(config.getFromAddress()))
+         {
+            problems.add("Email has no From address: set fromAddress in the Alerts QBit config.");
+         }
       }
       if(ChannelType.EMAIL_LIST.name().equals(type) && listAddresses(channel).isEmpty())
       {
@@ -114,6 +124,11 @@ public class EmailChannel implements AlertChannelInterface
          return (DeliveryResult.failed("No email address."));
       }
 
+      if(AlertsEmail.isActive())
+      {
+         return (deliverThroughEmailQBit(message, addresses));
+      }
+
       try
       {
          MultiParty to = new MultiParty();
@@ -133,6 +148,75 @@ public class EmailChannel implements AlertChannelInterface
       catch(Exception e)
       {
          return (DeliveryResult.retry(AlertRedactor.redact(e.getClass().getSimpleName() + ": " + e.getMessage())));
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** One qbit-email message per address. A retry is safe: the idempotency key
+    ** makes the already-queued ones DUPLICATE. Refused is permanent;
+    ** suppressed (the person unsubscribed) is reported, not retried.
+    *******************************************************************************/
+   private DeliveryResult deliverThroughEmailQBit(AlertMessage message, List<String> addresses)
+   {
+      List<Map<String, Serializable>> items = new ArrayList<>();
+      for(AlertMessage.Entry entry : message.entries())
+      {
+         Map<String, Serializable> item = new LinkedHashMap<>();
+         put(item, "title", entry.title());
+         put(item, "severity", entry.severity());
+         put(item, "typeLabel", entry.typeLabel());
+         put(item, "group", entry.group());
+         put(item, "summary", entry.summary());
+         put(item, "itemCount", entry.itemCount());
+         items.add(item);
+      }
+      String  base       = StringUtils.hasContent(config.getPublicBaseUrl()) ? config.getPublicBaseUrl().replaceAll("/+$", "") : "";
+      Instant now        = config.getRuntime() == null ? Instant.now() : config.getRuntime().now();
+      String  process    = AlertsProcessesMetaDataProducer.DELIVER_NOTIFICATIONS;
+      String  problem    = null;
+      int     suppressed = 0;
+      Integer firstId    = null;
+      try
+      {
+         for(String address : addresses)
+         {
+            AlertsEmailSender.Result result = AlertsEmailSender.sendAlert(address, process, message.subject(), message.severity(), message.kind(), items, message.link(),
+               base + "/app/alerts_subscription", message.alertIds(), now);
+            firstId = firstId == null ? result.messageId() : firstId;
+            if(result.status() == AlertsEmailSender.Status.REFUSED && problem == null)
+            {
+               problem = AlertRedactor.redact(result.detail());
+            }
+            suppressed += result.status() == AlertsEmailSender.Status.SUPPRESSED ? 1 : 0;
+         }
+      }
+      catch(Exception e)
+      {
+         return (DeliveryResult.retry(AlertRedactor.redact(e.getClass().getSimpleName() + ": " + e.getMessage())));
+      }
+      if(problem != null)
+      {
+         return (DeliveryResult.failed("Email was refused: " + problem));
+      }
+      if(suppressed == addresses.size())
+      {
+         return (DeliveryResult.failed("Email was suppressed: the recipient has unsubscribed."));
+      }
+      return (DeliveryResult.sent(firstId == null ? null : String.valueOf(firstId)));
+   }
+
+
+
+   /*******************************************************************************
+    ** Put a value in a template item unless it is null.
+    *******************************************************************************/
+   private static void put(Map<String, Serializable> item, String name, Serializable value)
+   {
+      if(value != null)
+      {
+         item.put(name, value);
       }
    }
 
