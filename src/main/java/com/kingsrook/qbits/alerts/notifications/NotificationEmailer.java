@@ -29,11 +29,14 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.delivery.AlertRedactor;
 import com.kingsrook.qbits.alerts.email.AlertsEmail;
 import com.kingsrook.qbits.alerts.email.AlertsEmailSender;
+import com.kingsrook.qbits.alerts.engine.AlertTiming;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.metadata.AlertsProcessesMetaDataProducer;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
@@ -43,6 +46,7 @@ import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EmailMode;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EmailStatus;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
 import com.kingsrook.qqq.backend.core.actions.messaging.SendMessageAction;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
 import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
 import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -67,6 +71,11 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  ** - IMMEDIATE: one email per notification at or above the minimum severity;
  ** - DAILY_DIGEST: one email at the user's digest hour (in their time zone,
  **   from My Alert Settings) listing the day's unread notifications.
+ ** A recipient with email status REQUESTED (a per-notification opt-in, e.g. by
+ ** a job) is emailed immediately without a standing category preference. It
+ ** still honours the category's email minimum severity when one is set, the
+ ** user's pause (SECURITY bypasses) and quiet hours (held, not dropped), is
+ ** skipped without a known address, and is only eligible for a day.
  ** Sent through qbit-email when it is produced in the instance (one message
  ** per recipient; templates alerts_notification and alerts_digest,
  ** NOTIFICATION), else through core SendMessageAction. Inert without either
@@ -137,12 +146,19 @@ public class NotificationEmailer
          {
             preferences.computeIfAbsent(preference.getValueString("userId"), k -> new HashMap<>()).put(preference.getValueString("category"), preference);
          }
-         if(preferences.isEmpty())
+
+         QQueryFilter eligible = new QQueryFilter().withBooleanOperator(QQueryFilter.BooleanOperator.OR)
+            .withSubFilter(new QQueryFilter()
+               .withCriteria("emailStatus", QCriteriaOperator.EQUALS, EmailStatus.REQUESTED.name())
+               .withCriteria("deliveredAt", QCriteriaOperator.GREATER_THAN_OR_EQUALS, now.minus(1, ChronoUnit.DAYS)));
+         if(!preferences.isEmpty())
          {
-            return (new Result(0, 0, 0, 0));
+            eligible.withSubFilter(new QQueryFilter()
+               .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
+               .withCriteria("emailStatus", QCriteriaOperator.IN, List.of(EmailStatus.NONE.name(), EmailStatus.PENDING.name())));
          }
 
-         Map<String, QRecord> settings = userSettings(preferences.keySet());
+         Map<String, QRecord> settings = new HashMap<>();
          int sent = 0;
          int skipped = 0;
          int failed = 0;
@@ -151,8 +167,7 @@ public class NotificationEmailer
          while(true)
          {
             List<QRecord> recipients = AlertsDb.query(AlertsNotificationRecipient.TABLE_NAME, new QQueryFilter()
-               .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(preferences.keySet()))
-               .withCriteria("emailStatus", QCriteriaOperator.IN, List.of(EmailStatus.NONE.name(), EmailStatus.PENDING.name()))
+               .withSubFilter(eligible)
                .withCriteria("id", QCriteriaOperator.GREATER_THAN, afterId)
                .withOrderBy(new QFilterOrderBy("id", true)).withLimit(SCAN));
             if(recipients.isEmpty())
@@ -161,25 +176,43 @@ public class NotificationEmailer
             }
             afterId = recipients.get(recipients.size() - 1).getValueInteger("id");
             Map<Integer, QRecord> notifications = notifications(recipients, now);
+            Set<String> pageUsers = recipients.stream().map(recipient -> recipient.getValueString("userId")).collect(Collectors.toSet());
+            settings.putAll(userSettings(pageUsers));
+            Map<String, Map<String, QRecord>> requestedPreferences = new HashMap<>();
+            for(QRecord preference : AlertsDb.query(AlertsNotificationPreference.TABLE_NAME, new QQueryFilter()
+               .withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(pageUsers))))
+            {
+               requestedPreferences.computeIfAbsent(preference.getValueString("userId"), k -> new HashMap<>()).put(preference.getValueString("category"), preference);
+            }
             for(QRecord recipient : recipients)
             {
                QRecord notification = notifications.get(recipient.getValueInteger("notificationId"));
                String  userId       = recipient.getValueString("userId");
-               QRecord preference   = notification == null ? null : preferences.get(userId).get(notification.getValueString("category"));
-               if(notification == null || preference == null || NotificationCategory.ALERT.name().equals(notification.getValueString("category"))
-                  || !atLeast(notification.getValueString("severity"), preference.getValueString("emailMinSeverity")))
+               boolean requested    = EmailStatus.REQUESTED.name().equals(recipient.getValueString("emailStatus"));
+               String  category     = notification == null ? null : notification.getValueString("category");
+               QRecord preference   = category == null ? null : (requested ? requestedPreferences : preferences).getOrDefault(userId, Map.of()).get(category);
+               QRecord setting      = settings.get(userId);
+               if(notification == null || NotificationCategory.ALERT.name().equals(category)
+                  || (requested ? (!StringUtils.hasContent(address(setting)) || (preference != null && StringUtils.hasContent(preference.getValueString("emailMinSeverity"))
+                  && !atLeast(notification.getValueString("severity"), preference.getValueString("emailMinSeverity"))))
+                  : (preference == null || !atLeast(notification.getValueString("severity"), preference.getValueString("emailMinSeverity")))))
                {
                   mark(recipient, EmailStatus.SKIPPED, null);
                   skipped++;
                }
-               else if(!NotificationCategory.SECURITY.name().equals(notification.getValueString("category"))
-                  && settings.get(userId) != null && settings.get(userId).getValueInstant("pausedUntil") != null
-                  && settings.get(userId).getValueInstant("pausedUntil").isAfter(now))
+               else if(!NotificationCategory.SECURITY.name().equals(category)
+                  && setting != null && setting.getValueInstant("pausedUntil") != null
+                  && setting.getValueInstant("pausedUntil").isAfter(now))
                {
                   // Leave the recipient pending so a later run can deliver it.
                   skipped++;
                }
-               else if(EmailMode.IMMEDIATE.name().equals(preference.getValueString("emailMode")))
+               else if(requested && AlertTiming.isQuiet(setting, AlertSeverity.fromLabel(notification.getValueString("severity"), AlertSeverity.WARNING), now))
+               {
+                  // Quiet hours hold a requested email; it stays REQUESTED until the window ends or it ages out.
+                  skipped++;
+               }
+               else if(requested || EmailMode.IMMEDIATE.name().equals(preference.getValueString("emailMode")))
                {
                   EmailStatus status = sendImmediate(address(settings.get(userId)), notification);
                   mark(recipient, status, status == EmailStatus.SENT ? now : null);

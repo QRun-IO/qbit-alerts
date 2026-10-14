@@ -290,7 +290,7 @@ public final class AlertsPossibleValues
     *******************************************************************************/
    public enum EmailStatus
    {
-      NONE, PENDING, SENT, DIGESTED, SKIPPED, FAILED
+      NONE, PENDING, REQUESTED, SENT, DIGESTED, SKIPPED, FAILED
    }
 
 
