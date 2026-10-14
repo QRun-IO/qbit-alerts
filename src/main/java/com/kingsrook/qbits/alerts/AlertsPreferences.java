@@ -17,6 +17,8 @@
 package com.kingsrook.qbits.alerts;
 
 
+import java.io.Serializable;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
@@ -26,7 +28,12 @@ import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ScopeType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.SubscriberType;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
+import com.kingsrook.qqq.backend.core.actions.tables.DeleteAction;
+import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
+import com.kingsrook.qqq.backend.core.model.actions.tables.delete.DeleteInput;
+import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
+import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
 
@@ -42,6 +49,9 @@ import com.kingsrook.qqq.backend.core.model.session.QSession;
  *******************************************************************************/
 public final class AlertsPreferences
 {
+   /** marks the bootstrap rule's subscription (createdByUserId). */
+   static final String BOOTSTRAP_CREATOR = "alerts (bootstrap rule)";
+
    private static final Set<String> ENSURED = ConcurrentHashMap.newKeySet();
 
 
@@ -69,36 +79,72 @@ public final class AlertsPreferences
 
       boolean admin    = session.hasPermission(AlertsQBitConfig.PERMISSION_ADMIN);
       String  fullName = session.getUser() == null ? null : session.getUser().getFullName();
-      runtime.asSystem(() ->
-      {
-         if(AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId)) == null)
-         {
-            AlertsDb.insert(AlertsUserPreference.TABLE_NAME, new QRecord()
-               .withValue("userId", userId)
-               .withValue("userLabel", fullName == null ? userId : fullName)
-               .withValue("inAppEnabled", true)
-               .withValue("emailEnabled", true)
-               .withValue("quietBypassSeverity", "CRITICAL")
-               .withValue("digestHour", 8));
-         }
 
-         if(admin && runtime.getConfig().getBootstrapMinSeverity() != null && AlertsDb.first(AlertsSubscription.TABLE_NAME, AlertsDb.eq("userId", userId)) == null)
+      ////////////////////////////////////////////////////////////////////////////
+      // A page load fires the home widgets and the bell together, so first     //
+      // calls for one user race. Serialize them in this JVM; across replicas,  //
+      // the clean-up below keeps one bootstrap subscription (the lowest id).   //
+      ////////////////////////////////////////////////////////////////////////////
+      synchronized(AlertsPreferences.class)
+      {
+         if(ENSURED.contains(userId))
          {
-            QRecord inApp = runtime.getChannels().defaultChannel(ChannelType.IN_APP);
-            AlertsDb.insert(AlertsSubscription.TABLE_NAME, new QRecord()
-               .withValue("subscriberType", SubscriberType.USER.name())
-               .withValue("userId", userId)
-               .withValue("scopeType", ScopeType.ALL.name())
-               .withValue("minSeverity", runtime.getConfig().getBootstrapMinSeverity().name())
-               .withValue("events", "RAISED,ESCALATED,REMINDER,RESOLVED")
-               .withValue("deliveryMode", DeliveryMode.IMMEDIATE.name())
-               .withValue("channelOverrideIds", String.valueOf(inApp.getValue("id")))
-               .withValue("enabled", true)
-               .withValue("createdByUserId", "alerts (bootstrap rule)"));
+            return;
          }
-         return (null);
-      });
-      ENSURED.add(userId);
+         runtime.asSystem(() ->
+         {
+            if(AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId)) == null)
+            {
+               AlertsDb.insert(AlertsUserPreference.TABLE_NAME, new QRecord()
+                  .withValue("userId", userId)
+                  .withValue("userLabel", fullName == null ? userId : fullName)
+                  .withValue("inAppEnabled", true)
+                  .withValue("emailEnabled", true)
+                  .withValue("quietBypassSeverity", "CRITICAL")
+                  .withValue("digestHour", 8));
+            }
+
+            if(admin && runtime.getConfig().getBootstrapMinSeverity() != null && AlertsDb.first(AlertsSubscription.TABLE_NAME, AlertsDb.eq("userId", userId)) == null)
+            {
+               QRecord inApp = runtime.getChannels().defaultChannel(ChannelType.IN_APP);
+               AlertsDb.insert(AlertsSubscription.TABLE_NAME, new QRecord()
+                  .withValue("subscriberType", SubscriberType.USER.name())
+                  .withValue("userId", userId)
+                  .withValue("scopeType", ScopeType.ALL.name())
+                  .withValue("minSeverity", runtime.getConfig().getBootstrapMinSeverity().name())
+                  .withValue("events", "RAISED,ESCALATED,REMINDER,RESOLVED")
+                  .withValue("deliveryMode", DeliveryMode.IMMEDIATE.name())
+                  .withValue("channelOverrideIds", String.valueOf(inApp.getValue("id")))
+                  .withValue("enabled", true)
+                  .withValue("createdByUserId", BOOTSTRAP_CREATOR));
+            }
+
+            removeDuplicateBootstrapSubscriptions(userId);
+            return (null);
+         });
+         ENSURED.add(userId);
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Keep only the first bootstrap subscription of a user. Two replicas can
+    ** each see no subscription and insert one; every later first call (and the
+    ** losers' own calls) delete the extra copies, so the user is not notified
+    ** twice per alert. Subscriptions a person made are never touched.
+    *******************************************************************************/
+   static void removeDuplicateBootstrapSubscriptions(String userId) throws QException
+   {
+      List<QRecord> bootstrap = AlertsDb.query(AlertsSubscription.TABLE_NAME, AlertsDb.eq("userId", userId)
+         .withCriteria("createdByUserId", QCriteriaOperator.EQUALS, BOOTSTRAP_CREATOR)
+         .withOrderBy(new QFilterOrderBy("id")));
+      if(bootstrap.size() < 2)
+      {
+         return;
+      }
+      List<Serializable> extra = bootstrap.subList(1, bootstrap.size()).stream().map(r -> (Serializable) r.getValue("id")).toList();
+      new DeleteAction().execute(new DeleteInput(AlertsSubscription.TABLE_NAME).withPrimaryKeys(extra).withTransaction(QContext.getQBackendTransaction()));
    }
 
 
