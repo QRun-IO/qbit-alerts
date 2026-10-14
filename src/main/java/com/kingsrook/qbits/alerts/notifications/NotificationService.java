@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
+import com.kingsrook.qbits.alerts.delivery.AlertMessage;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
@@ -377,6 +378,29 @@ public class NotificationService
          AlertsDb.update(AlertsNotificationRecipient.TABLE_NAME, new QRecord().withValue("id", recipient.getValue("id"))
             .withValue("deliveredAt", now).withValue("readAt", null).withValue("dismissedAt", null));
       }
+   }
+
+
+
+   /*******************************************************************************
+    ** One bell notification for a claimed digest, with all its alert links.
+    ** ALERT category keeps the general notification emailer from emailing it.
+    *******************************************************************************/
+   public void deliverDigest(String userId, AlertMessage message, Instant now) throws QException
+   {
+      QRecord existing = AlertsDb.first(AlertsNotification.TABLE_NAME, AlertsDb.eq("sourceKey", message.idempotencyKey()));
+      if(existing != null)
+      {
+         return;
+      }
+      QRecord notification = AlertsDb.insert(AlertsNotification.TABLE_NAME, new QRecord()
+         .withValue("title", message.subject()).withValue("body", message.text()).withValue("severity", message.severity())
+         .withValue("category", NotificationCategory.ALERT.name()).withValue("status", STATUS_SENT)
+         .withValue("sourceName", "alerts").withValue("sourceKey", message.idempotencyKey())
+         .withValue("linkUrl", "/app/" + AlertsAlert.TABLE_NAME).withValue("linkLabel", "Open alerts")
+         .withValue("audienceType", NotificationAudience.Type.USERS.name()).withValue("audienceValue", userId)
+         .withValue("publishAt", now).withValue("sentAt", now).withValue("recipientCount", 1));
+      AlertsDb.insert(AlertsNotificationRecipient.TABLE_NAME, newRecipient(notification.getValueInteger("id"), userId, now));
    }
 
 

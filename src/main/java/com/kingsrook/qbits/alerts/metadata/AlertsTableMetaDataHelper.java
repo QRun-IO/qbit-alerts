@@ -393,11 +393,12 @@ public final class AlertsTableMetaDataHelper
    public static QTableMetaData buildDeliveryTable(AlertsQBitConfig config) throws QException
    {
       QTableMetaData table = base(config, AlertsDelivery.TABLE_NAME, "Delivery Log", "send", AlertsDelivery.class)
+         .withUniqueKey(new UniqueKey("digestClaimKey"))
          .withRecordLabelFormat("%s %s")
          .withRecordLabelFields("kind", "recipientLabel")
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "alertId", "kind", "status", "channelId", "recipientLabel")))
          .withSection(new QFieldSection("delivery", "Delivery", new QIcon("send"), Tier.T2, List.of("suppressedReason", "attempts", "nextAttemptAt", "sentAt", "lastError", "providerMessageId")))
-         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("recipientUserId", "subscriptionId", "alertEventId", "claimedUntil", "createDate", "modifyDate")));
+         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("recipientUserId", "subscriptionId", "alertEventId", "digestKey", "digestClaimKey", "digestLastItemId", "claimedUntil", "createDate", "modifyDate")));
       return (readOnly(table));
    }
 

@@ -189,6 +189,18 @@ How each one sends:
 - **Responses:** 2xx is sent. 408, 425, 429, 5xx and network errors are retried. Any other 4xx fails permanently.
 - **URLs** must be https, unless the channel's settings say `"allowInsecureHttp": true`, which is meant for local receivers.
 
+## Quiet hours, pause and alert digests
+
+My Alert Settings applies to user subscriptions, explicit and host-resolved team members, and record followers. Pause suppresses personal push channels (email, email lists and other non-IN_APP channels) until `pausedUntil`. Quiet hours also apply only to push channels; neither setting suppresses the in-app bell. Quiet hours use `timeZone` (UTC when missing or invalid), start inclusively and end exclusively. For a window such as 22:00-07:00, `quietDays` names the day the window starts: Monday includes Tuesday morning. Empty days mean every day; use comma-separated ISO day numbers (1=Monday), full English names or MON/TUE/etc. Missing, invalid or equal start/end times disable quiet hours. Severities at or above `quietBypassSeverity` (CRITICAL by default) bypass quiet hours, but never pause. Channel subscriptions remain independent of these personal settings; their digest cadence still applies, using UTC and 08:00 for daily delivery. Suppressions are recorded in the Delivery Log; channel severity filtering now records `MIN_SEVERITY` too.
+
+Subscriptions with `DIGEST_HOURLY` or `DIGEST_DAILY` queue `DIGEST` delivery rows with status `PENDING`, a window key and a due time. Immediate delivery skips them. REMINDER and ESCALATED deliveries are always immediate, even for digest subscriptions, and still respect pause and quiet hours on push channels. The hidden `alertsSendDigests` process runs hourly on `schedulerName`; without a scheduler it can be invoked explicitly. Hourly windows close on the user's local hour. Daily windows close at their `digestHour` (08:00 by default), using local calendar days across daylight saving changes. A late scheduler catches up completed windows. Settings changes affect newly queued windows; the original boundary stays with existing items.
+
+Each user/channel/window produces one message with the window's open alerts ordered by severity, new alerts and resolved alerts, each linked to its record. Multiple events for an alert produce one entry per applicable section. In-app gets one notification; email uses the existing `alerts_digest` template through qbit-email's public API, or the configured messaging provider. Pause and quiet hours are checked again for push channels at dispatch; visibility is checked for every channel. No empty message is sent. There is no `DIGESTS` feature switch in this configuration.
+
+Changeset 27 adds the digest fields and a unique dispatch claim to `alerts_delivery`. The base key is `alerts:digest:<user>:<window start>`; alert digests append `:<delivery mode>:channel:<channel id>` to distinguish overlapping hourly/daily windows, channels and the existing notification digests. Channel-only digests use `alerts:channel-digest:<channel>:<window start>:<delivery mode>:channel:<channel id>`. Email keys also append a recipient hash so email-list addresses each receive their copy. A persisted claim prevents concurrent or repeated runs from sending twice. Its item cutoff freezes the contents; late items for a claimed window are logged as `DUPLICATE`, not reported as sent. Included items become `SENT`, or `FAILED` with the error. Digest transport failures are not automatically retried; an interrupted claim fails after ten minutes rather than risking another send through a provider without idempotency support. The Delivery Log retains that uncertainty for review.
+
+Digest queries and rendering are bounded: up to 100 candidate items are scanned per run, and a message accepts at most 500 queued events. Larger windows fail visibly with guidance to narrow the subscription or use hourly digests; they are never sent partially. Digest messages use MINIMAL detail and contain a snapshot of content visible at dispatch. Protected alerts require verifiable user visibility even for an in-app digest.
+
 ## Email through qbit-email
 
 When qbit-email is produced in the same instance (and on the classpath; it is an optional dependency), alert channel emails, notification emails and daily digests go through the published `com.kingsrook.qbits.email.api.EmailApi` in qbit-email `0.1.0-RC.2` instead of core `SendMessageAction`. Template registration, sends and installation detection use only the public API; templates, categories, idempotency keys, linked records and outcome mapping are unchanged:
@@ -246,12 +258,12 @@ assigned automatically. The Resolve action continues to record MANUAL.
 
 ## Known limits (v1)
 
-- **Claims are best-effort.** Delivery and monitor claims use a lease, not an atomic conditional update. With several scheduler nodes, run the scheduled processes on one node, or accept at-least-once delivery.
+- **Claims are best-effort.** Delivery and monitor claims use a lease, not an atomic conditional update. With several scheduler nodes, run the delivery and monitor processes on one node, or accept at-least-once delivery. Digest dispatch instead uses a unique database claim as described above.
 - **Email threading headers.** `Message-ID` and `In-Reply-To` need core messaging support for custom headers, so they are not set.
-- **Recipient visibility.** It is checked through `createAutomatedSessionForUser`. If a host's authentication module can't build a session with permissions for a user, email goes out only for alerts that have no visibility permission and no subject table. In-app delivery is always filtered by the record locks.
+- **Recipient visibility.** It is checked through `createAutomatedSessionForUser`. If a host's authentication module can't build a session with permissions for a user, email goes out only for alerts that have no visibility permission and no subject table. Individual in-app alerts are filtered by record locks. Digest snapshots are checked before dispatch.
 - **Outbound HTTP** blocks plain http, but has no full SSRF guard. Channels are admin-only. Core's `SafeHttpClient` (QRun-IO/qqq#1109) replaces the client when it is released.
 - **Alertmanager sink:** open alerts are sent with an `endsAt` a week out, not re-posted.
-- **Not built yet:** digests, quiet hours, Micrometer metrics, ROLE and IdP-group team resolvers, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
+- **Not built yet:** Micrometer metrics, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
 
 ## Build
 

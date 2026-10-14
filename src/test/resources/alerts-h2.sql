@@ -299,8 +299,13 @@ CREATE TABLE IF NOT EXISTS alerts_delivery (
    last_error VARCHAR(2000),
    create_date TIMESTAMP,
    modify_date TIMESTAMP,
+   digest_key VARCHAR(200),
+   digest_claim_key VARCHAR(240),
+   digest_last_item_id INTEGER,
+   CONSTRAINT uq_alerts_delivery_digest_claim UNIQUE (digest_claim_key),
    CONSTRAINT pk_alerts_delivery PRIMARY KEY (id)
 );
+CREATE INDEX IF NOT EXISTS ix_alerts_delivery_digest ON alerts_delivery (digest_key, channel_id, status);
 CREATE INDEX IF NOT EXISTS ix_alerts_delivery_status_next_attempt_at ON alerts_delivery (status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS ix_alerts_delivery_alert_id ON alerts_delivery (alert_id);
 CREATE INDEX IF NOT EXISTS ix_alerts_delivery_channel_id_status ON alerts_delivery (channel_id, status);

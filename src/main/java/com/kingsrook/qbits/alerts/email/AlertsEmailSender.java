@@ -200,6 +200,22 @@ public final class AlertsEmailSender
 
 
    /*******************************************************************************
+    ** An alert subscription digest uses the shared digest template and links
+    ** to an alert. Its channel-qualified key cannot collide with notification
+    ** digests or another delivery channel.
+    *******************************************************************************/
+   public static Result sendAlertDigest(String to, String process, String key, Integer alertId, int count, List<Map<String, Serializable>> items, String settingsUrl) throws QException
+   {
+      ensure(TEMPLATE_DIGEST);
+      EmailApiRequest request = base(to, process, key + ":recipient:" + hash(to)).withTemplateName(TEMPLATE_DIGEST)
+         .withVariable("count", count).withVariable("items", (Serializable) items).withLinkedRecord(AlertsAlert.TABLE_NAME, alertId);
+      withUrl(request, "settings_url", settingsUrl);
+      return (result(EmailApi.send(request)));
+   }
+
+
+
+   /*******************************************************************************
     ** The parts every message has: one recipient, the sender and the key.
     *******************************************************************************/
    private static EmailApiRequest base(String to, String process, String idempotencyKey)

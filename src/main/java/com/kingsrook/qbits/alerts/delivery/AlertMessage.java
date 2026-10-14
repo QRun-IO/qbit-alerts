@@ -34,9 +34,20 @@ import java.util.List;
  ** @param entries   one structured entry per alert, for channels that send
  **                  one event per alert (PagerDuty, Alertmanager, webhooks);
  **                  already redacted and capped by the detail level
+ ** @param idempotencyKey durable digest dispatch key, null for immediate messages
  *******************************************************************************/
-public record AlertMessage(String subject, String text, String html, String severity, String kind, List<Integer> alertIds, String link, List<Entry> entries)
+public record AlertMessage(String subject, String text, String html, String severity, String kind, List<Integer> alertIds, String link, List<Entry> entries, String idempotencyKey)
 {
+   /*******************************************************************************
+    ** A message without a durable dispatch key.
+    *******************************************************************************/
+   public AlertMessage(String subject, String text, String html, String severity, String kind, List<Integer> alertIds, String link, List<Entry> entries)
+   {
+      this(subject, text, html, severity, kind, alertIds, link, entries, null);
+   }
+
+
+
    /*******************************************************************************
     ** A message without structured entries.
     *******************************************************************************/

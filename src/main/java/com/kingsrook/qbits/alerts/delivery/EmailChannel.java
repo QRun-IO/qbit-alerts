@@ -182,7 +182,10 @@ public class EmailChannel implements AlertChannelInterface
       {
          for(String address : addresses)
          {
-            AlertsEmailSender.Result result = AlertsEmailSender.sendAlert(address, process, message.subject(), message.severity(), message.kind(), items, message.link(),
+            AlertsEmailSender.Result result = "DIGEST".equals(message.kind())
+               ? AlertsEmailSender.sendAlertDigest(address, AlertsProcessesMetaDataProducer.SEND_DIGESTS, message.idempotencyKey(), message.alertIds().get(0), message.alertIds().size(),
+                  digestItems(message), base + "/app/alerts_subscription")
+               : AlertsEmailSender.sendAlert(address, process, message.subject(), message.severity(), message.kind(), items, message.link(),
                base + "/app/alerts_subscription", message.alertIds(), now);
             firstId = firstId == null ? result.messageId() : firstId;
             if(result.status() == AlertsEmailSender.Status.REFUSED && problem == null)
@@ -205,6 +208,21 @@ public class EmailChannel implements AlertChannelInterface
          return (DeliveryResult.failed("Email was suppressed: the recipient has unsubscribed."));
       }
       return (DeliveryResult.sent(firstId == null ? null : String.valueOf(firstId)));
+   }
+
+
+
+   /*******************************************************************************
+    ** Keep the same sectioned, redacted content in the shared digest template.
+    *******************************************************************************/
+   private static List<Map<String, Serializable>> digestItems(AlertMessage message)
+   {
+      Map<String, Serializable> item = new LinkedHashMap<>();
+      item.put("title", message.subject());
+      item.put("body", message.text());
+      item.put("link", message.link());
+      item.put("linkLabel", "Open alerts");
+      return (List.of(item));
    }
 
 

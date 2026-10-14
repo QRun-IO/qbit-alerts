@@ -168,6 +168,45 @@ public final class AlertMessageRenderer
 
 
    /*******************************************************************************
+    ** A bounded digest: open alerts by severity, plus new and resolved events
+    ** in this window. Every entry has its own link and uses the normal redactor.
+    *******************************************************************************/
+   public static AlertMessage renderDigest(List<Item> items, String publicBaseUrl, Instant now, String key)
+   {
+      List<Item> ordered = items.stream().sorted((a, b) -> AlertSeverity.fromLabel(b.alert().getValueString("severity"), AlertSeverity.WARNING)
+         .compareTo(AlertSeverity.fromLabel(a.alert().getValueString("severity"), AlertSeverity.WARNING))).toList();
+      AlertMessage base = render(ordered, DeliveryKind.DIGEST, publicBaseUrl, now);
+      StringBuilder text = new StringBuilder();
+      StringBuilder html = new StringBuilder();
+      for(String section : List.of("Open alerts by severity", "New since the last digest", "Resolved since the last digest"))
+      {
+         text.append(section).append('\n');
+         html.append("<h3>").append(section).append("</h3>");
+         for(int i = 0; i < ordered.size(); i++)
+         {
+            QRecord alert = ordered.get(i).alert();
+            boolean included = switch(section)
+            {
+               case "Open alerts by severity" -> !"RESOLVED".equals(alert.getValueString("status"));
+               case "New since the last digest" -> Boolean.TRUE.equals(alert.getValueBoolean("digestNew"));
+               default -> Boolean.TRUE.equals(alert.getValueBoolean("digestResolved"));
+            };
+            if(included)
+            {
+               AlertMessage.Entry entry = base.entries().get(i);
+               String line = "[" + entry.severity() + "] " + entry.title();
+               text.append(line).append(" - [Open alert](").append(entry.link()).append(")\n");
+               html.append("<p><a href=\"").append(HomeHtml.escape(entry.link())).append("\">").append(HomeHtml.escape(line)).append("</a></p>");
+            }
+         }
+         text.append('\n');
+      }
+      return (new AlertMessage("Alert digest: " + items.size() + " alerts", text.toString(), html.toString(), base.severity(), "DIGEST", base.alertIds(), base.link(), base.entries(), key));
+   }
+
+
+
+   /*******************************************************************************
     ** The group all items share, or null.
     *******************************************************************************/
    private static String commonGroup(List<Item> items)

@@ -19,6 +19,10 @@ package com.kingsrook.qbits.alerts;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -201,8 +205,8 @@ class AlertsQBitProducerTest extends BaseAlertsTest
          for(QFieldMetaData field : table.getFields().values())
          {
             String column = QInstanceEnricher.inferBackendName(field.getName());
-            assertThat(body.contains("   " + column + " ") || changelog.contains("ALTER TABLE " + created + " ADD COLUMN " + column + " "))
-               .as(tableName + "." + field.getName()).isTrue();
+            boolean declared = body.contains("   " + column + " ") || changelog.contains("ALTER TABLE " + tableName + " ADD COLUMN " + column + " ");
+            assertThat(declared).as(tableName + "." + field.getName() + " is created or added by a migration").isTrue();
          }
       }
    }
@@ -262,6 +266,44 @@ class AlertsQBitProducerTest extends BaseAlertsTest
             assertThat(result.getString(1)).isEqualTo(key);
             assertThat(result.getString(2)).isEqualTo("123");
          }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** The real migration SQL builds a fresh schema and guards an already
+    ** upgraded schema. Its unique claim is enforced by the database itself.
+    *******************************************************************************/
+   @Test
+   void testDigestMigration() throws Exception
+   {
+      String changelog;
+      try(InputStream in = getClass().getClassLoader().getResourceAsStream("db/liquibase/qbit-alerts/alerts.changelog.sql"))
+      {
+         changelog = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+      }
+      String sql = changelog.lines().filter(line -> !line.stripLeading().startsWith("--")).collect(Collectors.joining("\n"));
+      try(Connection connection = DriverManager.getConnection("jdbc:h2:mem:alerts_digest_migration"); Statement statement = connection.createStatement())
+      {
+         for(String command : sql.split(";"))
+         {
+            if(!command.isBlank())
+            {
+               statement.execute(command);
+            }
+         }
+         String guard = changelog.substring(changelog.indexOf("-- changeset qbit-alerts:27")).lines()
+            .filter(line -> line.startsWith("-- precondition-sql-check")).findFirst().orElseThrow();
+         try(ResultSet result = statement.executeQuery(guard.substring(guard.indexOf("SELECT"))))
+         {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getInt(1)).as("an upgraded database skips changeset 27").isEqualTo(1);
+         }
+         statement.executeUpdate("INSERT INTO alerts_delivery (kind, status, digest_key, digest_claim_key, digest_last_item_id) VALUES ('DIGEST', 'SENDING', 'window', 'claim', 12)");
+         assertThatThrownBy(() -> statement.executeUpdate("INSERT INTO alerts_delivery (digest_claim_key) VALUES ('claim')"))
+            .isInstanceOf(java.sql.SQLException.class);
+         statement.executeUpdate("INSERT INTO alerts_delivery (digest_key) VALUES ('window'), ('window')");
       }
    }
 

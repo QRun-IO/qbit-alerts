@@ -102,6 +102,7 @@ public class DeliveryWorker
          Instant now = runtime.now();
          List<QRecord> due = AlertsDb.query(AlertsDelivery.TABLE_NAME, new QQueryFilter()
             .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.PENDING.name(), DeliveryStatus.RETRYING.name()))
+            .withCriteria("kind", QCriteriaOperator.NOT_EQUALS, DeliveryKind.DIGEST.name())
             .withCriteria("nextAttemptAt", QCriteriaOperator.LESS_THAN_OR_EQUALS, now)
             .withOrderBy(new QFilterOrderBy("id"))
             .withLimit(BATCH_LIMIT));

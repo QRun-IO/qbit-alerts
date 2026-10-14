@@ -80,7 +80,7 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  ** 2. expand team subscriptions to their members; keep channel subscriptions;
  ** 3. check each person can see the alert (section 7.2);
  ** 4. apply, in order: the type's notify switch, mutes, flapping, the user's
- **    pause, channel enabled / minimum severity / address / rate limit, and a
+ **    pause, quiet hours, channel minimum severity / enabled / address / rate limit, and a
  **    10-minute duplicate check;
  ** 5. write an alerts_delivery row per destination (SUPPRESSED rows keep
  **    their reason, so "why didn't I get it?" is answered by a table), and an
@@ -101,7 +101,7 @@ public class AlertRouter
    /*******************************************************************************
     ** One destination for one notification.
     *******************************************************************************/
-   record Destination(String userId, QRecord channel, Integer subscriptionId, String minSeverity, QRecord preference)
+   record Destination(String userId, QRecord channel, Integer subscriptionId, String minSeverity, QRecord preference, String deliveryMode)
    {
    }
 
@@ -182,7 +182,7 @@ public class AlertRouter
          if(channel != null)
          {
             deliver(alert, EventType.ESCALATED, eventId, DeliveryKind.ESCALATED,
-               List.of(new Destination(null, channel, null, null, null)));
+               List.of(new Destination(null, channel, null, null, null, "IMMEDIATE")));
          }
       }
       else if(SubscriberType.USER.name().equals(targetType))
@@ -225,7 +225,7 @@ public class AlertRouter
       for(QRecord channel : userChannels(null, preference))
       {
          deliver(alert, EventType.ESCALATED, eventId, DeliveryKind.ESCALATED,
-            List.of(new Destination(userId, channel, null, null, preference)));
+            List.of(new Destination(userId, channel, null, null, preference, "IMMEDIATE")));
       }
    }
 
@@ -259,6 +259,8 @@ public class AlertRouter
       int                  queued        = 0;
       for(Destination destination : destinations)
       {
+         boolean digest = kind != DeliveryKind.REMINDER && kind != DeliveryKind.ESCALATED
+            && List.of("DIGEST_HOURLY", "DIGEST_DAILY").contains(destination.deliveryMode() == null ? "IMMEDIATE" : destination.deliveryMode());
          SuppressedReason reason = null;
          String           channelType = destination.channel().getValueString("channelType");
          boolean          inApp       = ChannelType.IN_APP.name().equals(channelType);
@@ -275,10 +277,6 @@ public class AlertRouter
             continue;
          }
          AlertSeverity channelMin = AlertSeverity.fromLabel(destination.channel().getValueString("minSeverity"), null);
-         if(channelMin != null && !severity.isAtLeast(channelMin) && !inApp)
-         {
-            continue;
-         }
 
          if(silent)
          {
@@ -301,6 +299,14 @@ public class AlertRouter
          {
             reason = SuppressedReason.USER_PAUSED;
          }
+         else if(destination.userId() != null && !inApp && AlertTiming.isQuiet(destination.preference(), severity, now))
+         {
+            reason = SuppressedReason.QUIET_HOURS;
+         }
+         else if(channelMin != null && !severity.isAtLeast(channelMin) && !inApp)
+         {
+            reason = SuppressedReason.MIN_SEVERITY;
+         }
          else if(Boolean.FALSE.equals(destination.channel().getValueBoolean("enabled")))
          {
             reason = SuppressedReason.CHANNEL_DISABLED;
@@ -313,7 +319,7 @@ public class AlertRouter
          {
             reason = SuppressedReason.RATE_LIMITED;
          }
-         else if(kind != DeliveryKind.REMINDER && isDuplicate(alert, destination, kind, eventId, now))
+         else if(kind != DeliveryKind.REMINDER && isDuplicate(alert, destination, digest ? DeliveryKind.DIGEST : kind, eventId, now))
          {
             reason = SuppressedReason.DUPLICATE;
          }
@@ -332,6 +338,15 @@ public class AlertRouter
          {
             notification.setValue("status", DeliveryStatus.SUPPRESSED.name());
             notification.setValue("suppressedReason", reason.name());
+            AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
+         }
+         else if(digest)
+         {
+            Instant end = AlertTiming.digestEnd(destination.deliveryMode(), destination.preference(), now);
+            Instant start = AlertTiming.digestStart(destination.deliveryMode(), destination.preference(), end);
+            String recipientKey = destination.userId() == null ? "alerts:channel-digest:" + destination.channel().getValue("id") : "alerts:digest:" + destination.userId();
+            notification.withValue("kind", DeliveryKind.DIGEST.name()).withValue("status", DeliveryStatus.PENDING.name())
+               .withValue("digestKey", recipientKey + ":" + start + ":" + destination.deliveryMode()).withValue("nextAttemptAt", end);
             AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
          }
          else if(inApp)
@@ -422,7 +437,7 @@ public class AlertRouter
             QRecord channel = AlertsDb.byId(AlertsChannel.TABLE_NAME, subscription.getValue("channelId"));
             if(channel != null)
             {
-               destinations.putIfAbsent("channel:" + channel.getValue("id"), new Destination(null, channel, subscriptionId, minName, null));
+               destinations.putIfAbsent("channel:" + channel.getValue("id"), new Destination(null, channel, subscriptionId, minName, null, subscription.getValueString("deliveryMode")));
             }
             continue;
          }
@@ -446,7 +461,7 @@ public class AlertRouter
             QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
             for(QRecord channel : userChannels(subscription, preference))
             {
-               destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, subscriptionId, minName, preference));
+               destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, subscriptionId, minName, preference, subscription.getValueString("deliveryMode")));
             }
          }
       }
@@ -464,7 +479,7 @@ public class AlertRouter
             QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
             for(QRecord channel : userChannels(null, preference))
             {
-               destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, null, null, preference));
+               destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, null, null, preference, "IMMEDIATE"));
             }
          }
       }
@@ -688,6 +703,16 @@ public class AlertRouter
 
 
    /*******************************************************************************
+    ** Recheck queued digest content before sending it to a user.
+    *******************************************************************************/
+   public boolean canReceiveDigest(String userId, QRecord alert)
+   {
+      return (knownVisibility(userId, alert).orElse(alert.getValue("visibilityPermission") == null && alert.getValue("subjectTableName") == null));
+   }
+
+
+
+   /*******************************************************************************
     ** Followers must be able to read the source record, including its record locks.
     ** Reuse recipient sessions; unknown access fails closed before adding channels.
     *******************************************************************************/
@@ -775,6 +800,10 @@ public class AlertRouter
          .withCriteria("kind", QCriteriaOperator.EQUALS, kind.name())
          .withCriteria("status", QCriteriaOperator.IN, List.of(DeliveryStatus.PENDING.name(), DeliveryStatus.SENDING.name(), DeliveryStatus.SENT.name(), DeliveryStatus.RETRYING.name()))
          .withCriteria("createDate", QCriteriaOperator.GREATER_THAN, now.minus(DUPLICATE_WINDOW_MINUTES, ChronoUnit.MINUTES));
+      if(kind == DeliveryKind.DIGEST)
+      {
+         filter.withCriteria("alertEventId", QCriteriaOperator.EQUALS, eventId);
+      }
       if(kind == DeliveryKind.ESCALATED)
       {
          filter = AlertsDb.eq("alertId", alert.getValue("id"))
