@@ -5,8 +5,11 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Changed
+- Keep reminders and escalations immediate for digest subscribers while applying pause and quiet hours to their push channels. Preserve team audience resolution, mute scopes, both scheduled jobs and changesets 21-27.
 - Apply user pause and local quiet hours to personal push channels (email, email lists and other non-IN_APP channels), including team members, with logged suppression reasons and a configurable quiet-hours severity bypass. The in-app bell remains unaffected, including digest delivery. Channel subscriptions are unaffected.
 - Queue hourly and daily alert subscription digests and send them through the hidden hourly `alertsSendDigests` process. Group linked alert summaries into one message per user/channel/window, use the existing email integration, and keep durable dispatch claims in the Delivery Log (guarded changeset 27). Reruns cannot send a window twice; failed, interrupted and oversized windows remain visible for review.
+- Team subscriptions now combine explicit members with ROLE and IDP_GROUP users from the optional public `AlertAudienceResolver` configured through `withAudienceResolver`. Recipients are deduplicated and retain per-user visibility checks. Missing resolvers resolve to nobody, log the reason, and show configuration-aware help on team/member screens.
+- Fix the alert Mute action to target its subject record, or its type and dedup key when no subject exists. Add the separate "Mute this alert type" action. RECORD mutes now compare table and record ID. Guarded changesets 21–22 add `scope_record_id` and allow full ALERT keys; existing type-wide mutes retain their scope.
 - Switch the optional qbit-email integration to its published `com.kingsrook.qbits.email.api` package in `0.1.0-RC.2`, preserving templates, categories, idempotency keys, linked records and outcome mapping. Narrow the architecture allowance to that API package while retaining all guardrails.
 - Email goes through qbit-email when it is produced in the instance (optional dependency, `qbit-email.version` 0.1.0-RC.2): alert channel emails (template `alerts_alert`), notification emails (`alerts_notification`) and digests (`alerts_digest`), all NOTIFICATION, one recipient per message, with idempotency keys and the alert or notification as the linked record. `messagingProviderName` stays as the fallback when qbit-email is absent, and is not required when it is present.
 - Target released QQQ `4.1.0-RC.6`; verify normally with `./mvnw -B verify` (no version override).
@@ -23,6 +26,9 @@ All notable changes to this project are documented here. The format follows Keep
 - Webhook signing delegates to core `WebhookSigner`/`WebhookSecret` (qbit-alerts#15, F11). Headers, `v1,` signatures and `whsec_` encoding are unchanged. A thin adapter preserves legacy keys shorter than core's 16-byte minimum using equivalent HMAC zero-padding.
 
 ### Added
+- Apply reminders and escalation (#27, part 2): a minute-based hidden job sends due reminders, advances ordered USER/TEAM/CHANNEL escalation steps, and caps final-step repeats. Acknowledgement, snooze, resolution and mutes stop both; reopening restarts escalation. Delivery, events and progress commit together, with a persisted same-minute checkpoint.
+- Add admin escalation policy and step tables, child step lists, and type/group policy links in guarded Liquibase changesets 23â€“26. Type policies override group policies. CRITICAL reminders default to 60 minutes; explicit zero turns them off.
+- Keep EXPIRED reserved and remove it from selectable resolution values because the design specifies no expiration rule.
 - Optional external channels:
   - Slack (an Incoming Webhook, Block Kit)
   - Microsoft Teams (a Workflows webhook, an Adaptive Card)

@@ -31,6 +31,40 @@ Any qbit or app reports exceptional conditions ("a person should do something").
 
 All data is in standard QQQ tables named `alerts_*`. People change alerts through record actions, never by editing rows.
 
+## Team audiences and mutes
+
+Teams keep their source in `alerts_team.memberSource` and `memberSourceValue`.
+Rows in `alerts_team_member` are explicit user memberships. A team's ROLE or
+IDP_GROUP source adds users to those explicit members at routing time. Register
+`com.kingsrook.qbits.alerts.AlertAudienceResolver` before producing the qbit:
+
+```java
+config.withAudienceResolver((sourceType, sourceValue) -> hostDirectory.resolveUserIds(sourceType, sourceValue));
+```
+
+The host implements that directory lookup through its role or identity-provider
+public API; this qbit has no dependency on either implementation. Return a
+`Set<String>` of user IDs (an empty set for an unknown source/value), bounded by
+`maxAudienceSize` (50,000 by default). Users are deduplicated across explicit
+members, resolved members and subscriptions, and each still passes the router's
+visibility checks. Missing or failing resolvers contribute no users and log a
+clear reason; explicit members still receive alerts. Team and member screens
+show the missing-resolver help text only when no resolver was configured.
+
+The alert's **Mute** record action silences its subject table and record ID when
+there is one. Without a subject record, it silences only that alert's type and
+dedup key, including later occurrences of the same problem. **Mute this alert
+type** is a separate record action on alerts and alert types. Both use the usual
+Review and Result summaries and require a reason and a duration. Mutes remain
+shared rules, not personal notification preferences.
+
+RECORD mutes store the table in `scopeValue` and its record ID in `scopeRecordId`.
+ALERT mutes store the engine's full `type|dedupKey` in `scopeValue`. Apply guarded
+Liquibase changesets 21–22 before running this version: they add the record ID
+column and widen mute scope values to 520 characters. Existing type-wide mutes
+remain type-wide; historical RECORD mutes need their intended record ID filled
+in because previous versions did not store it.
+
 ## User notifications
 
 The qbit also carries ordinary notifications for people (design: [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)):
@@ -157,13 +191,13 @@ How each one sends:
 
 ## Quiet hours, pause and alert digests
 
-My Alert Settings applies to user subscriptions, manual team members and record followers. Pause suppresses personal push channels (email, email lists and other non-IN_APP channels) until `pausedUntil`. Quiet hours also apply only to push channels; neither setting suppresses the in-app bell. Quiet hours use `timeZone` (UTC when missing or invalid), start inclusively and end exclusively. For a window such as 22:00-07:00, `quietDays` names the day the window starts: Monday includes Tuesday morning. Empty days mean every day; use comma-separated ISO day numbers (1=Monday), full English names or MON/TUE/etc. Missing, invalid or equal start/end times disable quiet hours. Severities at or above `quietBypassSeverity` (CRITICAL by default) bypass quiet hours, but never pause. Channel subscriptions remain independent of these personal settings; their digest cadence still applies, using UTC and 08:00 for daily delivery. Suppressions are recorded in the Delivery Log; channel severity filtering now records `MIN_SEVERITY` too.
+My Alert Settings applies to user subscriptions, explicit and host-resolved team members, and record followers. Pause suppresses personal push channels (email, email lists and other non-IN_APP channels) until `pausedUntil`. Quiet hours also apply only to push channels; neither setting suppresses the in-app bell. Quiet hours use `timeZone` (UTC when missing or invalid), start inclusively and end exclusively. For a window such as 22:00-07:00, `quietDays` names the day the window starts: Monday includes Tuesday morning. Empty days mean every day; use comma-separated ISO day numbers (1=Monday), full English names or MON/TUE/etc. Missing, invalid or equal start/end times disable quiet hours. Severities at or above `quietBypassSeverity` (CRITICAL by default) bypass quiet hours, but never pause. Channel subscriptions remain independent of these personal settings; their digest cadence still applies, using UTC and 08:00 for daily delivery. Suppressions are recorded in the Delivery Log; channel severity filtering now records `MIN_SEVERITY` too.
 
-Subscriptions with `DIGEST_HOURLY` or `DIGEST_DAILY` queue `DIGEST` delivery rows with status `PENDING`, a window key and a due time. Immediate delivery skips them. The hidden `alertsSendDigests` process runs hourly on `schedulerName`; without a scheduler it can be invoked explicitly. Hourly windows close on the user's local hour. Daily windows close at their `digestHour` (08:00 by default), using local calendar days across daylight saving changes. A late scheduler catches up completed windows. Settings changes affect newly queued windows; the original boundary stays with existing items.
+Subscriptions with `DIGEST_HOURLY` or `DIGEST_DAILY` queue `DIGEST` delivery rows with status `PENDING`, a window key and a due time. Immediate delivery skips them. REMINDER and ESCALATED deliveries are always immediate, even for digest subscriptions, and still respect pause and quiet hours on push channels. The hidden `alertsSendDigests` process runs hourly on `schedulerName`; without a scheduler it can be invoked explicitly. Hourly windows close on the user's local hour. Daily windows close at their `digestHour` (08:00 by default), using local calendar days across daylight saving changes. A late scheduler catches up completed windows. Settings changes affect newly queued windows; the original boundary stays with existing items.
 
 Each user/channel/window produces one message with the window's open alerts ordered by severity, new alerts and resolved alerts, each linked to its record. Multiple events for an alert produce one entry per applicable section. In-app gets one notification; email uses the existing `alerts_digest` template through qbit-email's public API, or the configured messaging provider. Pause and quiet hours are checked again for push channels at dispatch; visibility is checked for every channel. No empty message is sent. There is no `DIGESTS` feature switch in this configuration.
 
-Changeset 21 adds the digest fields and a unique dispatch claim to `alerts_delivery`. The base key is `alerts:digest:<user>:<window start>`; alert digests append `:<delivery mode>:channel:<channel id>` to distinguish overlapping hourly/daily windows, channels and the existing notification digests. Channel-only digests use `alerts:channel-digest:<channel>:<window start>:<delivery mode>:channel:<channel id>`. Email keys also append a recipient hash so email-list addresses each receive their copy. A persisted claim prevents concurrent or repeated runs from sending twice. Its item cutoff freezes the contents; late items for a claimed window are logged as `DUPLICATE`, not reported as sent. Included items become `SENT`, or `FAILED` with the error. Digest transport failures are not automatically retried; an interrupted claim fails after ten minutes rather than risking another send through a provider without idempotency support. The Delivery Log retains that uncertainty for review.
+Changeset 27 adds the digest fields and a unique dispatch claim to `alerts_delivery`. The base key is `alerts:digest:<user>:<window start>`; alert digests append `:<delivery mode>:channel:<channel id>` to distinguish overlapping hourly/daily windows, channels and the existing notification digests. Channel-only digests use `alerts:channel-digest:<channel>:<window start>:<delivery mode>:channel:<channel id>`. Email keys also append a recipient hash so email-list addresses each receive their copy. A persisted claim prevents concurrent or repeated runs from sending twice. Its item cutoff freezes the contents; late items for a claimed window are logged as `DUPLICATE`, not reported as sent. Included items become `SENT`, or `FAILED` with the error. Digest transport failures are not automatically retried; an interrupted claim fails after ten minutes rather than risking another send through a provider without idempotency support. The Delivery Log retains that uncertainty for review.
 
 Digest queries and rendering are bounded: up to 100 candidate items are scanned per run, and a message accepts at most 500 queued events. Larger windows fail visibly with guidance to narrow the subscription or use hourly digests; they are never sent partially. Digest messages use MINIMAL detail and contain a snapshot of content visible at dispatch. Protected alerts require verifiable user visibility even for an in-app digest.
 
@@ -179,6 +213,49 @@ When qbit-email is produced in the same instance (and on the classpath; it is an
 - **Text** in the variables is the existing redacted, external-safe text. No record labels are passed.
 - **Config.** `messagingProviderName` and `fromAddress` are not needed (the From address comes from the email provider). Without qbit-email they work as before.
 
+## Reminders and escalation
+
+The hidden `alertsEscalateAndRemind` process runs every minute on `schedulerName`.
+Without a configured scheduler, hosts can invoke the process themselves. Apply
+Liquibase changesets 23â€“26 before running this version.
+
+An OPEN, unacknowledged alert sends REMINDER deliveries to matching subscriptions
+whose events include REMINDER (an empty events list includes all kinds). Set the
+type's `reminderIntervalMinutes`: null defaults to 60 for CRITICAL alerts and off
+otherwise; zero disables reminders, including CRITICAL. The interval starts at
+the later of the latest raise and the latest successful notification. Delivery
+uses the normal permission, channel and suppression checks, writes NOTIFIED in
+the timeline when something is queued, and updates `lastNotifiedAt`.
+
+Admins can create **Escalation Policies** in the Alerts app and add **Steps** on a
+policy's record screen. Attach `escalationPolicyId` to a type or group; a type's
+explicit policy takes precedence, including when that policy is disabled. Steps
+have a positive, unique `stepOrder`, a nonnegative `afterMinutes`, and exactly
+one USER (`userId`), TEAM (`teamId`) or CHANNEL (`channelId`) target. User and team
+targets use the users' normal in-app/email preferences. Steps apply only to OPEN
+alerts matching `onlyIfStatus` (default OPEN). Timing starts at the first raise
+or the latest reopen; repeated raises do not postpone escalation.
+
+Each due step sends ESCALATED through the normal delivery checks, records an
+ESCALATED event with the previous and new levels, and advances `escalationLevel`.
+After the final step, positive `repeatAfterMinutes` and `maxRepeats` allow that
+many additional attempts at the final target. Null/zero disables repeats. Repeats
+leave the level unchanged and are counted in the timeline within the current
+open cycle. Reopening resets the level and repeat budget. One step runs per tick;
+a delayed scheduler catches up over subsequent minutes instead of sending a burst.
+Acknowledgement, snooze, resolution, mute, flapping, and a disabled or silent type
+stop timed notifications. Suppressed deliveries still count as escalation attempts.
+
+Each alert's delivery rows, timeline and progress commit together. The persisted
+`timedNotificationCheckedAt` prevents duplicate attempts in the same minute,
+including when no recipient is eligible. Run this job on **one scheduler node**;
+there is no distributed lock between scheduler nodes. No ESCALATION feature
+switch exists in the current config; enable or disable individual policies.
+
+`EXPIRED` remains a reserved resolution enum value. The design defines no alert
+expiration rule, so it is excluded from selectable resolution values and is never
+assigned automatically. The Resolve action continues to record MANUAL.
+
 ## Known limits (v1)
 
 - **Claims are best-effort.** Delivery and monitor claims use a lease, not an atomic conditional update. With several scheduler nodes, run the delivery and monitor processes on one node, or accept at-least-once delivery. Digest dispatch instead uses a unique database claim as described above.
@@ -186,7 +263,7 @@ When qbit-email is produced in the same instance (and on the classpath; it is an
 - **Recipient visibility.** It is checked through `createAutomatedSessionForUser`. If a host's authentication module can't build a session with permissions for a user, email goes out only for alerts that have no visibility permission and no subject table. Individual in-app alerts are filtered by record locks. Digest snapshots are checked before dispatch.
 - **Outbound HTTP** blocks plain http, but has no full SSRF guard. Channels are admin-only. Core's `SafeHttpClient` (QRun-IO/qqq#1109) replaces the client when it is released.
 - **Alertmanager sink:** open alerts are sent with an `endsAt` a week out, not re-posted.
-- **Not built yet:** reminders, Micrometer metrics, ROLE and IdP-group team resolvers, escalation, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
+- **Not built yet:** Micrometer metrics, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
 
 ## Build
 

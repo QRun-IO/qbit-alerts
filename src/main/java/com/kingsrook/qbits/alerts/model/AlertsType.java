@@ -96,6 +96,9 @@ public class AlertsType extends QRecordEntity
    @QField(isEditable = false)
    private Integer openCount;
 
+   @QField(possibleValueSourceName = "alerts_escalation_policy")
+   private Integer escalationPolicyId;
+
    @QField(isEditable = false)
    private Instant createDate;
 
@@ -800,6 +803,37 @@ public class AlertsType extends QRecordEntity
    public AlertsType withModifyDate(Instant modifyDate)
    {
       this.modifyDate = modifyDate;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for escalationPolicyId
+    *******************************************************************************/
+   public Integer getEscalationPolicyId()
+   {
+      return (this.escalationPolicyId);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for escalationPolicyId
+    *******************************************************************************/
+   public void setEscalationPolicyId(Integer escalationPolicyId)
+   {
+      this.escalationPolicyId = escalationPolicyId;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for escalationPolicyId
+    *******************************************************************************/
+   public AlertsType withEscalationPolicyId(Integer escalationPolicyId)
+   {
+      this.escalationPolicyId = escalationPolicyId;
       return (this);
    }
 }

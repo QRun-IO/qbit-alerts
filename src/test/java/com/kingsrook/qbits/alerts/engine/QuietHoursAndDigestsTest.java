@@ -20,6 +20,7 @@ package com.kingsrook.qbits.alerts.engine;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.BaseAlertsTest;
 import com.kingsrook.qbits.alerts.TestSteps;
@@ -48,6 +49,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -203,14 +205,20 @@ class QuietHoursAndDigestsTest extends BaseAlertsTest
 
 
    /*******************************************************************************
-    ** Expanded manual team members have the same personal quiet windows.
+    ** Explicit and host-resolved team members share personal quiet windows.
     *******************************************************************************/
-   @Test
-   void testTeamQuietHours() throws Exception
+   @ParameterizedTest
+   @ValueSource(strings = {"MANUAL", "ROLE", "IDP_GROUP"})
+   void testTeamQuietHours(String source) throws Exception
    {
       settings(new QRecord().withValue("inAppEnabled", false).withValue("emailEnabled", true).withValue("emailAddress", "admin@example.com"));
-      QRecord team = runtime.asSystem(() -> AlertsDb.insert(AlertsTeam.TABLE_NAME, new QRecord().withValue("name", "ops").withValue("label", "Ops")));
-      runtime.asSystem(() -> AlertsDb.insert(AlertsTeamMember.TABLE_NAME, new QRecord().withValue("teamId", team.getValue("id")).withValue("userId", ADMIN)));
+      QRecord team = runtime.asSystem(() -> AlertsDb.insert(AlertsTeam.TABLE_NAME, new QRecord().withValue("name", "ops").withValue("label", "Ops")
+         .withValue("memberSource", source).withValue("memberSourceValue", "operators")));
+      config.withAudienceResolver((memberSource, value) -> Set.of(ADMIN));
+      if("MANUAL".equals(source))
+      {
+         runtime.asSystem(() -> AlertsDb.insert(AlertsTeamMember.TABLE_NAME, new QRecord().withValue("teamId", team.getValue("id")).withValue("userId", ADMIN)));
+      }
       runtime.asSystem(() -> AlertsDb.insert(AlertsSubscription.TABLE_NAME, new QRecord().withValue("subscriberType", "TEAM")
          .withValue("teamId", team.getValue("id")).withValue("scopeType", "ALL").withValue("enabled", true)));
       settings(new QRecord().withValue("quietHoursStart", "11:00").withValue("quietHoursEnd", "13:00").withValue("quietDays", "1,3"));
@@ -589,6 +597,95 @@ class QuietHoursAndDigestsTest extends BaseAlertsTest
       assertThat(items()).filteredOn(r -> !inAppId.equals(r.getValueInteger("channelId")))
          .extracting(r -> r.getValueString("suppressedReason")).containsExactly("QUIET_HOURS", "USER_PAUSED");
       assertThat(all(AlertsNotificationRecipient.TABLE_NAME)).hasSize(2);
+   }
+
+
+
+   /*******************************************************************************
+    ** Timed deliveries bypass both digest cadences while push channels still
+    ** respect quiet hours and pause; the in-app bell remains immediate.
+    *******************************************************************************/
+   @ParameterizedTest
+   @CsvSource({"REMINDER,DIGEST_HOURLY", "REMINDER,DIGEST_DAILY", "ESCALATED,DIGEST_HOURLY", "ESCALATED,DIGEST_DAILY",
+      "POLICY,DIGEST_HOURLY", "POLICY,DIGEST_DAILY"})
+   void testTimedNotificationsBypassDigests(String entryPoint, String mode) throws Exception
+   {
+      QRecord subscription = subscribe(mode, null);
+      runtime.asSystem(() -> AlertsDb.update(AlertsSubscription.TABLE_NAME, new QRecord().withValue("id", subscription.getValue("id"))
+         .withValue("events", "REMINDER,ESCALATED")));
+      settings(new QRecord().withValue("emailEnabled", true).withValue("emailAddress", "admin@example.com"));
+      timedNotification(raise("Immediate timed alert", AlertSeverity.ERROR), entryPoint);
+      assertThat(items()).hasSize(2).allSatisfy(row ->
+      {
+         assertThat(row.getValueString("kind")).isEqualTo("REMINDER".equals(entryPoint) ? "REMINDER" : "ESCALATED");
+         assertThat(row.getValueString("digestKey")).isNull();
+      });
+      assertThat(items()).filteredOn(row -> "PENDING".equals(row.getValueString("status"))).singleElement()
+         .satisfies(row -> assertThat(row.getValueInstant("nextAttemptAt")).isEqualTo(clock.instant()));
+      assertThat(runtime.getDeliveryWorker().deliverDue()).isEqualTo(1);
+      assertThat(TestSteps.SENT).hasSize(1);
+
+      settings(new QRecord().withValue("quietHoursStart", "11:00").withValue("quietHoursEnd", "13:00"));
+      timedNotification(raise("Quiet timed alert", AlertSeverity.ERROR), entryPoint);
+      settings(new QRecord().withValue("pausedUntil", clock.instant().plusSeconds(60)));
+      timedNotification(raise("Paused timed alert", AlertSeverity.CRITICAL), entryPoint);
+      assertThat(items()).filteredOn(row -> "SUPPRESSED".equals(row.getValueString("status")))
+         .extracting(row -> row.getValueString("suppressedReason")).containsExactly("QUIET_HOURS", "USER_PAUSED");
+      assertThat(items()).filteredOn(row -> "SENT".equals(row.getValueString("status"))).hasSize(4);
+      assertThat(items()).noneMatch(row -> "DIGEST".equals(row.getValueString("kind")));
+      assertThat(all(AlertsNotificationRecipient.TABLE_NAME)).hasSize(3);
+      assertThat(runtime.getDeliveryWorker().deliverDue()).isZero();
+   }
+
+
+
+   /*******************************************************************************
+    ** Exercise each shared router entry point under the scheduler's system context.
+    *******************************************************************************/
+   private void timedNotification(QRecord alert, String entryPoint) throws QException
+   {
+      runtime.asSystem(() ->
+      {
+         Integer eventId = "REMINDER".equals(entryPoint) ? null : runtime.getEngine().event(alert.getValueInteger("id"),
+            EventType.ESCALATED, null, "0", "1", "Timed notification", clock.instant());
+         if("REMINDER".equals(entryPoint))
+         {
+            runtime.getRouter().remind(alert);
+         }
+         else if("POLICY".equals(entryPoint))
+         {
+            runtime.getRouter().escalate(alert, new QRecord().withValue("targetType", "USER").withValue("userId", ADMIN), eventId);
+         }
+         else
+         {
+            runtime.getRouter().route(alert, EventType.ESCALATED, eventId);
+         }
+         return (null);
+      });
+   }
+
+
+
+   /*******************************************************************************
+    ** Personal settings win over channel severity, which is logged before disabled.
+    *******************************************************************************/
+   @Test
+   void testPersonalSuppressionPrecedesChannelChecks() throws Exception
+   {
+      subscribe("IMMEDIATE", null);
+      settings(new QRecord().withValue("inAppEnabled", false).withValue("emailEnabled", true).withValue("emailAddress", "admin@example.com")
+         .withValue("quietHoursStart", "11:00").withValue("quietHoursEnd", "13:00").withValue("pausedUntil", clock.instant().plusSeconds(60)));
+      QRecord email = runtime.asSystem(() -> runtime.getChannels().defaultChannel(ChannelType.EMAIL));
+      runtime.asSystem(() -> AlertsDb.update(AlertsChannel.TABLE_NAME, new QRecord().withValue("id", email.getValue("id"))
+         .withValue("enabled", false).withValue("minSeverity", "CRITICAL")));
+      raise("Pause first", AlertSeverity.WARNING);
+      settings(new QRecord().withValue("pausedUntil", null));
+      raise("Quiet next", AlertSeverity.WARNING);
+      settings(new QRecord().withValue("quietHoursStart", null).withValue("quietHoursEnd", null));
+      raise("Minimum severity next", AlertSeverity.WARNING);
+      raise("Disabled last", AlertSeverity.CRITICAL);
+      assertThat(items()).extracting(row -> row.getValueString("suppressedReason"))
+         .containsExactly("USER_PAUSED", "QUIET_HOURS", "MIN_SEVERITY", "CHANNEL_DISABLED");
    }
 
 

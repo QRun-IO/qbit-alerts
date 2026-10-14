@@ -23,11 +23,14 @@ import com.kingsrook.qqq.backend.core.actions.tables.CountAction;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
+import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
+import com.kingsrook.qqq.backend.core.model.actions.tables.count.CountInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.insert.InsertInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterCriteria;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter;
+import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.update.UpdateInput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.statusmessages.QStatusMessage;
@@ -56,7 +59,7 @@ public final class AlertsDb
     *******************************************************************************/
    public static List<QRecord> query(String tableName, QQueryFilter filter) throws QException
    {
-      return (QueryAction.execute(tableName, filter));
+      return (new QueryAction().execute(new QueryInput(tableName).withFilter(filter).withTransaction(QContext.getQBackendTransaction())).getRecords());
    }
 
 
@@ -66,7 +69,7 @@ public final class AlertsDb
     *******************************************************************************/
    public static QRecord first(String tableName, QQueryFilter filter) throws QException
    {
-      List<QRecord> records = QueryAction.execute(tableName, filter.withLimit(1));
+      List<QRecord> records = query(tableName, filter.withLimit(1));
       return (CollectionUtils.nullSafeIsEmpty(records) ? null : records.get(0));
    }
 
@@ -91,7 +94,7 @@ public final class AlertsDb
     *******************************************************************************/
    public static int count(String tableName, QQueryFilter filter) throws QException
    {
-      Integer count = CountAction.execute(tableName, filter);
+      Integer count = new CountAction().execute(new CountInput(tableName).withFilter(filter).withTransaction(QContext.getQBackendTransaction())).getCount();
       return (count == null ? 0 : count);
    }
 
@@ -102,7 +105,7 @@ public final class AlertsDb
     *******************************************************************************/
    public static QRecord insert(String tableName, QRecord record) throws QException
    {
-      List<QRecord> inserted = InsertAction.executeForRecords(new InsertInput(tableName).withRecord(record));
+      List<QRecord> inserted = InsertAction.executeForRecords(new InsertInput(tableName).withRecord(record).withTransaction(QContext.getQBackendTransaction()));
       QRecord       result   = inserted.get(0);
       throwIfErrors(tableName, result);
       return (result);
@@ -115,7 +118,7 @@ public final class AlertsDb
     *******************************************************************************/
    public static QRecord update(String tableName, QRecord record) throws QException
    {
-      List<QRecord> updated = UpdateAction.executeForRecords(new UpdateInput(tableName).withRecord(record));
+      List<QRecord> updated = UpdateAction.executeForRecords(new UpdateInput(tableName).withRecord(record).withTransaction(QContext.getQBackendTransaction()));
       QRecord       result  = updated.get(0);
       throwIfErrors(tableName, result);
       return (result);

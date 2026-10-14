@@ -19,6 +19,7 @@ package com.kingsrook.qbits.alerts.processes;
 
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.delivery.DigestWorker;
+import com.kingsrook.qbits.alerts.engine.EscalationAndReminder;
 import com.kingsrook.qbits.alerts.notifications.NotificationEmailer;
 import com.kingsrook.qqq.backend.core.actions.processes.BackendStep;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -28,7 +29,7 @@ import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepOutp
 
 /*******************************************************************************
  ** The hidden scheduled processes' steps: evaluate due monitors (plus snooze,
- ** quiet-period and flapping upkeep), deliver due notifications and send digests.
+ ** quiet-period and flapping upkeep), deliver notifications, escalate, remind and send digests.
  *******************************************************************************/
 public final class AlertsScheduledSteps
 {
@@ -79,6 +80,23 @@ public final class AlertsScheduledSteps
          runtime.getNotifications().purge();
          new NotificationEmailer(runtime).run();
          output.addValue(OUTPUT_COUNT, runtime.getDeliveryWorker().deliverDue());
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** alertsEscalateAndRemind
+    *******************************************************************************/
+   public static class EscalateAndRemind implements BackendStep
+   {
+      /***************************************************************************
+       ** Run timed notifications using the installed runtime's clock.
+       ***************************************************************************/
+      @Override
+      public void run(RunBackendStepInput input, RunBackendStepOutput output) throws QException
+      {
+         output.addValue(OUTPUT_COUNT, new EscalationAndReminder(AlertsRuntime.get()).runDue());
       }
    }
 

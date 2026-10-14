@@ -22,6 +22,8 @@ import java.util.List;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
+import com.kingsrook.qbits.alerts.model.AlertsEscalationPolicy;
+import com.kingsrook.qbits.alerts.model.AlertsEscalationStep;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsHeartbeat;
@@ -106,7 +108,30 @@ public class AlertsQBitConfig implements QBitConfig
    private Boolean        notifyFailedJobs          = true;
    private String         jobRunLinkPattern;
 
+   private transient AlertAudienceResolver audienceResolver;
+
    private transient AlertsRuntime runtime;
+
+
+
+   /*******************************************************************************
+    ** Optional host resolver for ROLE and IDP_GROUP team members.
+    *******************************************************************************/
+   public AlertAudienceResolver getAudienceResolver()
+   {
+      return (audienceResolver);
+   }
+
+
+
+   /*******************************************************************************
+    ** Register the host resolver before producing the qbit's metadata.
+    *******************************************************************************/
+   public AlertsQBitConfig withAudienceResolver(AlertAudienceResolver audienceResolver)
+   {
+      this.audienceResolver = audienceResolver;
+      return (this);
+   }
 
 
 
@@ -153,7 +178,7 @@ public class AlertsQBitConfig implements QBitConfig
     *******************************************************************************/
    public static List<String> allTableNames()
    {
-      return (List.of(AlertsAlert.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsSubscription.TABLE_NAME,
+      return (List.of(AlertsEscalationPolicy.TABLE_NAME, AlertsEscalationStep.TABLE_NAME, AlertsAlert.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsSubscription.TABLE_NAME,
          AlertsUserPreference.TABLE_NAME, AlertsTeam.TABLE_NAME, AlertsTeamMember.TABLE_NAME, AlertsChannel.TABLE_NAME, AlertsMute.TABLE_NAME,
          AlertsDelivery.TABLE_NAME, AlertsEvent.TABLE_NAME, AlertsRecordRef.TABLE_NAME, AlertsHeartbeat.TABLE_NAME, AlertsNotification.TABLE_NAME,
          AlertsNotificationRecipient.TABLE_NAME, AlertsNotificationPreference.TABLE_NAME));

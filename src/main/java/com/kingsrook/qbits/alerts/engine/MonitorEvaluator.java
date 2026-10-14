@@ -216,7 +216,7 @@ public class MonitorEvaluator
          long    started = System.currentTimeMillis();
          String  typeName = type.getValueString("name");
 
-         AlertTarget target = new AlertTarget(type.getValueInteger("id"), typeName, type.getValueInteger("groupId"), monitorId, type.getValueString("subjectTableName"), Set.of(), Map.of());
+         AlertTarget target = new AlertTarget(type.getValueInteger("id"), typeName, type.getValueInteger("groupId"), monitorId, type.getValueString("subjectTableName"), Set.of(), Map.of(), null);
          if(runtime.getRouter().isSuppressedByMaintenance(target, now))
          {
             Plan plan = new Plan(MonitorStatus.SKIPPED_MUTED, "skipped: maintenance window", List.of(), List.of(), List.of(), List.of(), null);

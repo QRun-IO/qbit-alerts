@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.kingsrook.qbits.alerts.AlertsPermissionChecker;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.customizers.AlertsNotificationCustomizer;
@@ -29,6 +30,8 @@ import com.kingsrook.qbits.alerts.customizers.AlertsWriteGuardCustomizer;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
+import com.kingsrook.qbits.alerts.model.AlertsEscalationPolicy;
+import com.kingsrook.qbits.alerts.model.AlertsEscalationStep;
 import com.kingsrook.qbits.alerts.model.AlertsEvent;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsHeartbeat;
@@ -62,6 +65,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.AdornmentType;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.FieldAdornment;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
+import com.kingsrook.qqq.backend.core.model.metadata.help.QHelpContent;
 import com.kingsrook.qqq.backend.core.model.metadata.joins.JoinOn;
 import com.kingsrook.qqq.backend.core.model.metadata.joins.JoinType;
 import com.kingsrook.qqq.backend.core.model.metadata.joins.QJoinMetaData;
@@ -94,6 +98,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.tables.UniqueKey;
  *******************************************************************************/
 public final class AlertsTableMetaDataHelper
 {
+   public static final String JOIN_POLICY_STEP = "alerts_escalation_policy_join_alerts_escalation_step";
    public static final String JOIN_ALERT_EVENT        = "alerts_alert_join_alerts_event";
    public static final String JOIN_ALERT_RECORD_REF   = "alerts_alert_join_alerts_record_ref";
    public static final String JOIN_ALERT_DELIVERY = "alerts_alert_join_alerts_delivery";
@@ -134,7 +139,7 @@ public final class AlertsTableMetaDataHelper
          .withSection(widgetSection(JOIN_ALERT_RECORD_REF, "Records", "link"))
          .withSection(widgetSection(JOIN_ALERT_DELIVERY, "Notifications", "send"))
          .withSection(new QFieldSection("occurrence", "Occurrences", new QIcon("repeat"), Tier.T3, List.of("firstRaisedAt", "lastRaisedAt", "occurrenceCount", "reopenCount", "flapping",
-            "lastNotifiedAt", "monitorId", "dedupKey", "alertTypeName", "visibilityPermission", "openDedupKey", "escalationLevel", "links", "attributes", "createDate", "modifyDate")));
+            "lastNotifiedAt", "timedNotificationCheckedAt", "monitorId", "dedupKey", "alertTypeName", "visibilityPermission", "openDedupKey", "escalationLevel", "links", "attributes", "createDate", "modifyDate")));
       return (readOnly(table));
    }
 
@@ -153,7 +158,7 @@ public final class AlertsTableMetaDataHelper
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "label", "name", "groupId", "sourceName", "openCount")))
          .withSection(new QFieldSection("about", "About", new QIcon("info"), Tier.T2, List.of("description", "howToFix", "subjectTableName", "visibilityPermission")))
          .withSection(new QFieldSection("tuning", "Tuning", new QIcon("tune"), Tier.T2, List.of("enabled", "notify", "defaultSeverity", "severityOverride", "resolveMode",
-            "quietPeriodMinutes", "reminderIntervalMinutes", "externalDetailCeiling")))
+            "quietPeriodMinutes", "reminderIntervalMinutes", "escalationPolicyId", "externalDetailCeiling")))
          .withSection(widgetSection(JOIN_TYPE_MONITOR, "Monitors", "monitor_heart"))
          .withSection(widgetSection(JOIN_TYPE_ALERT, "Alerts", "notifications_active"))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("installed", "lastRaisedAt", "createDate", "modifyDate")));
@@ -174,7 +179,7 @@ public final class AlertsTableMetaDataHelper
          .withUniqueKey(new UniqueKey("name"))
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "label", "name", "parentGroupId")))
-         .withSection(new QFieldSection("details", new QIcon("description"), Tier.T2, List.of("description", "ownerTeamId", "icon", "sortOrder")))
+         .withSection(new QFieldSection("details", new QIcon("description"), Tier.T2, List.of("description", "ownerTeamId", "escalationPolicyId", "icon", "sortOrder")))
          .withSection(widgetSection(JOIN_GROUP_TYPE, "Alert Types", "category"))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
       return (table);
@@ -304,6 +309,10 @@ public final class AlertsTableMetaDataHelper
          .withSection(new QFieldSection("details", new QIcon("description"), Tier.T2, List.of("description")))
          .withSection(widgetSection(JOIN_TEAM_MEMBER, "Members", "person"))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
+      if(config.getAudienceResolver() == null)
+      {
+         table.getField("memberSource").withHelpContent(new QHelpContent("ROLE and IdP Group members need a host resolver; none is configured"));
+      }
       table.getField("memberSource").setDefaultValue(AlertsPossibleValues.MemberSource.MANUAL.name());
       return (table);
    }
@@ -322,6 +331,10 @@ public final class AlertsTableMetaDataHelper
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "teamId", "userId", "role")))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
+      if(config.getAudienceResolver() == null)
+      {
+         table.getField("teamId").withHelpContent(new QHelpContent("ROLE and IdP Group members need a host resolver; none is configured"));
+      }
       table.getField("role").setDefaultValue(AlertsPossibleValues.TeamRole.MEMBER.name());
       return (table);
    }
@@ -364,7 +377,7 @@ public final class AlertsTableMetaDataHelper
          .withRecordLabelFields("name")
          .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "name", "enabled", "effect")))
-         .withSection(new QFieldSection("scope", "What and When", new QIcon("filter_alt"), Tier.T2, List.of("scopeType", "scopeValue", "startsAt", "endsAt", "reason")))
+         .withSection(new QFieldSection("scope", "What and When", new QIcon("filter_alt"), Tier.T2, List.of("scopeType", "scopeValue", "scopeRecordId", "startsAt", "endsAt", "reason")))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createdByUserId", "createDate", "modifyDate")));
       table.getField("effect").setDefaultValue(AlertsPossibleValues.MuteEffect.SILENCE_NOTIFICATIONS.name());
       table.getField("enabled").setDefaultValue(true);
@@ -499,11 +512,51 @@ public final class AlertsTableMetaDataHelper
 
 
    /*******************************************************************************
+    ** Escalation policies, with ordered steps on the record screen.
+    *******************************************************************************/
+   public static QTableMetaData buildEscalationPolicyTable(AlertsQBitConfig config) throws QException
+   {
+      QTableMetaData table = text(base(config, AlertsEscalationPolicy.TABLE_NAME, "Escalation Policies", "trending_up", AlertsEscalationPolicy.class), "description")
+         .withPermissionRules(AlertsPermissionChecker.rules(AlertsQBitConfig.PERMISSION_ADMIN))
+         .withRecordLabelFormat("%s").withRecordLabelFields("name")
+         .withUniqueKey(new UniqueKey("name"))
+         .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
+         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "name", "enabled")))
+         .withSection(new QFieldSection("details", new QIcon("description"), Tier.T2, List.of("description", "repeatAfterMinutes", "maxRepeats")))
+         .withSection(widgetSection(JOIN_POLICY_STEP, "Steps", "trending_up"))
+         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
+      table.getField("enabled").setDefaultValue(true);
+      table.getField("maxRepeats").setDefaultValue(0);
+      return (table);
+   }
+
+
+
+   /*******************************************************************************
+    ** Escalation steps are standard admin tables, reached from their policy.
+    *******************************************************************************/
+   public static QTableMetaData buildEscalationStepTable(AlertsQBitConfig config) throws QException
+   {
+      QTableMetaData table = base(config, AlertsEscalationStep.TABLE_NAME, "Escalation Steps", "trending_up", AlertsEscalationStep.class)
+         .withPermissionRules(AlertsPermissionChecker.rules(AlertsQBitConfig.PERMISSION_ADMIN))
+         .withRecordLabelFormat("Step %s").withRecordLabelFields("stepOrder")
+         .withUniqueKey(new UniqueKey("policyId", "stepOrder"))
+         .withAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD))
+         .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "policyId", "stepOrder", "afterMinutes")))
+         .withSection(new QFieldSection("target", new QIcon("person"), Tier.T2, List.of("targetType", "userId", "teamId", "channelId", "onlyIfStatus")))
+         .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("createDate", "modifyDate")));
+      table.getField("onlyIfStatus").setDefaultValue(AlertsPossibleValues.Status.OPEN.name());
+      return (table);
+   }
+
+
+
+   /*******************************************************************************
     ** All the tables.
     *******************************************************************************/
    public static List<QTableMetaData> buildAllTables(AlertsQBitConfig config) throws QException
    {
-      return (List.of(buildAlertTable(config), buildMonitorTable(config), buildTypeTable(config), buildGroupTable(config), buildSubscriptionTable(config),
+      return (List.of(buildEscalationPolicyTable(config), buildEscalationStepTable(config), buildAlertTable(config), buildMonitorTable(config), buildTypeTable(config), buildGroupTable(config), buildSubscriptionTable(config),
          buildUserPreferenceTable(config), buildTeamTable(config), buildTeamMemberTable(config), buildChannelTable(config), buildMuteTable(config),
          buildDeliveryTable(config), buildEventTable(config), buildRecordRefTable(config), buildHeartbeatTable(config), buildNotificationTable(config),
          buildNotificationRecipientTable(config), buildNotificationPreferenceTable(config)));
@@ -517,7 +570,7 @@ public final class AlertsTableMetaDataHelper
    public static List<QPossibleValueSource> buildPossibleValueSources()
    {
       List<QPossibleValueSource> sources = new ArrayList<>(AlertsPossibleValues.buildEnumSources());
-      for(String table : List.of(AlertsAlert.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsTeam.TABLE_NAME,
+      for(String table : List.of(AlertsEscalationPolicy.TABLE_NAME, AlertsAlert.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsTeam.TABLE_NAME,
          AlertsChannel.TABLE_NAME, AlertsSubscription.TABLE_NAME, AlertsNotification.TABLE_NAME))
       {
          sources.add(QPossibleValueSource.newForTable(table));
@@ -533,6 +586,7 @@ public final class AlertsTableMetaDataHelper
    public static List<QJoinMetaData> buildJoins()
    {
       List<QJoinMetaData> joins = new ArrayList<>();
+      joins.add(oneToMany(JOIN_POLICY_STEP, AlertsEscalationPolicy.TABLE_NAME, AlertsEscalationStep.TABLE_NAME, "policyId"));
       joins.add(oneToMany(JOIN_ALERT_EVENT, AlertsAlert.TABLE_NAME, AlertsEvent.TABLE_NAME, "alertId"));
       joins.add(oneToMany(JOIN_ALERT_RECORD_REF, AlertsAlert.TABLE_NAME, AlertsRecordRef.TABLE_NAME, "alertId"));
       joins.add(oneToMany(JOIN_ALERT_DELIVERY, AlertsAlert.TABLE_NAME, AlertsDelivery.TABLE_NAME, "alertId"));
@@ -561,6 +615,9 @@ public final class AlertsTableMetaDataHelper
       }
 
       List<QWidgetMetaDataInterface> widgets = new ArrayList<>();
+      widgets.add(ChildRecordListRenderer.widgetMetaDataBuilder(joins.get(JOIN_POLICY_STEP)).withLabel("Steps").withCanAddChildRecord(true).withMaxRows(100)
+         .withOrderBys(List.of(new QFilterOrderBy("stepOrder", true)))
+         .withOnlyIncludeFieldNames(List.of("stepOrder", "afterMinutes", "targetType", "onlyIfStatus")).getWidgetMetaData());
       widgets.add(childList(joins.get(JOIN_ALERT_EVENT), "Timeline", 50, new QFilterOrderBy("at", false), List.of("at", "eventType", "userId", "toValue", "note")));
       widgets.add(childList(joins.get(JOIN_ALERT_RECORD_REF), "Records", 25, new QFilterOrderBy("id", true), List.of("tableName", "recordId", "label", "active")));
       widgets.add(childList(joins.get(JOIN_ALERT_DELIVERY), "Notifications", 25, new QFilterOrderBy("id", false), List.of("kind", "status", "recipientLabel", "sentAt")));
