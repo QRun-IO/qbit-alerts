@@ -132,7 +132,7 @@ public final class AlertsPossibleValues
     *******************************************************************************/
    public enum ScopeType
    {
-      ALL, GROUP, ALERT_TYPE, MONITOR, TABLE, RECORD, ATTRIBUTE
+      ALL, GROUP, ALERT_TYPE, MONITOR, TABLE, RECORD, ATTRIBUTE, ALERT
    }
 
 
@@ -223,7 +223,7 @@ public final class AlertsPossibleValues
     *******************************************************************************/
    public enum SuppressedReason
    {
-      QUIET_HOURS, MUTED, FLAPPING, RATE_LIMITED, NOT_VISIBLE, CHANNEL_DISABLED, DUPLICATE, USER_PAUSED, TYPE_SILENT, NO_ADDRESS
+      QUIET_HOURS, MUTED, FLAPPING, RATE_LIMITED, NOT_VISIBLE, CHANNEL_DISABLED, DUPLICATE, USER_PAUSED, TYPE_SILENT, NO_ADDRESS, MIN_SEVERITY
    }
 
 
@@ -251,7 +251,7 @@ public final class AlertsPossibleValues
          enumSource(MONITOR_KIND, AlertMonitorKind.values()),
          enumSource(MONITOR_STATUS, MonitorStatus.values()),
          enumSource(EVENT_TYPE, EventType.values()),
-         enumSource(RESOLUTION, Resolution.values()),
+         enumSource(RESOLUTION, new Resolution[] { Resolution.PRODUCER, Resolution.MONITOR, Resolution.QUIET_PERIOD, Resolution.MANUAL }),
          enumSource(SUBSCRIBER_TYPE, SubscriberType.values()),
          enumSource(SCOPE_TYPE, ScopeType.values()),
          enumSource(DELIVERY_MODE, DeliveryMode.values()),

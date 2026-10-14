@@ -22,6 +22,8 @@
       <maven.compiler.source>21</maven.compiler.source>
       <maven.compiler.target>21</maven.compiler.target>
       <jacoco.version>0.8.15</jacoco.version>
+      <!-- qbit-email from Maven Central -->
+      <qbit-email.version>0.1.0-RC.2</qbit-email.version>
       <qbit.guardrails.enforce>true</qbit.guardrails.enforce>
       <qbit.guardrails.strictUiApiRoutes>true</qbit.guardrails.strictUiApiRoutes>
    </properties>
@@ -29,7 +31,7 @@
    <parent>
       <groupId>com.kingsrook</groupId>
       <artifactId>qbit-build-parent</artifactId>
-      <version>2.1.0</version>
+      <version>2.1.1</version>
    </parent>
 
    <groupId>com.kingsrook.qbits</groupId>
@@ -79,6 +81,15 @@
       <dependency>
          <groupId>com.kingsrook.qqq</groupId>
          <artifactId>qqq-middleware-javalin</artifactId>
+         <optional>true</optional>
+      </dependency>
+
+      <!-- Email through qbit-email when it is produced in the same instance; -->
+      <!-- otherwise core SendMessageAction and messagingProviderName.        -->
+      <dependency>
+         <groupId>com.kingsrook.qbits</groupId>
+         <artifactId>qbit-email</artifactId>
+         <version>${qbit-email.version}</version>
          <optional>true</optional>
       </dependency>
 
