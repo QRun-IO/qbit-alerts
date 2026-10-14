@@ -40,19 +40,19 @@ import com.kingsrook.qbits.alerts.model.AlertsSubscription;
 import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
 import com.kingsrook.qbits.alerts.notifications.NotificationService;
-import com.kingsrook.qbits.alerts.spi.AlertDefaultMonitor;
 import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.AlertMonitorKind;
-import com.kingsrook.qbits.alerts.spi.AlertRecordRef;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
-import com.kingsrook.qbits.alerts.spi.AlertsInstanceMetaData;
 import com.kingsrook.qbits.alerts.spi.NotificationAudience;
 import com.kingsrook.qbits.alerts.spi.NotificationCategory;
 import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qbits.alerts.spi.NotificationSignal;
-import com.kingsrook.qbits.alerts.spi.QAlertTypeMetaData;
-import com.kingsrook.qbits.alerts.spi.ResolveMode;
+import com.kingsrook.qqq.backend.core.alerts.AlertDefaultMonitor;
+import com.kingsrook.qqq.backend.core.alerts.AlertMonitorKind;
+import com.kingsrook.qqq.backend.core.alerts.AlertRecordRef;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertsInstanceMetaData;
+import com.kingsrook.qqq.backend.core.alerts.QAlertTypeMetaData;
+import com.kingsrook.qqq.backend.core.alerts.ResolveMode;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.instances.AbstractQQQApplication;
@@ -309,11 +309,11 @@ public class AlertsDemoServer extends AbstractQQQApplication
             {
                runtime.sink().raise(new AlertSignal("backups.job.failed").withDedupKey("nightly-db").withTitle("Nightly database backup failed")
                   .withSummary("The dump step exited with an error.").withDetails("pg_dump: error: connection to server lost")
-                  .withRecordRef(AlertRecordRef.of("backup_run", runId)).withLink(AlertLink.toRecord("backup_run", runId, "Open the run")));
+                  .withRecordRef(AlertRecordRef.of("backup_run", runId)).withLink(com.kingsrook.qqq.backend.core.alerts.AlertLink.toRecord("backup_run", runId, "Open the run")));
             }
             else
             {
-               runtime.sink().resolve(new com.kingsrook.qbits.alerts.spi.AlertResolution("backups.job.failed", "nightly-db", "The next run succeeded"));
+               runtime.sink().resolve(new com.kingsrook.qqq.backend.core.alerts.AlertResolution("backups.job.failed", "nightly-db", "The next run succeeded"));
                runtime.sink().heartbeat("backups.nightly-db", clock.instant());
             }
          }
@@ -324,7 +324,7 @@ public class AlertsDemoServer extends AbstractQQQApplication
             if(day != 27)
             {
                clock.set(clock.instant().plus(Duration.ofHours(3)));
-               runtime.sink().resolve(new com.kingsrook.qbits.alerts.spi.AlertResolution("cdn.purge.dead", "provider:cloudfront", "A later purge succeeded"));
+               runtime.sink().resolve(new com.kingsrook.qqq.backend.core.alerts.AlertResolution("cdn.purge.dead", "provider:cloudfront", "A later purge succeeded"));
             }
          }
          if(day == 25)

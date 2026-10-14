@@ -28,11 +28,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Resolution;
-import com.kingsrook.qbits.alerts.spi.AlertResolution;
-import com.kingsrook.qbits.alerts.spi.AlertSeverity;
-import com.kingsrook.qbits.alerts.spi.AlertSignal;
-import com.kingsrook.qbits.alerts.spi.AlertSinkInterface;
 import com.kingsrook.qbits.alerts.spi.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertResolution;
+import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
+import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertSinkInterface;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
 import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
@@ -134,10 +134,11 @@ public class QbitAlertsSink implements AlertSinkInterface
 
 
    /*******************************************************************************
+    ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
+    **
     ** Queue a notification (it is written and sent by the notification
     ** service on the drain thread).
     *******************************************************************************/
-   @Override
    public void notify(NotificationSignal signal)
    {
       if(signal == null)

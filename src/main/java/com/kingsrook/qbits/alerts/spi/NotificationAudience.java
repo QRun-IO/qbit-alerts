@@ -26,12 +26,16 @@ import java.util.Objects;
 
 
 /*******************************************************************************
+ ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
+ **
  ** Who a notification is for, resolved to users when it is sent (stand-in for
  ** core's com.kingsrook.qqq.backend.core.alerts.NotificationAudience).
  *******************************************************************************/
 public class NotificationAudience implements Serializable
 {
    /*******************************************************************************
+    ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
+    **
     ** The kinds of audience.
     *******************************************************************************/
    public enum Type
