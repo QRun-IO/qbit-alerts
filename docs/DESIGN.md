@@ -4,7 +4,7 @@ The design for this qbit is tracked in [QRun-IO/qqq#1090](https://github.com/QRu
 
 Deviations from the design, and why:
 - **UI API and record following:** the RC.6 alerts extension, collaboration ownership of follow, and machine webhook migration are specified in [UI-API.md](UI-API.md). Existing RECORD watch subscriptions remain readable without migration.
-- **Alerts use core's RC.5 SPI** (QRun-IO/qqq#1108), including sink registration in core instance metadata. Only notification types and their `AlertLink` signature dependency remain in `spi/`, preserving released producers until QRun-IO/qqq#1125 ships in RC.6.
+- **Alerts and notifications use core's RC.6 producer API**, including sink registration in core instance metadata (QRun-IO/qqq#1108 and #1125). `AlertsSinkAdapter` delegates `raise`, `resolve`, `heartbeat` and `notify` to the runtime queue. No local SPI types remain; storage-specific audience and severity conversion belongs to `NotificationService`.
 - **Visibility checks 1 to 3 (section 7.2)** are enforced by record security locks on session keys (`alerts_permission`, `alerts_readable_table`), not by a pre-query customizer. QQQ has no pre-query customizer, and locks also apply to counts, exports and the API.
 - **Heartbeats** are stored in an extra table, `alerts_heartbeat`.
 - **Claims** are leases, not atomic conditional updates (see README.md, Known limits).

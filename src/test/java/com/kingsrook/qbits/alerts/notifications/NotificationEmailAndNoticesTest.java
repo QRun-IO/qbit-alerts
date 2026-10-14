@@ -29,11 +29,12 @@ import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
-import com.kingsrook.qbits.alerts.spi.AlertLink;
-import com.kingsrook.qbits.alerts.spi.NotificationAudience;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
-import com.kingsrook.qbits.alerts.spi.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.QAlerts;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.Content;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.SendMessageInput;
@@ -147,7 +148,7 @@ class NotificationEmailAndNoticesTest extends BaseAlertsTest
    {
       emailSettings("viewer-1", "JOB", "IMMEDIATE", "WARNING");
       emailSettings("viewer-2", "JOB", "IMMEDIATE", "ERROR");
-      runtime.getNotifications().notify(new NotificationSignal("Export failed").withBody("Disk <full>").withSeverity(NotificationSeverity.WARNING)
+      QAlerts.notify(new NotificationSignal("Export failed").withBody("Disk <full>").withSeverity(NotificationSeverity.WARNING)
          .withCategory(NotificationCategory.JOB).withLink(AlertLink.toPath("/app/widget", "Widgets")).withAudience(NotificationAudience.users("viewer-1", "viewer-2", "manager-1")));
 
       NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
@@ -175,7 +176,7 @@ class NotificationEmailAndNoticesTest extends BaseAlertsTest
       clock.set(Instant.parse("2026-10-12T09:00:00Z"));
       emailSettings("viewer-1", "RELEASE", "DAILY_DIGEST", "INFO");
       AlertsNotices.release("2.4", "Dark mode everywhere.", null);
-      runtime.getNotifications().notify(new NotificationSignal("Version 2.5 is out").withCategory(NotificationCategory.RELEASE).withAudience(NotificationAudience.user("viewer-1")));
+      QAlerts.notify(new NotificationSignal("Version 2.5 is out").withCategory(NotificationCategory.RELEASE).withAudience(NotificationAudience.user("viewer-1")));
 
       assertThat(new NotificationEmailer(runtime).run().digests()).isEqualTo(0);
       clock.set(Instant.parse("2026-10-12T12:05:00Z"));

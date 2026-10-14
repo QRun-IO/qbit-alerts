@@ -37,9 +37,9 @@ import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EmailMode;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.EmailStatus;
 import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
-import com.kingsrook.qbits.alerts.spi.NotificationCategory;
-import com.kingsrook.qbits.alerts.spi.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.actions.messaging.SendMessageAction;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSeverity;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.Content;
@@ -222,7 +222,7 @@ public class NotificationEmailer
     *******************************************************************************/
    static boolean atLeast(String severity, String minimum)
    {
-      return (NotificationSeverity.fromName(severity, NotificationSeverity.INFO).compareTo(NotificationSeverity.fromName(minimum, NotificationSeverity.WARNING)) >= 0);
+      return (NotificationService.severityOf(severity, NotificationSeverity.INFO).compareTo(NotificationService.severityOf(minimum, NotificationSeverity.WARNING)) >= 0);
    }
 
 

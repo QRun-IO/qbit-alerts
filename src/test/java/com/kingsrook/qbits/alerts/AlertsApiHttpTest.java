@@ -24,8 +24,13 @@ import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 import com.kingsrook.qbits.alerts.api.AlertsRouteProvider;
+import com.kingsrook.qqq.backend.core.alerts.AlertLink;
 import com.kingsrook.qqq.backend.core.alerts.AlertRecordRef;
 import com.kingsrook.qqq.backend.core.alerts.AlertSignal;
+import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
+import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
+import com.kingsrook.qqq.backend.core.alerts.NotificationSignal;
+import com.kingsrook.qqq.backend.core.alerts.QAlerts;
 import com.kingsrook.qqq.backend.core.instances.AbstractQQQApplication;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
@@ -145,6 +150,38 @@ class AlertsApiHttpTest extends BaseAlertsTest
    {
       assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
       return (JsonUtils.toObject(response.body(), Map.class));
+   }
+
+
+
+   /*******************************************************************************
+    ** A core producer reaches the strict HTTP inbox through the background sink.
+    *******************************************************************************/
+   @Test
+   @SuppressWarnings("unchecked")
+   void coreNotificationReachesInbox() throws Exception
+   {
+      config.withSynchronousSink(false);
+      start();
+      long failures = QAlerts.getProducerFailureCount();
+      QAlerts.notify(new NotificationSignal("Shipment delivered").withBody("Your shipment arrived.")
+         .withCategory(NotificationCategory.JOB).withSourceName("easypost-tracking")
+         .withLink(AlertLink.toRecord(WIDGET, 5, "Shipment"))
+         .withAudience(NotificationAudience.user("viewer-1")));
+      runtime.getSink().stop();
+
+      String base = "/qqq/v1/alerts/inbox";
+      Map<String, Object> summary = json(request("GET", base + "/summary", null, "viewer-1", null));
+      assertThat(summary).containsEntry("unreadCount", 1).containsEntry("highestUnreadSeverity", "INFO");
+      List<Map<String, Object>> items = (List<Map<String, Object>>) summary.get("items");
+      assertThat(items).singleElement().satisfies(item -> assertThat(item)
+         .containsEntry("title", "Shipment delivered").containsEntry("category", "JOB")
+         .containsEntry("source", "easypost-tracking").containsEntry("href", "/app/" + WIDGET + "/5"));
+      Map<String, Object> page = json(request("GET", base, null, "viewer-1", null));
+      assertThat((List<Map<String, Object>>) page.get("items")).singleElement()
+         .satisfies(item -> assertThat(item).containsEntry("body", "Your shipment arrived."));
+      assertThat(json(request("GET", base + "/summary", null, "viewer-2", null))).containsEntry("unreadCount", 0);
+      assertThat(QAlerts.getProducerFailureCount()).isEqualTo(failures);
    }
 
 
