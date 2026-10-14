@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format follows Keep
 ### Fixed
 - Record-view child lists (e.g. a notification's Recipients) failed with "Error in JSON Serialization": the child table's meta-data includes the qbit config, and `AlertsQBitConfig.getRuntime()` points at a runtime that points back at the config, so Jackson recursed to its 1000-level nesting limit. `getRuntime()` and `getAudienceResolver()` are now `@JsonIgnore`, as in the other qbits' configs. A regression test renders and serializes every child-list widget.
 
+### Added
+- Starter defaults changelog `alerts-defaults.changelog.sql` (insert-only, guarded): the `in-app` and `email` channels and the `alerts` and `other` groups, equal to what the runtime creates on first use. Tested through real Liquibase on H2.
+- Help for the Alerts app and every `alerts_*` table (`help/qbit-alerts.yaml`, STAND-IN core#1198): what the table is for and how its rows get created, shown when it is empty.
+- A Setup card first on the Alerts home (alerts admins): each configuration table, its state and the next step.
+- `AlertsTablesGuardrailTest`: every table is used by runtime code, seeded or listed as starting empty with a reason, and has help.
+
+### Fixed
+- A group's `ownerTeamId` was stored but never read. An alert that no subscription matches (WARNING and above) now goes to the owner team of its group, or of the nearest parent group that has one.
+- A user's `defaultChannelIds` was stored but never read. It now adds the chosen external channels to the bell (unless In-App is off) for subscriptions that name none.
+- Alert types, groups and default monitors also sync on the first bell request, so those tables are not empty on a running install.
+
 ### Changed
 - Keep reminders and escalations immediate for digest subscribers while applying pause and quiet hours to their push channels. Preserve team audience resolution, mute scopes, both scheduled jobs and changesets 21-27.
 - Apply user pause and local quiet hours to personal push channels (email, email lists and other non-IN_APP channels), including team members, with logged suppression reasons and a configurable quiet-hours severity bypass. The in-app bell remains unaffected, including digest delivery. Channel subscriptions are unaffected.
