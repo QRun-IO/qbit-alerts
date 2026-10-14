@@ -136,6 +136,76 @@ class RoutingAndDeliveryTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** First calls for one user race (the home widgets and the bell load
+    ** together): only one bootstrap subscription is created.
+    *******************************************************************************/
+   @Test
+   void testConcurrentFirstCallsBootstrapOnce() throws Exception
+   {
+      com.kingsrook.qqq.backend.core.context.CapturedContext context = QContext.capture();
+      java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+      try
+      {
+         java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+         List<java.util.concurrent.Future<Object>> futures = new java.util.ArrayList<>();
+         for(int i = 0; i < 4; i++)
+         {
+            futures.add(pool.submit(() ->
+            {
+               QContext.init(context);
+               start.await();
+               AlertsPreferences.ensure(runtime, QContext.getQSession());
+               return (null);
+            }));
+         }
+         start.countDown();
+         for(java.util.concurrent.Future<Object> future : futures)
+         {
+            future.get();
+         }
+      }
+      finally
+      {
+         pool.shutdownNow();
+      }
+      assertThat(all(AlertsSubscription.TABLE_NAME)).hasSize(1);
+      assertThat(all(AlertsUserPreference.TABLE_NAME)).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** Another replica raced and left a second bootstrap subscription: the next
+    ** first call keeps the oldest and leaves a person's own subscriptions alone.
+    *******************************************************************************/
+   @Test
+   void testDuplicateBootstrapSubscriptionsAreRemoved() throws Exception
+   {
+      for(String creator : List.of("alerts (bootstrap rule)", "alerts (bootstrap rule)", ADMIN))
+      {
+         runtime.asSystem(() -> AlertsDb.insert(AlertsSubscription.TABLE_NAME, new QRecord()
+            .withValue("subscriberType", "USER")
+            .withValue("userId", ADMIN)
+            .withValue("scopeType", "ALL")
+            .withValue("minSeverity", "ERROR")
+            .withValue("events", "RAISED")
+            .withValue("deliveryMode", "IMMEDIATE")
+            .withValue("enabled", true)
+            .withValue("createdByUserId", creator)));
+      }
+      List<QRecord> before = all(AlertsSubscription.TABLE_NAME);
+      assertThat(before).hasSize(3);
+
+      AlertsPreferences.ensure(runtime, QContext.getQSession());
+
+      List<QRecord> after = all(AlertsSubscription.TABLE_NAME);
+      assertThat(after).hasSize(2);
+      assertThat(after).extracting(r -> r.getValueInteger("id")).containsExactlyInAnyOrder(before.get(0).getValueInteger("id"), before.get(2).getValueInteger("id"));
+   }
+
+
+
+   /*******************************************************************************
     ** No subscriptions: nobody is notified. The bootstrap rule gives admins an
     ** in-app subscription to ERROR and worse on first visit.
     *******************************************************************************/
