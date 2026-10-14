@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import com.kingsrook.qbits.alerts.AlertsPreferences;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
@@ -36,8 +37,8 @@ import com.kingsrook.qbits.alerts.model.AlertsUserPreference;
 import com.kingsrook.qbits.alerts.notifications.NotificationEmailer;
 import com.kingsrook.qbits.email.EmailQBitConfig;
 import com.kingsrook.qbits.email.EmailQBitProducer;
-import com.kingsrook.qbits.email.EmailRuntime;
-import com.kingsrook.qbits.email.metadata.EmailTables;
+import com.kingsrook.qbits.email.api.EmailApi;
+import com.kingsrook.qbits.email.api.EmailApiMessage;
 import com.kingsrook.qqq.backend.core.alerts.AlertLink;
 import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
 import com.kingsrook.qqq.backend.core.alerts.NotificationCategory;
@@ -64,7 +65,8 @@ class EmailQBitSendingTest extends BaseAlertsTest
 {
    /*******************************************************************************
     ** The email qbit in the same instance, and the alerts config without a
-    ** messaging provider (qbit-email makes it unnecessary).
+    ** messaging provider (qbit-email makes it unnecessary). G1 permits the
+    ** producer and configuration imports in test setup.
     *******************************************************************************/
    @Override
    protected void customizeInstance(QInstance qInstance)
@@ -116,7 +118,7 @@ class EmailQBitSendingTest extends BaseAlertsTest
     *******************************************************************************/
    private void addProvider() throws Exception
    {
-      runtime.asSystem(() -> AlertsDb.insert(EmailTables.PROVIDER, new QRecord().withValue("name", "relay").withValue("label", "Relay").withValue("kind", "SMTP")
+      runtime.asSystem(() -> AlertsDb.insert("email_provider", new QRecord().withValue("name", "relay").withValue("label", "Relay").withValue("kind", "SMTP")
          .withValue("host", "127.0.0.1").withValue("port", 2525).withValue("security", "NONE").withValue("fromAddress", "sender@example.com")
          .withValue("enabled", true).withValue("isDefault", true)));
    }
@@ -124,12 +126,18 @@ class EmailQBitSendingTest extends BaseAlertsTest
 
 
    /*******************************************************************************
-    ** The queued messages, oldest first.
+    ** Find messages through the API, oldest first. Read the fixture rows with
+    ** core QQQ for content assertions: the API deliberately omits bodies,
+    ** recipients and sender details from its metadata projection.
     *******************************************************************************/
    private List<QRecord> messages() throws QException
    {
-      return (runtime.asSystem(() -> AlertsDb.query(EmailTables.MESSAGE, new com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter().withOrderBy(
-         new com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy("id")))));
+      List<QRecord> messages = new ArrayList<>();
+      for(EmailApiMessage message : EmailApi.findMessagesByIdempotencyKeyPrefix("alerts:", 100))
+      {
+         messages.add(runtime.asSystem(() -> AlertsDb.byId("email_message", message.id())));
+      }
+      return (messages);
    }
 
 
@@ -139,7 +147,7 @@ class EmailQBitSendingTest extends BaseAlertsTest
     *******************************************************************************/
    private String templateName(QRecord message) throws QException
    {
-      return (runtime.asSystem(() -> AlertsDb.byId(EmailTables.TEMPLATE, message.getValue("templateId"))).getValueString("name"));
+      return (EmailApi.getMessage(message.getValueInteger("id")).orElseThrow().templateName());
    }
 
 
@@ -184,7 +192,7 @@ class EmailQBitSendingTest extends BaseAlertsTest
    {
       assertThat(AlertsEmail.isActive()).isTrue();
       assertThat(AlertsEmail.isActive(null)).isFalse();
-      assertThat(EmailRuntime.config(qInstance)).isNotNull();
+      assertThat(EmailApi.isInstalled(qInstance)).isTrue();
       assertThat(new EmailChannel(new AlertsQBitConfig(), ChannelType.EMAIL).validate(null, null)).isEmpty();
       assertThat(new NotificationEmailer(runtime).isConfigured()).isTrue();
    }
@@ -201,7 +209,8 @@ class EmailQBitSendingTest extends BaseAlertsTest
    {
       addProvider();
       EmailChannel channel = new EmailChannel(config, ChannelType.EMAIL);
-      assertThat(channel.deliver(alertMessage(), null, "ops@example.com", null).outcome()).isEqualTo(DeliveryResult.Outcome.SENT);
+      DeliveryResult delivered = channel.deliver(alertMessage(), null, "ops@example.com", null);
+      assertThat(delivered.outcome()).as("Delivery outcome: %s", delivered.error()).isEqualTo(DeliveryResult.Outcome.SENT);
 
       List<QRecord> messages = messages();
       assertThat(messages).hasSize(1);
@@ -267,7 +276,7 @@ class EmailQBitSendingTest extends BaseAlertsTest
    void testSuppressedAddress() throws Exception
    {
       addProvider();
-      runtime.asSystem(() -> AlertsDb.insert(EmailTables.SUPPRESSION, new QRecord().withValue("address", "ops@example.com").withValue("scope", "ALL").withValue("reason", "HARD_BOUNCE")));
+      runtime.asSystem(() -> AlertsDb.insert("email_suppression", new QRecord().withValue("address", "ops@example.com").withValue("scope", "ALL").withValue("reason", "HARD_BOUNCE")));
       DeliveryResult result = new EmailChannel(config, ChannelType.EMAIL).deliver(alertMessage(), null, "ops@example.com", null);
       assertThat(result.outcome()).isEqualTo(DeliveryResult.Outcome.FAILED);
       assertThat(result.error()).contains("suppressed");
@@ -344,7 +353,7 @@ class EmailQBitSendingTest extends BaseAlertsTest
       loginAs(ADMIN);
       QAlerts.notify(new NotificationSignal("Export failed").withSeverity(NotificationSeverity.WARNING).withCategory(NotificationCategory.JOB)
          .withAudience(NotificationAudience.users("viewer-1")));
-      runtime.asSystem(() -> AlertsDb.insert(EmailTables.SUPPRESSION, new QRecord().withValue("address", "viewer-1@example.com").withValue("scope", "ALL").withValue("reason", "HARD_BOUNCE")));
+      runtime.asSystem(() -> AlertsDb.insert("email_suppression", new QRecord().withValue("address", "viewer-1@example.com").withValue("scope", "ALL").withValue("reason", "HARD_BOUNCE")));
       NotificationEmailer.Result suppressed = new NotificationEmailer(runtime).run();
       assertThat(suppressed.skipped()).isEqualTo(1);
       assertThat(suppressed.sent()).isEqualTo(0);

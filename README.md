@@ -157,7 +157,7 @@ How each one sends:
 
 ## Email through qbit-email
 
-When qbit-email is produced in the same instance (and on the classpath; it is an optional dependency), alert channel emails, notification emails and daily digests go through `EmailService` instead of core `SendMessageAction`:
+When qbit-email is produced in the same instance (and on the classpath; it is an optional dependency), alert channel emails, notification emails and daily digests go through the published `com.kingsrook.qbits.email.api.EmailApi` in qbit-email `0.1.0-RC.2` instead of core `SendMessageAction`. Template registration, sends and installation detection use only the public API; templates, categories, idempotency keys, linked records and outcome mapping are unchanged:
 
 - **Templates**, registered on first use and never overwritten (edit them in the Email app): `alerts_alert` (a channel email for one alert or a batch), `alerts_notification` (one notification) and `alerts_digest` (a list of items, `{{#each items}}`). All are Markdown, category NOTIFICATION, so unsubscribe and suppression apply.
 - **One recipient per message.** An email list channel sends one message per address.
