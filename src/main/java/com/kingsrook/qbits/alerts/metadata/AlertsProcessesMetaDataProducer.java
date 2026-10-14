@@ -46,13 +46,15 @@ import com.kingsrook.qqq.backend.core.processes.implementations.etl.streamedwith
  ** - the record and table actions (AlertsAction), each a standard streamed
  **   ETL process on its table: optional input, Review summary lines, Result
  **   summary lines;
- ** - two hidden scheduled processes: alertsEvaluateMonitors (monitors, plus
- **   snooze / quiet-period / flapping upkeep) and alertsDeliverNotifications.
+ ** - hidden scheduled processes: alertsEvaluateMonitors (monitors, plus
+ **   snooze / quiet-period / flapping upkeep), alertsDeliverNotifications,
+ **   and alertsEscalateAndRemind.
  **   They exist without a scheduler and run on one only when the config names
  **   it.
  *******************************************************************************/
 public class AlertsProcessesMetaDataProducer extends QBitComponentMetaDataProducer<MetaDataProducerMultiOutput, AlertsQBitConfig>
 {
+   public static final String ESCALATE_AND_REMIND = "alertsEscalateAndRemind";
    public static final String EVALUATE_MONITORS     = "alertsEvaluateMonitors";
    public static final String DELIVER_NOTIFICATIONS = "alertsDeliverNotifications";
 
@@ -87,6 +89,7 @@ public class AlertsProcessesMetaDataProducer extends QBitComponentMetaDataProduc
       }
       processes.add(scheduled(config, EVALUATE_MONITORS, "Evaluate alert monitors", AlertsScheduledSteps.EvaluateMonitors.class, config.getEvaluateEverySeconds()));
       processes.add(scheduled(config, DELIVER_NOTIFICATIONS, "Deliver alert notifications", AlertsScheduledSteps.DeliverNotifications.class, config.getDeliverEverySeconds()));
+      processes.add(scheduled(config, ESCALATE_AND_REMIND, "Escalate and remind", AlertsScheduledSteps.EscalateAndRemind.class, 60));
       return (processes);
    }
 

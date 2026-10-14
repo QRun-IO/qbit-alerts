@@ -24,6 +24,7 @@ import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
+import com.kingsrook.qbits.alerts.model.AlertsEscalationPolicy;
 import com.kingsrook.qbits.alerts.model.AlertsGroup;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
 import com.kingsrook.qbits.alerts.model.AlertsMute;
@@ -55,7 +56,7 @@ public class AlertsAppMetaDataProducer extends QBitComponentMetaDataProducer<QAp
 {
    /** the main tables, in nav order. */
    public static final List<String> MAIN_TABLES = List.of(AlertsAlert.TABLE_NAME, AlertsNotification.TABLE_NAME, AlertsMonitor.TABLE_NAME, AlertsType.TABLE_NAME, AlertsGroup.TABLE_NAME,
-      AlertsSubscription.TABLE_NAME, AlertsUserPreference.TABLE_NAME, AlertsNotificationPreference.TABLE_NAME, AlertsTeam.TABLE_NAME, AlertsChannel.TABLE_NAME, AlertsMute.TABLE_NAME, AlertsDelivery.TABLE_NAME);
+      AlertsSubscription.TABLE_NAME, AlertsUserPreference.TABLE_NAME, AlertsNotificationPreference.TABLE_NAME, AlertsTeam.TABLE_NAME, AlertsChannel.TABLE_NAME, AlertsEscalationPolicy.TABLE_NAME, AlertsMute.TABLE_NAME, AlertsDelivery.TABLE_NAME);
 
 
 
