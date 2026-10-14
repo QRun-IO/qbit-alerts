@@ -52,7 +52,7 @@ public final class AlertsUiApi
    public static MiddlewareSpecExtension extension()
    {
       return (new MiddlewareSpecExtension().withName("alerts").withPathPrefix("/alerts")
-         .withSemanticVersion("1.0.0").withDescription("Alerts inbox and record panel")
+         .withSemanticVersion("1.1.0").withDescription("Alerts inbox and record panel")
          .withSpec(InboxSummarySpec.class).withSpec(InboxSpec.class)
          .withSpec(InboxReadSpec.class).withSpec(InboxUnreadSpec.class)
          .withSpec(InboxDismissSpec.class).withSpec(RecordPanelSpec.class));

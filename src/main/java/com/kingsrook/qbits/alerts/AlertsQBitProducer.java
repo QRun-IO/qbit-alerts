@@ -209,6 +209,11 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
          qInstance.withProcessLifecycleListener(new QCodeReference(AlertsProcessListener.class));
       }
 
+      if(Boolean.TRUE.equals(qBitConfig.getPreferencesSectionEnabled()) && isPreferencesAvailable())
+      {
+         com.kingsrook.qbits.alerts.preferences.AlertsNotificationPreferencesProvider.register(qInstance, qBitConfig);
+      }
+
       boolean routes = false;
       if(Boolean.TRUE.equals(qBitConfig.getRegisterRoutes()) && isJavalinAvailable())
       {
@@ -289,5 +294,33 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
       {
          return (false);
       }
+   }
+
+
+
+   /*******************************************************************************
+    ** Older core versions can run without the optional preferences integration.
+    *******************************************************************************/
+   private static boolean isPreferencesAvailable()
+   {
+      try
+      {
+         Class.forName("com.kingsrook.qqq.backend.core.model.metadata.preferences.UserPreferencesMetaData", false, AlertsQBitProducer.class.getClassLoader());
+         return (true);
+      }
+      catch(ClassNotFoundException | LinkageError e)
+      {
+         return (false);
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** The bell shortcut is present only when the section is registered.
+    *******************************************************************************/
+   public static String preferencesSectionName(QInstance instance)
+   {
+      return (isPreferencesAvailable() && com.kingsrook.qbits.alerts.preferences.AlertsNotificationPreferencesProvider.isRegistered(instance) ? "notifications" : null);
    }
 }

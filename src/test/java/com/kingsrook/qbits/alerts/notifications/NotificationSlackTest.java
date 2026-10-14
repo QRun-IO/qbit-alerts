@@ -18,6 +18,7 @@
 package com.kingsrook.qbits.alerts.notifications;
 
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -254,6 +255,44 @@ class NotificationSlackTest extends BaseAlertsTest
       assertThat(new NotificationSlackSender(runtime).run().held()).isEqualTo(1);
       assertThat(SENT).isEmpty();
       assertThat(slackStatus("viewer-1")).isEqualTo("NONE");
+      clock.advance(Duration.ofDays(2));
+      assertThat(new NotificationSlackSender(runtime).run().sent()).isEqualTo(1);
+      assertThat(slackStatus("viewer-1")).isEqualTo("SENT");
+   }
+
+
+
+   /*******************************************************************************
+    ** Pauses hold JOB items in both Slack modes, even in a digest containing
+    ** SECURITY. After two days every held item is delivered exactly once.
+    *******************************************************************************/
+   @Test
+   void testPausedSecurityAndMixedDigest() throws Exception
+   {
+      clock.set(Instant.parse("2026-10-12T12:05:00Z"));
+      for(String userId : List.of("viewer-1", "viewer-2"))
+      {
+         String mode = "viewer-1".equals(userId) ? "IMMEDIATE" : "DAILY_DIGEST";
+         QRecord paused = new QRecord().withValue("pausedUntil", clock.instant().plus(Duration.ofDays(2)));
+         slackSettings(userId, "JOB", mode, "INFO", paused);
+         slackSettings(userId, "SECURITY", mode, "INFO", paused);
+      }
+      for(NotificationCategory category : List.of(NotificationCategory.JOB, NotificationCategory.SECURITY))
+      {
+         QAlerts.notify(new NotificationSignal(category.name()).withCategory(category).withSeverity(NotificationSeverity.CRITICAL)
+            .withAudience(NotificationAudience.users("viewer-1", "viewer-2")));
+      }
+      NotificationSlackSender.Result paused = new NotificationSlackSender(runtime).run();
+      assertThat(paused.sent()).isEqualTo(1);
+      assertThat(paused.digests()).isEqualTo(1);
+      assertThat(paused.held()).isEqualTo(2);
+      assertThat(SENT).hasSize(2).allSatisfy(message -> assertThat(text(message)).contains("SECURITY").doesNotContain("JOB"));
+      clock.advance(Duration.ofDays(2));
+      NotificationSlackSender.Result resumed = new NotificationSlackSender(runtime).run();
+      assertThat(resumed.sent()).isEqualTo(1);
+      assertThat(resumed.digests()).isEqualTo(1);
+      assertThat(SENT).hasSize(4);
+      assertThat(new NotificationSlackSender(runtime).run()).isEqualTo(new NotificationSlackSender.Result(0, 0, 0, 0, 0));
    }
 
 

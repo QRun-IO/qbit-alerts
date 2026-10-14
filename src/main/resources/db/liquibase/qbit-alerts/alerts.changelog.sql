@@ -513,3 +513,9 @@ ALTER TABLE alerts_notification_preference ADD COLUMN slack_min_severity VARCHAR
 ALTER TABLE alerts_notification_recipient ADD COLUMN slack_status VARCHAR(16);
 ALTER TABLE alerts_notification_recipient ADD COLUMN slack_message_id VARCHAR(100);
 CREATE INDEX ix_alerts_notification_recipient_slack_status ON alerts_notification_recipient (slack_status);
+
+-- changeset qbit-alerts:29
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM information_schema.columns WHERE LOWER(table_name) = 'alerts_notification_preference' AND LOWER(column_name) = 'in_app_min_severity'
+-- comment: Optional minimum severity for in-app notifications (security always arrives).
+ALTER TABLE alerts_notification_preference ADD COLUMN in_app_min_severity VARCHAR(16);
