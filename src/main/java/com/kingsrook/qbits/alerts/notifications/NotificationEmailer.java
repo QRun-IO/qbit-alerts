@@ -422,6 +422,16 @@ public class NotificationEmailer
     *******************************************************************************/
    private String absolute(String link)
    {
+      return (absolute(runtime, link));
+   }
+
+
+
+   /*******************************************************************************
+    ** A link made absolute with the public base URL (relative app paths).
+    *******************************************************************************/
+   static String absolute(AlertsRuntime runtime, String link)
+   {
       String base = runtime.getConfig().getPublicBaseUrl();
       if(link == null || !link.startsWith("/") || !StringUtils.hasContent(base))
       {
@@ -445,7 +455,7 @@ public class NotificationEmailer
    /*******************************************************************************
     ** The live (SENT, published, not expired) notifications for the rows.
     *******************************************************************************/
-   private static Map<Integer, QRecord> notifications(List<QRecord> recipients, Instant now) throws QException
+   static Map<Integer, QRecord> notifications(List<QRecord> recipients, Instant now) throws QException
    {
       Map<Integer, QRecord> live = new HashMap<>();
       List<Integer>         ids  = recipients.stream().map(recipient -> recipient.getValueInteger("notificationId")).distinct().toList();
@@ -470,7 +480,7 @@ public class NotificationEmailer
    /*******************************************************************************
     ** My Alert Settings rows (address, time zone, digest hour) by user.
     *******************************************************************************/
-   private static Map<String, QRecord> userSettings(java.util.Set<String> userIds) throws QException
+   static Map<String, QRecord> userSettings(java.util.Set<String> userIds) throws QException
    {
       Map<String, QRecord> settings = new HashMap<>();
       for(QRecord setting : AlertsDb.query(AlertsUserPreference.TABLE_NAME, new QQueryFilter().withCriteria("userId", QCriteriaOperator.IN, new ArrayList<>(userIds))))

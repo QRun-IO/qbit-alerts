@@ -23,7 +23,9 @@ system as well"
 ## 1. Owner decisions (2026-10-13)
 
 1. **Channels.** In-app (the bell and the notifications page) always. Email is opt-in per user, by
-   severity or as a daily digest. Slack stays a group or monitor channel only, never per user.
+   severity or as a daily digest. Slack is also a per-user channel, chosen per category (owner decision
+   2026-10-14, superseding the 2026-10-13 "Slack stays a group or monitor channel only, never per user";
+   alert-group and monitor Slack channels are unchanged).
 2. **Audience.** Dynamic audiences: all users, groups or roles, holders of a permission, or named users.
    The audience is resolved at send time and materialized as one recipient row per user, so read,
    unread and dismissed are tracked per user.
@@ -88,8 +90,9 @@ everywhere. Deleting it deletes its recipient rows.
 
 A child of the notification: one row per user, unique (`notificationId`, `userId`).
 
-`notificationId`, `userId`, `deliveredAt`, `readAt`, `dismissedAt`, `emailedAt`, `emailStatus`
-(NONE / PENDING / SENT / DIGESTED / SKIPPED / FAILED).
+`notificationId`, `userId`, `deliveredAt`, `readAt`, `dismissedAt`, `emailedAt`, `emailStatus`,
+`slackStatus`, `slackMessageId` (each status is NONE / PENDING / SENT / DIGESTED / SKIPPED / FAILED;
+`slackMessageId` is filled when the Slack provider reports one).
 
 Users see and change only their own rows (owner lock on `userId`). Only `readAt` and `dismissedAt` are
 editable; inserts and deletes are the qbit's.
@@ -99,7 +102,8 @@ editable; inserts and deletes are the qbit's.
 One row per user and category, unique (`userId`, `category`); a missing row means the defaults.
 
 `userId`, `category`, `inAppMuted` (boolean; refused for SECURITY), `emailMode` (OFF / IMMEDIATE /
-DAILY_DIGEST, default OFF), `emailMinSeverity` (default WARNING). It is owner-locked on `userId`. The
+DAILY_DIGEST, default OFF), `emailMinSeverity` (default WARNING), `slackMode` (OFF / IMMEDIATE / DAILY_DIGEST, default OFF),
+`slackMinSeverity` (default WARNING). It is owner-locked on `userId`. The
 digest hour and time zone come from `alerts_user_preference`.
 
 ## 4. Audiences
@@ -191,7 +195,19 @@ QAlerts.notify(new NotificationSignal("Your export failed")
   sends from the delivery job. DAILY_DIGEST sends one email per user at their digest hour, listing their
   unread notifications since the last digest. A muted category is skipped. Email never includes a body
   for SECURITY beyond the title and a link.
-- **Slack** stays a channel for alert groups and monitors only.
+- **Slack** (per user, opt-in per category through the Slack column of My Notification Settings): sent by
+  `NotificationSlackSender` from the same delivery job, only through core `SendMessageAction` (provider
+  `slackProviderName`, default `slack`; address `user:<userId>`, the recipient as owner, so the DM goes
+  through that user's own Slack connection; qbit-slack is never imported). IMMEDIATE sends one DM per
+  notification at or above `slackMinSeverity`; DAILY_DIGEST sends one DM per user at their digest hour,
+  listing their unread notifications, and marks the rows DIGESTED. Slack is a push channel, so a user's pause
+  and quiet hours (`alerts_user_preference`) hold it, with the same CRITICAL bypass as other push channels;
+  the bell is never held. ALERT notifications are not sent (alert channels already cover them) and SECURITY
+  carries the title and link only. With no provider registered under that name the rows are SKIPPED. A user
+  without a Slack connection is SKIPPED with no retry; any other error is FAILED; neither fails the
+  notification. Idempotency key `notify:<notificationId>:<userId>:slack`; until core adds an idempotency
+  field (STAND-IN core#1194, remove by RC.8) the recipient's `slackStatus` prevents a resend.
+- **Alert-group and monitor Slack channels** (incoming webhooks) work as before.
 
 ## 8. Next UI bell and page
 
