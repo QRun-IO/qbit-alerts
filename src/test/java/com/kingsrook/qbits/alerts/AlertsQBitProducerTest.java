@@ -413,4 +413,35 @@ class AlertsQBitProducerTest extends BaseAlertsTest
          com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType.INSERT)).isTrue();
    }
 
+
+
+   /*******************************************************************************
+    ** Every one-to-many join's child column leads an index in the shipped
+    ** changelog, so record pages, child lists and per-parent lookups do not scan
+    ** the child table.
+    *******************************************************************************/
+   @Test
+   void testJoinChildColumnsAreIndexed() throws Exception
+   {
+      String changelog;
+      try(InputStream in = getClass().getClassLoader().getResourceAsStream("db/liquibase/qbit-alerts/alerts.changelog.sql"))
+      {
+         changelog = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+      }
+      for(com.kingsrook.qqq.backend.core.model.metadata.joins.QJoinMetaData join : AlertsTableMetaDataHelper.buildJoins())
+      {
+         String table  = join.getRightTable();
+         String column = join.getJoinOns().get(0).getRightField().replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
+         java.util.regex.Pattern index = java.util.regex.Pattern.compile("(?i)CREATE (UNIQUE )?INDEX (IF NOT EXISTS )?\\w+ ON " + table + " \\(" + column + "[,)]");
+         java.util.regex.Pattern unique = java.util.regex.Pattern.compile("(?is)CREATE TABLE IF NOT EXISTS " + table + " \\((?:(?!\\);).)*UNIQUE \\(" + column + "[,)]");
+         //////////////////////////////////////////////////////////////////////
+         // alerts_delivery was renamed from the RC.1 alerts_notification;   //
+         // its indexes came along by ALTER INDEX ... RENAME TO ix_<t>_<col> //
+         //////////////////////////////////////////////////////////////////////
+         boolean renamed = changelog.contains("RENAME TO ix_" + table + "_" + column + ";") || changelog.contains("RENAME TO ix_" + table + "_" + column + "_");
+         assertThat(index.matcher(changelog).find() || unique.matcher(changelog).find() || renamed)
+            .as("index leading with " + table + "." + column + " for join " + join.getName())
+            .isTrue();
+      }
+   }
 }
