@@ -44,7 +44,7 @@ Packages:
 ## Dependencies
 
 - Java 21.
-- Parent `com.kingsrook:qbit-build-parent:2.0.0` (qqq 4.0.0). The default-active `qqq-snapshot` profile imports `qqq-bom-pom:4.1.0-RC.6` ahead of it, as in qbit-quick-search (ADR-0007). Remove that activation when the parent moves to 4.1.
+- Parent `com.kingsrook:qbit-build-parent:2.1.0` (qqq 4.0.0), with architecture guardrails enforced and strict UI API route tests enabled. The default-active `qqq-snapshot` profile imports released `qqq-bom-pom:4.1.0-RC.6` ahead of it, as in qbit-quick-search (ADR-0007). Build normally without a version override. Remove that activation when the parent moves to 4.1.
 - Tests: JUnit 5, AssertJ.
 
 ## Release

@@ -334,7 +334,7 @@ public class DeliveryWorker
 
 
    /*******************************************************************************
-    ** The stand-in alert a TEST message describes.
+    ** The sample alert a TEST message describes.
     *******************************************************************************/
    private static QRecord testAlert(Instant now)
    {
