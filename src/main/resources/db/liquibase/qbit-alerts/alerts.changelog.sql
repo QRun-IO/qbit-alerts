@@ -503,3 +503,13 @@ ALTER TABLE alerts_delivery ADD COLUMN digest_claim_key VARCHAR(240);
 ALTER TABLE alerts_delivery ADD COLUMN digest_last_item_id INTEGER;
 ALTER TABLE alerts_delivery ADD CONSTRAINT uq_alerts_delivery_digest_claim UNIQUE (digest_claim_key);
 CREATE INDEX ix_alerts_delivery_digest ON alerts_delivery (digest_key, channel_id, status);
+
+-- changeset qbit-alerts:28
+-- comment: Per-user Slack direct messages for notification categories: the Slack mode and minimum severity, and each recipient's Slack status and message id.
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM information_schema.columns WHERE LOWER(table_name) = 'alerts_notification_preference' AND LOWER(column_name) = 'slack_mode'
+ALTER TABLE alerts_notification_preference ADD COLUMN slack_mode VARCHAR(16);
+ALTER TABLE alerts_notification_preference ADD COLUMN slack_min_severity VARCHAR(16);
+ALTER TABLE alerts_notification_recipient ADD COLUMN slack_status VARCHAR(16);
+ALTER TABLE alerts_notification_recipient ADD COLUMN slack_message_id VARCHAR(100);
+CREATE INDEX ix_alerts_notification_recipient_slack_status ON alerts_notification_recipient (slack_status);
