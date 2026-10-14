@@ -4,11 +4,16 @@ All notable changes to this project are documented here. The format follows Keep
 
 ## [0.1.0] - Unreleased
 
+### Changed
+- Build against the released QQQ 4.1.0-RC.5 BOM. Alert types and sink registration now use core's alerts SPI; host `QAlerts.raise/resolve/heartbeat` calls reach the installed qbit through core instance metadata (qbit-alerts#15, F3).
+- Removed alert SPI copies. Retained `spi.NotificationSignal`, `NotificationAudience`, `NotificationCategory`, `NotificationSeverity`, `AlertLink`, and the binary-compatible `AlertsRuntime.sink().notify(...)` entry point for qbit-easypost-tracking 0.1.x until QRun-IO/qqq#1125 ships in RC.6.
+- Webhook signing delegates to core `WebhookSigner`/`WebhookSecret` (qbit-alerts#15, F11). Headers, `v1,` signatures and `whsec_` encoding are unchanged. A thin adapter preserves legacy keys shorter than core's 16-byte minimum using equivalent HMAC zero-padding.
+
 ### Added
 - Optional external channels:
   - Slack (an Incoming Webhook, Block Kit)
   - Microsoft Teams (a Workflows webhook, an Adaptive Card)
-  - a generic webhook, signed with Standard Webhooks headers through a stand-in for core's `WebhookSigner` (QRun-IO/qqq#1109)
+  - a generic webhook, signed with Standard Webhooks headers through core's `WebhookSigner` (QRun-IO/qqq#1109)
   - PagerDuty (Events API v2: trigger, acknowledge and resolve)
   - an Alertmanager sink (`/api/v2/alerts`, with the qqq labels and the origin guard)
 - Prometheus Alertmanager ingest at `POST /qqq/v1/alerts/ingest/alertmanager`. It takes a bearer token, creates EXTERNAL types with notifications off, and keeps a loop guard.
@@ -43,5 +48,5 @@ All notable changes to this project are documented here. The format follows Keep
 - The top-level Alerts app and its home dashboard, plus `AlertSummaryLoader` for link-only summaries.
 - `/qqq/v1/alerts` routes for the Next UI bell and record panel.
 - Record security, through three key types (`alerts_user`, `alerts_permission`, `alerts_readable_table`).
-- A stand-in for the core producer SPI (QRun-IO/qqq#1108), to be removed when that RC ships.
+- Core alert producer SPI integration (QRun-IO/qqq#1108), plus temporary notification SPI compatibility until RC.6 (QRun-IO/qqq#1125).
 - Repository scaffold: `AlertsQBitConfig` and `AlertsQBitProducer` (table prefix `alerts_`, permissions `alerts.*`), build, CI and repository standard files.

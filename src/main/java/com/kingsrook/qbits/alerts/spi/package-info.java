@@ -16,16 +16,20 @@
 
 
 /*******************************************************************************
- ** STAND-IN for the QQQ core alerts producer SPI (QRun-IO/qqq#1108), which is
- ** not yet in a released QQQ 4.1.0 RC. These classes are copies of
- ** com.kingsrook.qqq.backend.core.alerts (AlertSignal, AlertSeverity,
- ** QAlertTypeMetaData and friends) under this package, so the qbit can be
- ** built and tested against 4.1.0-RC.4 now.
+ ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
  **
- ** Replace when the RC with qqq#1108 ships: delete this package, change the
- ** imports to com.kingsrook.qqq.backend.core.alerts, and register
- ** QbitAlertsSink in core's AlertsInstanceMetaData (see AlertsQBitProducer).
- ** Until then, producers in a host reach the qbit through
- ** AlertsRuntime.sink() (or its monitors), not through core's QAlerts.
+ ** Only NotificationSignal, NotificationAudience, NotificationCategory,
+ ** NotificationSeverity and AlertLink remain here. Core 4.1.0-RC.5 ships the
+ ** alert SPI, but not the notification API planned in QRun-IO/qqq#1125.
+ **
+ ** Released qbit-easypost-tracking 0.1.x calls AlertsRuntime.sink().notify
+ ** with these types. AlertLink remains because NotificationSignal's public
+ ** signatures use it. Keep their binary signatures until producers migrate
+ ** to core QAlerts.notify in RC.6; no local sink interface is needed because
+ ** AlertsRuntime.sink() still returns QbitAlertsSink.
+ **
+ ** Alerts use com.kingsrook.qqq.backend.core.alerts. AlertsQBitProducer
+ ** registers AlertsSinkAdapter through core AlertsInstanceMetaData, so host
+ ** QAlerts.raise/resolve/heartbeat calls reach this qbit's runtime.
  *******************************************************************************/
 package com.kingsrook.qbits.alerts.spi;

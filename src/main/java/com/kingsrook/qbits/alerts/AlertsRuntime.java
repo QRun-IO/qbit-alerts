@@ -276,8 +276,9 @@ public class AlertsRuntime
 
 
    /*******************************************************************************
-    ** The sink producers send signals to (until the core SPI ships, hosts call
-    ** it directly: AlertsRuntime.get().sink().raise(...)).
+    ** The runtime sink. Alert producers use core QAlerts; notification
+    ** producers keep calling sink().notify(spi.NotificationSignal) until RC.6.
+    ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
     *******************************************************************************/
    public QbitAlertsSink sink()
    {

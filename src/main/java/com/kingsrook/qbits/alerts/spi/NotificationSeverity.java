@@ -19,6 +19,8 @@ package com.kingsrook.qbits.alerts.spi;
 
 
 /*******************************************************************************
+ ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
+ **
  ** How a notification looks to its reader: INFO and SUCCESS are good news,
  ** WARNING and ERROR need a look, CRITICAL makes the badge red (stand-in for
  ** core's com.kingsrook.qqq.backend.core.alerts.NotificationSeverity).
