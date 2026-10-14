@@ -353,6 +353,8 @@ public class AlertRouter
             }
          }
       }
+      // TODO STAND-IN(core=QRun-IO/qqq#1164, removeBy=4.1.0-RC.7): merge record followers
+      // from RecordFollowersProviderInterface here, before the existing visibility/suppression checks.
       return (new ArrayList<>(destinations.values()));
    }
 

@@ -331,7 +331,7 @@ class NotificationsTest extends BaseAlertsTest
       assertThat(NotificationService.linkUrl(AlertLink.toUrl("https://example.com/x", "x"))).isEqualTo("https://example.com/x");
       assertThat(NotificationService.linkUrl(AlertLink.toPath("/app/alerts", "x"))).isEqualTo("/app/alerts");
       assertThat(NotificationService.safeLink("//evil.example.com")).isNull();
-      for(String bad : List.of("/\\evil.com", "\\\\evil.com", "javascript:alert(1)", "data:text/html,x", "http://x.example.com", "https:///nohost", "/a b", "/a	b", "https://"))
+      for(String bad : List.of("/\\evil.com", "\\\\evil.com", "javascript:alert(1)", "data:text/html,x", "http://x.example.com", "https:///nohost", "/a b", "/a\tb", "https://"))
       {
          assertThat(NotificationService.safeLink(bad)).as(bad).isNull();
       }

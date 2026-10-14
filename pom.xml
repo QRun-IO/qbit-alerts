@@ -108,6 +108,32 @@
    <build>
       <plugins>
          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-checkstyle-plugin</artifactId>
+            <version>3.6.0</version>
+            <dependencies>
+               <dependency>
+                  <groupId>com.puppycrawl.tools</groupId>
+                  <artifactId>checkstyle</artifactId>
+                  <version>14.3.0</version>
+               </dependency>
+            </dependencies>
+            <configuration>
+               <configLocation>checkstyle/config.xml</configLocation>
+               <includeTestSourceDirectory>true</includeTestSourceDirectory>
+               <violationSeverity>warning</violationSeverity>
+            </configuration>
+            <executions>
+               <execution>
+                  <id>checkstyle</id>
+                  <phase>validate</phase>
+                  <goals>
+                     <goal>check</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
+         <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
             <version>${jacoco.version}</version>
@@ -158,14 +184,14 @@
    <profiles>
       <!-- Built against qqq 4.1 (QBitMetaDataProducer). Until qbit-build-parent  -->
       <!-- imports the released 4.1 BOM, this profile is active by default and     -->
-      <!-- imports qqq-bom-pom 4.1.0-RC.5 ahead of the parent's 4.0.0 BOM.         -->
+      <!-- imports qqq-bom-pom 4.1.0-RC.6 ahead of the parent's 4.0.0 BOM.         -->
       <profile>
          <id>qqq-snapshot</id>
          <activation>
             <activeByDefault>true</activeByDefault>
          </activation>
          <properties>
-            <qqq.snapshot.version>4.1.0-RC.5</qqq.snapshot.version>
+            <qqq.snapshot.version>4.1.0-RC.6</qqq.snapshot.version>
          </properties>
          <dependencyManagement>
             <dependencies>

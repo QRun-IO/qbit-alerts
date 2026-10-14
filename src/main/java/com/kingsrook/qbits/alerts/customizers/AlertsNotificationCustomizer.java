@@ -220,11 +220,11 @@ public class AlertsNotificationCustomizer implements TableCustomizerInterface
          else if(audience.getType() != NotificationAudience.Type.ALL_USERS && audience.getValues().isEmpty())
          {
             record.addError(new BadInputStatusMessage("List the " + switch(audience.getType())
-            {
-               case ROLES -> "roles or groups";
-               case PERMISSION -> "permission";
-               default -> "user ids";
-            } + " in Audience Members."));
+               {
+                  case ROLES -> "roles or groups";
+                  case PERMISSION -> "permission";
+                  default -> "user ids";
+               } + " in Audience Members."));
          }
       }
    }

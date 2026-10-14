@@ -139,8 +139,9 @@ notification admins. The home stays the only Alerts dashboard.
 ## 6. Producer SPI
 
 The notification API below is planned in [QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)
-for 4.1.0-RC.6. The baseline is 4.1.0-RC.5, which ships the core alert SPI
-(`com.kingsrook.qqq.backend.core.alerts`) but does **not** yet provide `QAlerts.notify`:
+for 4.1.0-RC.6. This branch now targets 4.1.0-RC.6 for the UI extension API. The retained qbit notification
+adapter still needs a separate migration to core `QAlerts.notify`; the following remains the
+target integration shape:
 
 ```java
 QAlerts.notify(new NotificationSignal("Your export failed")
@@ -250,3 +251,9 @@ recipients) whose `expireAt` is more than 7 days past, plus SENT or RETRACTED no
 5. Core authentication events? **Later.** Hosts call `AlertsSecurityNotices` from their authentication
    customizer until core offers a sign-in event.
 6. Server-sent events? **Later.** Polling with backoff is enough at 60 s.
+
+## UI contract
+
+The implemented UI routes and additive action/follow metadata are specified in [UI-API.md](UI-API.md),
+with the generated fragment at `src/main/resources/openapi/qqq-v1/alerts.yaml`. Record following
+belongs to collaboration; the old alerts panel watch route is removed.

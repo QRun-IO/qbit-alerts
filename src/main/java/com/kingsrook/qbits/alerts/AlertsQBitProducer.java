@@ -212,6 +212,7 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
       boolean routes = false;
       if(Boolean.TRUE.equals(qBitConfig.getRegisterRoutes()) && isJavalinAvailable())
       {
+         com.kingsrook.qbits.alerts.api.AlertsUiApi.register(qInstance);
          com.kingsrook.qbits.alerts.api.AlertsRouteProvider.register(qInstance);
          routes = true;
       }
