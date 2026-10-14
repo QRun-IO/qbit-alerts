@@ -56,7 +56,8 @@ class AlertsApiContractTest extends BaseAlertsTest
          "/qqq/v1/alerts/inbox/summary", "/qqq/v1/alerts/inbox", "/qqq/v1/alerts/inbox/read",
          "/qqq/v1/alerts/inbox/unread", "/qqq/v1/alerts/inbox/dismiss", "/qqq/v1/alerts/record-panel");
       assertThat(extension.getSpecs()).hasSize(6);
-      assertThat(generated).contains("alertsInboxSummary", "alertsInboxRead", "alertsInboxUnread", "alertsInboxDismiss", "alertsRecordPanel", "inboxHref", "actions", "follow");
+      assertThat(extension.getSemanticVersion()).isEqualTo("1.1.0");
+      assertThat(generated).contains("alertsInboxSummary", "alertsInboxRead", "alertsInboxUnread", "alertsInboxDismiss", "alertsRecordPanel", "inboxHref", "preferencesSection", "actions", "follow");
       assertThat(generated).doesNotContain("/watch", "/ingest/", "/hooks/");
    }
 

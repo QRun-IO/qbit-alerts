@@ -1,7 +1,7 @@
 # Alerts UI API and webhook migration
 
 The qbit targets QQQ **4.1.0-RC.6** (pending release). `AlertsQBitProducer` registers the
-`alerts` `MiddlewareSpecExtension`, version `1.0.0`, with the established `/alerts` prefix.
+`alerts` `MiddlewareSpecExtension`, version `1.1.0`, with the established `/alerts` prefix.
 `withRegisterRoutes(false)` opts out of both the extension and webhook registration.
 The six JSON specs extend `AbstractJsonEndpointSpec`; existing `AlertsApi` logic continues
 to enforce caller permissions, recipient ownership and alert visibility.
@@ -27,6 +27,7 @@ Nullable fields remain serialized as JSON null.
 
 ## Next handoff: additive payload fields
 
+- Summary adds nullable `preferencesSection`: the user Preferences section name (`notifications`) or null when not registered. Clients can use `/qqq/v1/preferences/{name}` for notification settings.
 - Summary adds `inboxHref`, currently `/app/notifications`. Retain and honor the existing
   `notificationsHref` and `alertsHref` fields for older clients.
 - Every inbox item (including banners) adds `actions`: `name`, `label`, `operationId`.
@@ -126,13 +127,12 @@ The supplied Next `main` checkout still has no alerts client; the
 
 ## Verification
 
-Use the Maven wrapper. The committed BOM version is RC.6; while it is unreleased, verify with
-an already installed local core build:
+Use the Maven wrapper with the released QQQ 4.1.0-RC.7 artifacts already installed locally:
 
 ```sh
-./mvnw -B verify -Dqqq.snapshot.version=4.1.0-ARCHRC6-SNAPSHOT
+./mvnw -o -q verify
 ```
 
 Regenerate intentionally with `-Dtest=AlertsApiContractTest -Dalerts.openapi.update=true test`
-(and the same local version override). Normal tests compare the fragment without rewriting it.
+(with `-o` for an offline build). Normal tests compare the fragment without rewriting it.
 Checkstyle uses `checkstyle/config.xml` and the repository's existing short Apache headers.

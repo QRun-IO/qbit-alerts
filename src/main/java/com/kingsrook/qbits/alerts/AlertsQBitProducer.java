@@ -24,6 +24,7 @@ import com.kingsrook.qbits.alerts.engine.AlertsProcessListener;
 import com.kingsrook.qbits.alerts.engine.AlertsSinkAdapter;
 import com.kingsrook.qbits.alerts.engine.MonitorEvaluator;
 import com.kingsrook.qbits.alerts.engine.QbitAlertsSink;
+import com.kingsrook.qbits.alerts.metadata.AlertsHelp;
 import com.kingsrook.qbits.alerts.metadata.AlertsTableMetaDataHelper;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
@@ -173,6 +174,7 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
 
       MetaDataProducerMultiOutput output = QBitMetaDataProducer.super.produce(qInstance);
       output.addSelfToInstance(qInstance);
+      AlertsHelp.apply(qInstance);
       return (new MetaDataProducerMultiOutput());
    }
 
@@ -207,6 +209,11 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
       if(qInstance.getProcessLifecycleListeners() == null || qInstance.getProcessLifecycleListeners().stream().noneMatch(ref -> ref != null && listener.equals(ref.getName())))
       {
          qInstance.withProcessLifecycleListener(new QCodeReference(AlertsProcessListener.class));
+      }
+
+      if(Boolean.TRUE.equals(qBitConfig.getPreferencesSectionEnabled()) && isPreferencesAvailable())
+      {
+         com.kingsrook.qbits.alerts.preferences.AlertsNotificationPreferencesProvider.register(qInstance, qBitConfig);
       }
 
       boolean routes = false;
@@ -289,5 +296,33 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
       {
          return (false);
       }
+   }
+
+
+
+   /*******************************************************************************
+    ** Older core versions can run without the optional preferences integration.
+    *******************************************************************************/
+   private static boolean isPreferencesAvailable()
+   {
+      try
+      {
+         Class.forName("com.kingsrook.qqq.backend.core.model.metadata.preferences.UserPreferencesMetaData", false, AlertsQBitProducer.class.getClassLoader());
+         return (true);
+      }
+      catch(ClassNotFoundException | LinkageError e)
+      {
+         return (false);
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** The bell shortcut is present only when the section is registered.
+    *******************************************************************************/
+   public static String preferencesSectionName(QInstance instance)
+   {
+      return (isPreferencesAvailable() && com.kingsrook.qbits.alerts.preferences.AlertsNotificationPreferencesProvider.isRegistered(instance) ? "notifications" : null);
    }
 }

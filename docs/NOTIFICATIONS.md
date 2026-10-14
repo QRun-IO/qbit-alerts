@@ -101,10 +101,61 @@ editable; inserts and deletes are the qbit's.
 
 One row per user and category, unique (`userId`, `category`); a missing row means the defaults.
 
-`userId`, `category`, `inAppMuted` (boolean; refused for SECURITY), `emailMode` (OFF / IMMEDIATE /
+`userId`, `category`, `inAppMuted` (boolean; refused for SECURITY), `inAppMinSeverity` (nullable; null means every severity, refused for SECURITY), `emailMode` (OFF / IMMEDIATE /
 DAILY_DIGEST, default OFF), `emailMinSeverity` (default WARNING), `slackMode` (OFF / IMMEDIATE / DAILY_DIGEST, default OFF),
 `slackMinSeverity` (default WARNING). It is owner-locked on `userId`. The
 digest hour and time zone come from `alerts_user_preference`.
+
+### 3.4 Notification settings in Preferences
+
+With the core user-preferences contract installed, the qbit registers **Notifications** (`notifications`,
+order 20, icon `notifications`): “What reaches you in the app, by email and on Slack.” It requires `alerts.view`
+and has no app scope. Hosts can disable it with `AlertsQBitConfig.withPreferencesSectionEnabled(false)`.
+Older core runtimes without preferences metadata omit the section.
+
+The section reads and writes the existing owner-locked tables, through core table actions with FIELD
+level audits retaining the signed-in user and client channel. It exposes:
+
+- Pause notifications until (security notices still arrive), daily digest time (24 hourly choices),
+  time zone (a valid Java `ZoneId`), and the alert in-app and email switches from `alerts_user_preference`.
+  A missing user row gets the same defaults as the bell's first-visit setup.
+- One category row per notification category: In-app, In-app from, Email (Off / Immediate / Daily digest),
+  Email from, Slack (Off / Immediate / Daily digest) and Slack from. Slack fields appear only when
+  the configured `slackProviderName` messaging provider is registered before Alerts is produced.
+  They use the same `alerts_email_mode` choices as the table. Missing category rows use table defaults;
+  edits upsert only that user's category. SECURITY Slack fields remain editable.
+  SECURITY's two in-app fields are read-only: “Security notices can't be muted.”
+- Only the user's own USER subscriptions, labelled by scope, with Enabled, From severity and Delivery mode.
+  Other users' rules and team/channel rules cannot be edited here, including by administrators.
+
+`GET /qqq/v1/preferences/notifications` loads the section and inline enum choices.
+`PATCH /qqq/v1/preferences/notifications` accepts partial changes, for example:
+
+```json
+{
+  "values": { "digestHour": 8, "timeZone": "America/Chicago" },
+  "lists": {
+    "categories": [{ "key": "JOB", "values": { "inAppMinSeverity": "WARNING", "emailMode": "DAILY_DIGEST", "slack": "IMMEDIATE", "slackMinSeverity": "WARNING" } }],
+    "subscriptions": [{ "key": "42", "values": { "enabled": true, "minSeverity": "ERROR" } }]
+  }
+}
+```
+
+Subscription keys are persisted row IDs. Invalid zones, foreign/team subscription keys and SECURITY
+in-app changes return 400; a section hidden by permission or configuration returns 404.
+The section has no user parameter and cannot change ownership. Administrators retain the standard
+table screens for administering other users' settings.
+
+In-app severity filters apply when recipients are materialized, just like category muting; existing
+inbox items remain. SECURITY always reaches its in-app recipients. While `pausedUntil` is in the future,
+non-SECURITY notification emails and per-user Slack DMs are deferred, including daily digests; recipients remain in the inbox
+and eligible after the pause ends, even after more than a day. SECURITY keeps its category email mode
+and Slack mode/severity settings but bypasses the pause. Existing alert routing continues to use the same pause
+and alert channel switches.
+
+Schema migration: `qbit-alerts:29` adds nullable `in_app_min_severity VARCHAR(16)`.
+The migration uses `onFail:MARK_RAN` when the column already exists.
+The POM targets released QQQ `4.1.0-RC.7`; build with `./mvnw -o -q verify`.
 
 ## 4. Audiences
 
@@ -201,7 +252,8 @@ QAlerts.notify(new NotificationSignal("Your export failed")
   through that user's own Slack connection; qbit-slack is never imported). IMMEDIATE sends one DM per
   notification at or above `slackMinSeverity`; DAILY_DIGEST sends one DM per user at their digest hour,
   listing their unread notifications, and marks the rows DIGESTED. Slack is a push channel, so a user's pause
-  and quiet hours (`alerts_user_preference`) hold it, with the same CRITICAL bypass as other push channels;
+  holds non-SECURITY items; quiet hours (`alerts_user_preference`) hold items with the same CRITICAL
+  bypass as other push channels. SECURITY bypasses pause, and mixed digests include only eligible items;
   the bell is never held. ALERT notifications are not sent (alert channels already cover them) and SECURITY
   carries the title and link only. With no provider registered under that name the rows are SKIPPED. A user
   without a Slack connection is SKIPPED with no retry; any other error is FAILED; neither fails the
@@ -228,7 +280,7 @@ Gating is unchanged from #85: no bell and zero requests unless `metaData.apps.al
 
 | Method | Path | Body or query | Returns |
 |---|---|---|---|
-| GET | `/inbox/summary` | | `{unreadCount, highestUnreadSeverity, items[≤10], banners[], pollSeconds, notificationsHref}` |
+| GET | `/inbox/summary` | | `{unreadCount, highestUnreadSeverity, items[≤10], banners[], pollSeconds, notificationsHref, inboxHref, alertsHref, preferencesSection}` |
 | GET | `/inbox` | `?status=all\|unread&category=&severity=&offset=0&limit=25` | `{items[], total, offset, limit}` |
 | POST | `/inbox/read` | `{id}` or `{ids:[..]}` or `{all:true}` (`{alertId}` still works) | `{updated}` |
 | POST | `/inbox/unread` | `{id}` | `{updated}` |
@@ -238,6 +290,9 @@ An item is `{id, notificationId, title, body, severity, category, source, href, 
 deliveredAt, age, unread, sticky}`. `id` is the recipient row id. `body` appears only in `/inbox` and in
 banners. `highestUnreadSeverity` is one of the five severities. Every call works in the caller's
 session, so the record locks apply.
+The alerts extension is version `1.1.0`. `inboxHref` retains the canonical inbox link.
+`preferencesSection` is `"notifications"` when that section is registered, otherwise JSON null.
+Clients can use it for the bell's settings shortcut to the core Preferences section.
 
 ## 9. Security
 

@@ -310,6 +310,50 @@ class AlertsQBitProducerTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** Changeset 29 upgrades existing Slack preferences once and preserves their
+    ** values; its MARK_RAN guard skips a database that already has the column.
+    *******************************************************************************/
+   @Test
+   void testInAppSeverityMigration() throws Exception
+   {
+      String changelog;
+      try(InputStream in = getClass().getClassLoader().getResourceAsStream("db/liquibase/qbit-alerts/alerts.changelog.sql"))
+      {
+         changelog = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+      }
+      String block = changelog.substring(changelog.indexOf("-- changeset qbit-alerts:29"));
+      assertThat(block).contains("-- preconditions onFail:MARK_RAN onError:HALT");
+      String guard = block.lines().filter(line -> line.startsWith("-- precondition-sql-check")).findFirst().orElseThrow();
+      String sql = block.lines().filter(line -> line.startsWith("ALTER TABLE")).findFirst().orElseThrow();
+      try(Connection connection = DriverManager.getConnection("jdbc:h2:mem:alerts_preferences_migration"); Statement statement = connection.createStatement())
+      {
+         statement.execute("CREATE TABLE alerts_notification_preference (user_id VARCHAR(100), slack_mode VARCHAR(16), slack_min_severity VARCHAR(16))");
+         statement.execute("INSERT INTO alerts_notification_preference VALUES ('viewer-1', 'DAILY_DIGEST', 'ERROR')");
+         for(int pass = 0; pass < 2; pass++)
+         {
+            try(ResultSet result = statement.executeQuery(guard.substring(guard.indexOf("SELECT"))))
+            {
+               assertThat(result.next()).isTrue();
+               assertThat(result.getInt(1)).isEqualTo(pass);
+            }
+            if(pass == 0)
+            {
+               statement.execute(sql);
+            }
+         }
+         try(ResultSet result = statement.executeQuery("SELECT slack_mode, slack_min_severity, in_app_min_severity FROM alerts_notification_preference"))
+         {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getString(1)).isEqualTo("DAILY_DIGEST");
+            assertThat(result.getString(2)).isEqualTo("ERROR");
+            assertThat(result.getString(3)).isNull();
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
     ** Permissions: the three alerts permissions are listed; role lists nest.
     *******************************************************************************/
    @Test
