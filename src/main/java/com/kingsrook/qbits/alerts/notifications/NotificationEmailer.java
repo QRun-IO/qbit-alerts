@@ -18,6 +18,7 @@
 package com.kingsrook.qbits.alerts.notifications;
 
 
+import java.io.Serializable;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -30,7 +31,11 @@ import java.util.List;
 import java.util.Map;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
+import com.kingsrook.qbits.alerts.delivery.AlertRedactor;
+import com.kingsrook.qbits.alerts.email.AlertsEmail;
+import com.kingsrook.qbits.alerts.email.AlertsEmailSender;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
+import com.kingsrook.qbits.alerts.metadata.AlertsProcessesMetaDataProducer;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
@@ -61,7 +66,10 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  ** - IMMEDIATE: one email per notification at or above the minimum severity;
  ** - DAILY_DIGEST: one email at the user's digest hour (in their time zone,
  **   from My Alert Settings) listing the day's unread notifications.
- ** Inert without a messaging provider and a From address. ALERT
+ ** Sent through qbit-email when it is produced in the instance (one message
+ ** per recipient; templates alerts_notification and alerts_digest,
+ ** NOTIFICATION), else through core SendMessageAction. Inert without either
+ ** (a messaging provider and a From address). ALERT
  ** notifications are never emailed here (alert subscriptions already email
  ** them). SECURITY emails carry the title and link only. Runs as the system
  ** user from the delivery job.
@@ -100,6 +108,10 @@ public class NotificationEmailer
     *******************************************************************************/
    public boolean isConfigured()
    {
+      if(AlertsEmail.isActive())
+      {
+         return (true);
+      }
       AlertsQBitConfig config = runtime.getConfig();
       return (StringUtils.hasContent(config.getMessagingProviderName()) && StringUtils.hasContent(config.getFromAddress()));
    }
@@ -154,16 +166,11 @@ public class NotificationEmailer
             }
             else if(EmailMode.IMMEDIATE.name().equals(preference.getValueString("emailMode")))
             {
-               boolean ok = send(address(settings.get(userId)), notification.getValueString("title"), List.of(notification));
-               mark(recipient, ok ? EmailStatus.SENT : EmailStatus.FAILED, ok ? now : null);
-               if(ok)
-               {
-                  sent++;
-               }
-               else
-               {
-                  failed++;
-               }
+               EmailStatus status = sendImmediate(address(settings.get(userId)), notification);
+               mark(recipient, status, status == EmailStatus.SENT ? now : null);
+               sent += status == EmailStatus.SENT ? 1 : 0;
+               skipped += status == EmailStatus.SKIPPED ? 1 : 0;
+               failed += status == EmailStatus.FAILED ? 1 : 0;
             }
             else if(recipient.getValue("readAt") == null)
             {
@@ -180,13 +187,14 @@ public class NotificationEmailer
                continue;
             }
             List<QRecord> items = digest.getValue().stream().map(pair -> pair[1]).toList();
-            boolean       ok    = send(address(setting), items.size() == 1 ? "1 new notification" : items.size() + " new notifications", items);
+            Instant       window = now.atZone(zone(setting)).truncatedTo(ChronoUnit.HOURS).toInstant();
+            EmailStatus   status = sendDigest(address(setting), digest.getKey(), window, items);
             for(QRecord[] pair : digest.getValue())
             {
-               mark(pair[0], ok ? EmailStatus.DIGESTED : EmailStatus.FAILED, ok ? now : null);
+               mark(pair[0], status == EmailStatus.SENT ? EmailStatus.DIGESTED : status, status == EmailStatus.SENT ? now : null);
             }
-            digestCount += ok ? 1 : 0;
-            failed += ok ? 0 : 1;
+            digestCount += status == EmailStatus.SENT ? 1 : 0;
+            failed += status == EmailStatus.FAILED ? 1 : 0;
          }
          return (new Result(sent, digestCount, skipped, failed));
       }));
@@ -200,19 +208,28 @@ public class NotificationEmailer
    static boolean isDigestHour(QRecord setting, Instant now)
    {
       Integer hour = setting == null ? null : setting.getValueInteger("digestHour");
-      ZoneId  zone = ZoneOffset.UTC;
+      return (now.atZone(zone(setting)).getHour() == (hour == null ? 8 : hour));
+   }
+
+
+
+   /*******************************************************************************
+    ** The user time zone (default UTC).
+    *******************************************************************************/
+   private static ZoneId zone(QRecord setting)
+   {
       try
       {
          if(setting != null && StringUtils.hasContent(setting.getValueString("timeZone")))
          {
-            zone = ZoneId.of(setting.getValueString("timeZone"));
+            return (ZoneId.of(setting.getValueString("timeZone")));
          }
       }
       catch(DateTimeException e)
       {
-         zone = ZoneOffset.UTC;
+         return (ZoneOffset.UTC);
       }
-      return (now.atZone(zone).getHour() == (hour == null ? 8 : hour));
+      return (ZoneOffset.UTC);
    }
 
 
@@ -228,8 +245,126 @@ public class NotificationEmailer
 
 
    /*******************************************************************************
-    ** One email: the notifications' titles, bodies (not for SECURITY) and
-    ** links. False when it could not be sent (or there is no address).
+    ** One notification emailed to one user: SENT, SKIPPED (the person
+    ** unsubscribed) or FAILED.
+    *******************************************************************************/
+   private EmailStatus sendImmediate(String address, QRecord notification)
+   {
+      if(!StringUtils.hasContent(address))
+      {
+         return (EmailStatus.FAILED);
+      }
+      if(!AlertsEmail.isActive())
+      {
+         return (send(address, notification.getValueString("title"), List.of(notification)) ? EmailStatus.SENT : EmailStatus.FAILED);
+      }
+      try
+      {
+         AlertsEmailSender.Result result = AlertsEmailSender.sendNotification(address, AlertsProcessesMetaDataProducer.DELIVER_NOTIFICATIONS, notification.getValueInteger("id"),
+            item(notification), settingsLink());
+         return (status(result));
+      }
+      catch(Exception e)
+      {
+         LOG.warn("Could not email a notification", e, logPair("notificationId", notification.getValue("id")));
+         return (EmailStatus.FAILED);
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** A user digest emailed: SENT, SKIPPED (the person unsubscribed) or FAILED.
+    *******************************************************************************/
+   private EmailStatus sendDigest(String address, String userId, Instant windowStart, List<QRecord> notifications)
+   {
+      if(!StringUtils.hasContent(address))
+      {
+         return (EmailStatus.FAILED);
+      }
+      if(!AlertsEmail.isActive())
+      {
+         return (send(address, notifications.size() == 1 ? "1 new notification" : notifications.size() + " new notifications", notifications) ? EmailStatus.SENT : EmailStatus.FAILED);
+      }
+      try
+      {
+         List<Map<String, Serializable>> items = new ArrayList<>();
+         for(QRecord notification : notifications)
+         {
+            items.add(item(notification));
+         }
+         return (status(AlertsEmailSender.sendDigest(address, AlertsProcessesMetaDataProducer.DELIVER_NOTIFICATIONS, userId, windowStart, notifications.get(0).getValueInteger("id"),
+            items, settingsLink())));
+      }
+      catch(Exception e)
+      {
+         LOG.warn("Could not email a digest", e, logPair("userId", userId));
+         return (EmailStatus.FAILED);
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** The qbit-email answer in this qbit email status vocabulary. A repeat
+    ** (DUPLICATE) was already queued, so it counts as sent.
+    *******************************************************************************/
+   private static EmailStatus status(AlertsEmailSender.Result result)
+   {
+      return (switch(result.status())
+      {
+         case QUEUED, DUPLICATE -> EmailStatus.SENT;
+         case SUPPRESSED -> EmailStatus.SKIPPED;
+         case REFUSED ->
+         {
+            LOG.warn("Email was refused", logPair("reasons", AlertRedactor.redact(result.detail())));
+            yield (EmailStatus.FAILED);
+         }
+      });
+   }
+
+
+
+   /*******************************************************************************
+    ** The template variables for one notification: title, body (not for
+    ** SECURITY), and an absolute link with its label.
+    *******************************************************************************/
+   private Map<String, Serializable> item(QRecord notification)
+   {
+      Map<String, Serializable> item = new LinkedHashMap<>();
+      item.put("title", notification.getValueString("title"));
+      String body = NotificationCategory.SECURITY.name().equals(notification.getValueString("category")) ? null : notification.getValueString("body");
+      if(StringUtils.hasContent(body))
+      {
+         item.put("body", body);
+      }
+      String link = absolute(NotificationService.safeLink(notification.getValueString("linkUrl")));
+      if(link != null && (link.startsWith("https://") || link.startsWith("http://")))
+      {
+         item.put("link", link);
+         if(StringUtils.hasContent(notification.getValueString("linkLabel")))
+         {
+            item.put("linkLabel", notification.getValueString("linkLabel"));
+         }
+      }
+      return (item);
+   }
+
+
+
+   /*******************************************************************************
+    ** Where a person changes these emails.
+    *******************************************************************************/
+   private String settingsLink()
+   {
+      return (absolute("/app/" + AlertsNotificationPreference.TABLE_NAME));
+   }
+
+
+
+   /*******************************************************************************
+    ** One email through core SendMessageAction: the notification titles,
+    ** bodies (not for SECURITY) and links. False when it could not be sent.
     *******************************************************************************/
    private boolean send(String address, String subject, List<QRecord> items)
    {

@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Changed
+- Email goes through qbit-email when it is produced in the instance (optional dependency, `qbit-email.version` 0.1.0-SNAPSHOT): alert channel emails (template `alerts_alert`), notification emails (`alerts_notification`) and digests (`alerts_digest`), all NOTIFICATION, one recipient per message, with idempotency keys and the alert or notification as the linked record. `messagingProviderName` stays as the fallback when qbit-email is absent, and is not required when it is present.
 - Build against the released QQQ 4.1.0-RC.5 BOM. Alert types and sink registration now use core's alerts SPI; host `QAlerts.raise/resolve/heartbeat` calls reach the installed qbit through core instance metadata (qbit-alerts#15, F3).
 - Removed alert SPI copies. Retained `spi.NotificationSignal`, `NotificationAudience`, `NotificationCategory`, `NotificationSeverity`, `AlertLink`, and the binary-compatible `AlertsRuntime.sink().notify(...)` entry point for qbit-easypost-tracking 0.1.x until QRun-IO/qqq#1125 ships in RC.6.
 - Webhook signing delegates to core `WebhookSigner`/`WebhookSecret` (qbit-alerts#15, F11). Headers, `v1,` signatures and `whsec_` encoding are unchanged. A thin adapter preserves legacy keys shorter than core's 16-byte minimum using equivalent HMAC zero-padding.

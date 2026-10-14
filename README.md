@@ -54,7 +54,7 @@ Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions i
 - QQQ 4.1 (built against `4.1.0-RC.5`).
 - An RDBMS backend.
 - A scheduler, for monitors and email delivery.
-- A messaging provider, for email.
+- For email, either [qbit-email](https://github.com/QRun-IO/qbit-email) produced in the same instance, or a messaging provider.
 - `qqq-middleware-javalin`, for the `/qqq/v1/alerts` routes (optional).
 
 ## Install
@@ -129,6 +129,18 @@ How each one sends:
 - **Alertmanager** alerts carry the labels `qqq_type`, `qqq_group`, `qqq_key` and `qqq_origin="qbit-alerts"`. Ingest ignores alerts with that origin, so nothing loops.
 - **Responses:** 2xx is sent. 408, 425, 429, 5xx and network errors are retried. Any other 4xx fails permanently.
 - **URLs** must be https, unless the channel's settings say `"allowInsecureHttp": true`, which is meant for local receivers.
+
+## Email through qbit-email
+
+When qbit-email is produced in the same instance (and on the classpath; it is an optional dependency), alert channel emails, notification emails and daily digests go through `EmailService` instead of core `SendMessageAction`:
+
+- **Templates**, registered on first use and never overwritten (edit them in the Email app): `alerts_alert` (a channel email for one alert or a batch), `alerts_notification` (one notification) and `alerts_digest` (a list of items, `{{#each items}}`). All are Markdown, category NOTIFICATION, so unsubscribe and suppression apply.
+- **One recipient per message.** An email list channel sends one message per address.
+- **Idempotency keys** never hold an address: `alerts:alert:<alert ids>:<recipient hash>:<message kind>:<minute>` (the kind and minute keep a reminder or a reopened alert from looking like a repeat), `alerts:notification:<notification id>:<recipient hash>` and `alerts:digest:<user>:<digest window start>`.
+- **Linked record** is the alert or notification row; the sender is `qbit-alerts` and the process `alertsDeliverNotifications`.
+- **Outcomes.** Queued or duplicate is sent. Suppressed (the person unsubscribed) is `SKIPPED` for notifications and a permanent failure that says so for channels. Refused (for example no enabled email provider) is `FAILED` and not retried.
+- **Text** in the variables is the existing redacted, external-safe text. No record labels are passed.
+- **Config.** `messagingProviderName` and `fromAddress` are not needed (the From address comes from the email provider). Without qbit-email they work as before.
 
 ## Known limits (v1)
 
