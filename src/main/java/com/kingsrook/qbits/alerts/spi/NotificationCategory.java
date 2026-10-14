@@ -19,6 +19,8 @@ package com.kingsrook.qbits.alerts.spi;
 
 
 /*******************************************************************************
+ ** STAND-IN(core=QRun-IO/qqq#1125, removeBy=4.1.0-RC.6)
+ **
  ** What a notification is about (stand-in for core's
  ** com.kingsrook.qqq.backend.core.alerts.NotificationCategory). Users filter
  ** and mute by category; SECURITY can never be muted in-app.

@@ -138,8 +138,9 @@ notification admins. The home stays the only Alerts dashboard.
 
 ## 6. Producer SPI
 
-It extends the core alerts SPI (`com.kingsrook.qqq.backend.core.alerts`) through a core PR to qqq
-`develop`, for the next 4.1 RC:
+The notification API below is planned in [QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)
+for 4.1.0-RC.6. The baseline is 4.1.0-RC.5, which ships the core alert SPI
+(`com.kingsrook.qqq.backend.core.alerts`) but does **not** yet provide `QAlerts.notify`:
 
 ```java
 QAlerts.notify(new NotificationSignal("Your export failed")
@@ -156,8 +157,12 @@ QAlerts.notify(new NotificationSignal("Your export failed")
 - The guarantees match `raise`: it never throws or blocks, it waits for the commit when a transaction is
   open, and bad input is counted.
 - `NotificationAudience`: `allUsers()`, `roles(...)`, `permission(p)`, `users(...)`, `user(id)`.
-- Until that RC ships, the qbit carries the same classes in its `spi` stand-in package, and hosts call
-  `AlertsRuntime.get(qInstance).sink().notify(...)`.
+- Until RC.6 ships, the qbit keeps `spi.NotificationSignal`, `NotificationAudience`,
+  `NotificationCategory`, `NotificationSeverity` and `AlertLink`, and hosts call
+  `AlertsRuntime.get(qInstance).sink().notify(...)`. Their binary signatures remain unchanged for
+  released qbit-easypost-tracking 0.1.x. The return type of `sink()` remains `QbitAlertsSink`;
+  there is no local sink interface. This direct notification path queues immediately; the
+  transaction-aware `QAlerts.notify` guarantees above describe the planned core API.
 
 ### 6.1 Automatic sources
 

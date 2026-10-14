@@ -51,7 +51,7 @@ Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions i
 ## Requirements
 
 - Java 21.
-- QQQ 4.1 (built against `4.1.0-RC.4`).
+- QQQ 4.1 (built against `4.1.0-RC.5`).
 - An RDBMS backend.
 - A scheduler, for monitors and email delivery.
 - A messaging provider, for email.
@@ -84,16 +84,18 @@ new AlertsQBitProducer()
 
 ## Raising alerts
 
-Until the core producer SPI ([QRun-IO/qqq#1108](https://github.com/QRun-IO/qqq/pull/1108)) is in a released QQQ RC, the SPI types are a stand-in in `com.kingsrook.qbits.alerts.spi` (see its `package-info.java`). In the meantime, call the qbit's sink directly:
+Use the producer SPI from `com.kingsrook.qqq.backend.core.alerts`, released in QQQ 4.1.0-RC.5 ([QRun-IO/qqq#1108](https://github.com/QRun-IO/qqq/pull/1108)). `AlertsQBitProducer` registers the qbit's sink through core's `AlertsInstanceMetaData`, so host producers need only core:
 
 ```java
-AlertsRuntime.get().sink().raise(new AlertSignal("cdn.purge.dead")
+QAlerts.raise(new AlertSignal("cdn.purge.dead")
    .withDedupKey("provider:" + providerId)
    .withTitle("3 CDN purges failed after retries")             // external-safe: no personal data
    .withRecordRefs(AlertRecordRef.of("cdn_purge_request", ids)));
 ```
 
-Once the RC ships, producers call `QAlerts.raise(...)` from core and need no dependency on this qbit.
+`QAlerts.resolve(...)` and `QAlerts.heartbeat(...)` reach the same sink. Declare types with core's `QAlertTypeMetaData`. Calls through `QAlerts.raise/resolve` defer to transaction commit when a transaction is present; without this qbit installed, core uses its logging sink.
+
+User notifications remain on `AlertsRuntime.get(qInstance).sink().notify(...)`: core's notification API ([QRun-IO/qqq#1125](https://github.com/QRun-IO/qqq/pull/1125)) is expected in RC.6 and is not in RC.5. The four `spi.Notification*` types and `spi.AlertLink` retain their binary signatures for released qbit-easypost-tracking 0.1.x. Use core `AlertLink` for alert signals and `spi.AlertLink` for notification signals until that migration.
 
 ## Endpoints (for the Next UI)
 
@@ -122,7 +124,7 @@ Each external channel is an `alerts_channel` row that an admin creates. Its secr
 
 How each one sends:
 
-- **Webhook** bodies are `{type, subject, severity, link, alerts: [...]}`, signed with the Standard Webhooks headers (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256 of id.timestamp.body>`). This is the shared format from the qbit-webhooks assessment (QRun-IO/qqq#1105). The signer is a stand-in until core's `WebhookSigner` (QRun-IO/qqq#1109) is released.
+- **Webhook** bodies are `{type, subject, severity, link, alerts: [...]}`, signed by core's `WebhookSigner` with the Standard Webhooks headers (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256 of id.timestamp.body>`). Both raw UTF-8 and `whsec_` base64 secrets keep the same wire format. Core's `WebhookSecret` requires 16 key bytes; a thin adapter zero-pads legacy shorter keys to 16 bytes, which is HMAC-SHA256-equivalent and preserves their signatures. New secrets should use `WebhookSecret.generate()`.
 - **PagerDuty** gets one event per alert: `trigger`, `acknowledge` or `resolve`, with `dedup_key` set to the type and key.
 - **Alertmanager** alerts carry the labels `qqq_type`, `qqq_group`, `qqq_key` and `qqq_origin="qbit-alerts"`. Ingest ignores alerts with that origin, so nothing loops.
 - **Responses:** 2xx is sent. 408, 425, 429, 5xx and network errors are retried. Any other 4xx fails permanently.

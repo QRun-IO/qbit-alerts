@@ -27,9 +27,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import com.kingsrook.qbits.alerts.AlertsPreferences;
+import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.BaseAlertsTest;
 import com.kingsrook.qbits.alerts.api.AlertsApi;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
+import com.kingsrook.qbits.alerts.engine.QbitAlertsSink;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
@@ -342,6 +344,36 @@ class NotificationsTest extends BaseAlertsTest
       ////////////////////////////////////////////////////////////////////
       runtime.sink().notify(new NotificationSignal("Shared with you: Q3 notebook").withCategory(NotificationCategory.SHARE).withAudience(NotificationAudience.user("viewer-1")));
       assertThat(api.inboxSummary().get("unreadCount")).isEqualTo(2);
+   }
+
+
+
+   /*******************************************************************************
+    ** Preserve the method descriptors used by released notification producers,
+    ** including the local AlertLink, and deliver to the selected user's bell.
+    *******************************************************************************/
+   @Test
+   void testLegacyNotificationSinkSignaturesAndDelivery() throws Exception
+   {
+      assertThat(AlertsRuntime.class.getMethod("sink").getReturnType()).isEqualTo(QbitAlertsSink.class);
+      assertThat(QbitAlertsSink.class.getMethod("notify", NotificationSignal.class).getReturnType()).isEqualTo(void.class);
+      assertThat(NotificationSignal.class.getMethod("withLink", AlertLink.class).getReturnType()).isEqualTo(NotificationSignal.class);
+      assertThat(NotificationSignal.class.getMethod("getLink").getReturnType()).isEqualTo(AlertLink.class);
+      assertThat(NotificationSignal.class.getMethod("withAudience", NotificationAudience.class).getReturnType()).isEqualTo(NotificationSignal.class);
+      assertThat(AlertLink.class.getMethod("toRecord", String.class, Serializable.class, String.class).getReturnType()).isEqualTo(AlertLink.class);
+      assertThat(NotificationAudience.class.getMethod("user", String.class).getReturnType()).isEqualTo(NotificationAudience.class);
+
+      runtime.sink().notify(new NotificationSignal("Shipment delivered")
+         .withSeverity(NotificationSeverity.INFO).withCategory(NotificationCategory.JOB)
+         .withLink(AlertLink.toRecord("widget", 5, "Shipment"))
+         .withAudience(NotificationAudience.user("viewer-1")));
+
+      loginAs("viewer-1");
+      Map<String, Object> summary = new AlertsApi(runtime).inboxSummary();
+      assertThat(summary.get("unreadCount")).isEqualTo(1);
+      assertThat(items(summary).get(0)).containsEntry("title", "Shipment delivered").containsEntry("href", "/app/widget/5");
+      loginAs("viewer-2");
+      assertThat(new AlertsApi(runtime).inboxSummary().get("unreadCount")).isEqualTo(0);
    }
 
 
