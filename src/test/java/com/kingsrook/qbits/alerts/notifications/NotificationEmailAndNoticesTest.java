@@ -173,6 +173,232 @@ class NotificationEmailAndNoticesTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** A requested email does not require a standing category preference.
+    *******************************************************************************/
+   @Test
+   void testRequestedWithoutPreference() throws Exception
+   {
+      addressOnly();
+      requested("JOB");
+      assertThat(new NotificationEmailer(runtime).run().sent()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("SENT");
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** An explicit request and an immediate preference still send only once.
+    *******************************************************************************/
+   @Test
+   void testRequestedWithImmediatePreference() throws Exception
+   {
+      emailSettings("viewer-1", "JOB", "IMMEDIATE", "INFO");
+      requested("JOB");
+      assertThat(new NotificationEmailer(runtime).run().sent()).isEqualTo(1);
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** A request overrides digest timing (not the category's minimum severity).
+    *******************************************************************************/
+   @Test
+   void testRequestedWithDigestPreference() throws Exception
+   {
+      emailSettings("viewer-1", "JOB", "DAILY_DIGEST", "INFO");
+      requested("JOB");
+      NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
+      assertThat(result.sent()).isEqualTo(1);
+      assertThat(result.digests()).isZero();
+      assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** Knowing an address alone does not opt a notification into email.
+    *******************************************************************************/
+   @Test
+   void testNotRequestedWithoutPreference() throws Exception
+   {
+      addressOnly();
+      runtime.getNotifications().notify(new NotificationSignal("Done").withCategory(NotificationCategory.JOB)
+         .withAudience(NotificationAudience.user("viewer-1")));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("NONE");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Missing addresses are skipped rather than counted as delivery failures.
+    *******************************************************************************/
+   @Test
+   void testRequestedWithoutAddress() throws Exception
+   {
+      requested("JOB");
+      NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
+      assertThat(result.skipped()).isEqualTo(1);
+      assertThat(result.failed()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("SKIPPED");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Alert subscriptions own alert emails, even with an explicit request.
+    *******************************************************************************/
+   @Test
+   void testRequestedAlertNeverEmailed() throws Exception
+   {
+      emailSettings("viewer-1", "ALERT", "IMMEDIATE", "INFO");
+      requested("ALERT");
+      assertThat(new NotificationEmailer(runtime).run().skipped()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("SKIPPED");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Requests older than the delivery window are not emailed.
+    *******************************************************************************/
+   @Test
+   void testRequestedOutsideDeliveryWindow() throws Exception
+   {
+      addressOnly();
+      requested("JOB");
+      clock.set(clock.instant().plusSeconds(86401));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("REQUESTED");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** Provider failures remain terminal and do not cause repeated sends.
+    *******************************************************************************/
+   @Test
+   void testRequestedDeliveryFailure() throws Exception
+   {
+      addressOnly();
+      requested("JOB");
+      runtime.getConfig().withMessagingProviderName("missing-provider");
+      NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
+      assertThat(result.failed()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("FAILED");
+      assertThat(new NotificationEmailer(runtime).run().failed()).isZero();
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** A request still honours the category's email minimum severity.
+    *******************************************************************************/
+   @Test
+   void testRequestedBelowMinSeverity() throws Exception
+   {
+      emailSettings("viewer-1", "JOB", "OFF", "ERROR");
+      requested("JOB");
+      NotificationEmailer.Result result = new NotificationEmailer(runtime).run();
+      assertThat(result.skipped()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("SKIPPED");
+      assertThat(SENT).isEmpty();
+   }
+
+
+
+   /*******************************************************************************
+    ** A user's pause or quiet hours hold a requested email until they end.
+    *******************************************************************************/
+   @Test
+   void testRequestedHeldByPauseAndQuietHours() throws Exception
+   {
+      clock.set(Instant.parse("2026-10-12T12:00:00Z"));
+      addressOnly();
+      requested("JOB");
+      setUserPreference(new QRecord().withValue("pausedUntil", clock.instant().plusSeconds(3600)));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("REQUESTED");
+
+      clock.set(Instant.parse("2026-10-12T13:30:00Z"));
+      setUserPreference(new QRecord().withValue("timeZone", "UTC").withValue("quietHoursStart", "13:00").withValue("quietHoursEnd", "14:00"));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isZero();
+      assertThat(emailStatus("viewer-1")).isEqualTo("REQUESTED");
+
+      clock.set(Instant.parse("2026-10-12T14:00:00Z"));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isEqualTo(1);
+      assertThat(emailStatus("viewer-1")).isEqualTo("SENT");
+      assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** A pause does not hold a requested SECURITY email.
+    *******************************************************************************/
+   @Test
+   void testRequestedSecurityBypassesPause() throws Exception
+   {
+      addressOnly();
+      requested("SECURITY");
+      setUserPreference(new QRecord().withValue("pausedUntil", clock.instant().plusSeconds(3600)));
+      assertThat(new NotificationEmailer(runtime).run().sent()).isEqualTo(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** Update the user's alert settings row.
+    *******************************************************************************/
+   private void setUserPreference(QRecord values) throws QException
+   {
+      runtime.asSystem(() ->
+      {
+         QRecord setting = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", "viewer-1"));
+         return (AlertsDb.update(AlertsUserPreference.TABLE_NAME, values.withValue("id", setting.getValue("id"))));
+      });
+   }
+
+
+
+   /*******************************************************************************
+    ** Store an address without opting into any category.
+    *******************************************************************************/
+   private void addressOnly() throws QException
+   {
+      runtime.asSystem(() -> AlertsDb.insert(AlertsUserPreference.TABLE_NAME,
+         new QRecord().withValue("userId", "viewer-1").withValue("emailAddress", "viewer-1@example.com")));
+   }
+
+
+
+   /*******************************************************************************
+    ** Set up a recipient explicitly requesting email for worker tests.
+    *******************************************************************************/
+   private void requested(String category) throws QException
+   {
+      Integer id = runtime.getNotifications().notify(new NotificationSignal("Done").withCategory(NotificationCategory.valueOf(category))
+         .withAudience(NotificationAudience.user("viewer-1")));
+      runtime.asSystem(() ->
+      {
+         QRecord recipient = AlertsDb.first(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("notificationId", id));
+         return (AlertsDb.update(AlertsNotificationRecipient.TABLE_NAME,
+            new QRecord().withValue("id", recipient.getValue("id")).withValue("emailStatus", "REQUESTED")));
+      });
+   }
+
+
+
+   /*******************************************************************************
     ** The daily digest waits for the user's hour, then lists the unread ones.
     *******************************************************************************/
    @Test

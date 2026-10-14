@@ -47,6 +47,7 @@ All notable changes to this project are documented here. The format follows Keep
 - Apply reminders and escalation (#27, part 2): a minute-based hidden job sends due reminders, advances ordered USER/TEAM/CHANNEL escalation steps, and caps final-step repeats. Acknowledgement, snooze, resolution and mutes stop both; reopening restarts escalation. Delivery, events and progress commit together, with a persisted same-minute checkpoint.
 - Add admin escalation policy and step tables, child step lists, and type/group policy links in guarded Liquibase changesets 23–26. Type policies override group policies. CRITICAL reminders default to 60 minutes; explicit zero turns them off.
 - Keep EXPIRED reserved and remove it from selectable resolution values because the design specifies no expiration rule.
+- Per-notification email opt-in via recipient email status `REQUESTED`: immediate delivery without a standing category preference. It still honours the category email minimum severity, the user pause (SECURITY bypasses) and quiet hours (held until they end, for up to a day), is skipped when no address is known, and is never emailed for ALERT notifications.
 - Optional external channels:
   - Slack (an Incoming Webhook, Block Kit)
   - Microsoft Teams (a Workflows webhook, an Adaptive Card)
