@@ -26,9 +26,10 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import com.kingsrook.qbits.alerts.metadata.AlertsHelp;
-import com.kingsrook.qqq.backend.core.model.metadata.help.QHelpContent;
+import com.kingsrook.qbits.alerts.metadata.AlertsProcessesMetaDataProducer;
+import com.kingsrook.qqq.backend.core.model.metadata.help.bundles.HelpBundles;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
+import com.kingsrook.qqq.backend.core.testing.HelpBundleAssertions;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,7 +59,7 @@ class AlertsTablesGuardrailTest extends BaseAlertsTest
       Map.entry("alerts_event", "runtime: the alert timeline"),
       Map.entry("alerts_subscription", "people's own choices; the first alerts admin gets one by the bootstrap rule (AlertsPreferences)"),
       Map.entry("alerts_user_preference", "user content: created per person on their first visit (AlertsPreferences)"),
-      Map.entry("alerts_team", "the host's own people (kof22 seeds its team)"),
+      Map.entry("alerts_team", "the host's own people"),
       Map.entry("alerts_team_member", "the host's own people"),
       Map.entry("alerts_mute", "user content: maintenance windows and mutes people create"),
       Map.entry("alerts_delivery", "runtime log: every delivery attempt"),
@@ -122,31 +123,44 @@ class AlertsTablesGuardrailTest extends BaseAlertsTest
    @Test
    void everyTableHasEmptyStateHelp() throws Exception
    {
-      assertThat(AlertsHelp.entries()).allSatisfy((key, entry) -> assertThat(entry.path("summary").asText().length()).as(key).isLessThanOrEqualTo(120));
+      // Core adds bulk CRUD processes during validation; the qbit owns its declared actions and jobs.
+      var processes = AlertsProcessesMetaDataProducer.buildProcesses(config).stream().map(process -> process.getName()).toList();
+      HelpBundleAssertions.forInstance(qInstance)
+         .bundles("help/qbit-alerts.yaml")
+         .owning(target -> "process".equals(target.kind()) ? processes.contains(target.name()) : target.name().startsWith("alerts"))
+         .assertComplete();
+      var entries = HelpBundles.of(qInstance).getBundles().get(0).getEntries();
+      // Core's gate does not yet require widget and possible-value-source help.
+      var keys = entries.stream().map(entry -> entry.getKey()).toList();
+      qInstance.getWidgets().keySet().stream().filter(name -> name.startsWith("alerts"))
+         .forEach(name -> assertThat(keys).contains("widget:" + name + ";slot:help"));
+      qInstance.getPossibleValueSources().keySet().stream().filter(name -> name.startsWith("alerts"))
+         .forEach(name -> assertThat(keys).contains("possibleValueSource:" + name + ";slot:help"));
       for(String table : alertsTables())
       {
-         List<QHelpContent> help = qInstance.getTable(table).getHelpContent() == null ? null : qInstance.getTable(table).getHelpContent().get(AlertsHelp.SLOT);
-         assertThat(help).as(table + " table help").isNotEmpty();
-         assertThat(help.get(0).getContent()).as(table + " help says how rows get created").contains("How rows get created");
+         assertThat(entries).anySatisfy(entry ->
+         {
+            assertThat(entry.getKey()).isEqualTo("table:" + table + ";slot:help");
+            assertThat(entry.getContent()).contains("How rows get created");
+         });
       }
-      assertThat(qInstance.getApp(AlertsQBitConfig.APP_NAME).getHelpContent()).containsKey(AlertsHelp.SLOT);
-      assertThat(AlertsHelp.entries().keySet()).allMatch(key -> !key.startsWith("table:") || qInstance.getTable(key.substring(6, key.indexOf(';'))) != null,
-         "help names only real tables");
    }
 
 
 
    /*******************************************************************************
-    ** A host's own help on a table is kept; the bundle fills only empty slots.
+    ** Bundle registration needs no help table; core safely skips startup sync.
     *******************************************************************************/
    @Test
-   void hostHelpIsNotOverridden() throws Exception
+   void hostWithoutHelpTableIsSupported()
    {
-      QTableMetaData table = qInstance.getTable("alerts_channel");
-      table.getHelpContent().remove(AlertsHelp.SLOT);
-      table.withHelpContent(AlertsHelp.SLOT, new QHelpContent().withContentAsMarkdown("host text"));
-      AlertsHelp.apply(qInstance);
-      assertThat(table.getHelpContent().get(AlertsHelp.SLOT)).singleElement().matches(c -> "host text".equals(c.getContent()));
+      assertThat(qInstance.getTable("helpContent")).isNull();
+      assertThat(HelpBundles.of(qInstance).getBundles()).singleElement().satisfies(bundle ->
+      {
+         assertThat(bundle.getId()).isEqualTo("qbit-alerts");
+         assertThat(bundle.getVersion()).isEqualTo("0.1.0-SNAPSHOT");
+      });
+      HelpBundles.syncOnStartup(qInstance);
    }
 
 
