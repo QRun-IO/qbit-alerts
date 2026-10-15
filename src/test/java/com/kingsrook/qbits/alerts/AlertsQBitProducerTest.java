@@ -64,6 +64,8 @@ class AlertsQBitProducerTest extends BaseAlertsTest
    void testProduce()
    {
       assertThat(qInstance.getQBits()).hasSize(1);
+      assertThat(System.getProperty("qbit.artifactVersion")).isNotBlank().isEqualTo(AlertsQBitProducer.VERSION);
+      assertThat(qInstance.getQBits().values().iterator().next().getVersion()).isEqualTo(System.getProperty("qbit.artifactVersion"));
       assertThat(qInstance.getQBits().values().iterator().next().getArtifactId()).isEqualTo(AlertsQBitProducer.ARTIFACT_ID);
       assertThat(AlertsRuntime.find(qInstance)).isSameAs(runtime);
       assertThat(AlertsRuntime.find(new QInstance())).isNull();
