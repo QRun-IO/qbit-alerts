@@ -278,7 +278,19 @@ public final class AlertsSecurity
     *******************************************************************************/
    public static QSystemUserSession systemSession()
    {
-      QSystemUserSession session = new QSystemUserSession();
+      return (systemSession(QContext.getQInstance()));
+   }
+
+
+
+   /*******************************************************************************
+    ** A system-user session for this instance, holding the alerts all-access
+    ** keys.  Background threads (the alerts sink, schedulers) have no QContext
+    ** yet, so they must pass the instance in.
+    *******************************************************************************/
+   public static QSystemUserSession systemSession(QInstance qInstance)
+   {
+      QSystemUserSession session = new QSystemUserSession(qInstance);
       session.withSecurityKeyValue(KEY_USER_ALL_ACCESS, true);
       session.withSecurityKeyValue(KEY_PERMISSION_ALL, true);
       session.withSecurityKeyValue(KEY_READABLE_TABLE_ALL, true);

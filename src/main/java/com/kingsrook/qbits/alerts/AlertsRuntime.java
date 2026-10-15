@@ -144,7 +144,7 @@ public class AlertsRuntime
    public <R> R asSystem(SystemWork<R> work) throws QException
    {
       Object[] result = new Object[1];
-      QContext.withTemporaryContext(new CapturedContext(qInstance, AlertsSecurity.systemSession()), () ->
+      QContext.withTemporaryContext(new CapturedContext(qInstance, AlertsSecurity.systemSession(qInstance)), () ->
       {
          result[0] = work.run();
       });
