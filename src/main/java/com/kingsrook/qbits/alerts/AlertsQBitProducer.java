@@ -17,8 +17,11 @@
 package com.kingsrook.qbits.alerts;
 
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import com.kingsrook.qbits.alerts.delivery.DeliveryWorker;
 import com.kingsrook.qbits.alerts.engine.AlertsProcessListener;
 import com.kingsrook.qbits.alerts.engine.AlertsSinkAdapter;
@@ -66,12 +69,40 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
 
    public static final String GROUP_ID    = "com.kingsrook.qbits";
    public static final String ARTIFACT_ID = "qbit-alerts";
-   public static final String VERSION     = "0.1.0";
+   public static final String VERSION     = loadVersion();
 
    private static final String JAVALIN_CLASS = "com.kingsrook.qqq.middleware.javalin.QJavalinMetaData";
 
    private AlertsQBitConfig qBitConfig;
    private String           namespace;
+
+
+
+   /*******************************************************************************
+    ** Read the artifact version from the Maven-filtered resource.
+    *******************************************************************************/
+   private static String loadVersion()
+   {
+      try(InputStream inputStream = AlertsQBitProducer.class.getClassLoader().getResourceAsStream("qbit-alerts.properties"))
+      {
+         if(inputStream == null)
+         {
+            throw (new IllegalStateException("Missing qbit-alerts.properties; build with Maven to generate the artifact version"));
+         }
+         Properties properties = new Properties();
+         properties.load(inputStream);
+         String version = properties.getProperty("version");
+         if(version == null || version.isBlank() || version.contains("${"))
+         {
+            throw (new IllegalStateException("Missing or invalid version in qbit-alerts.properties; build with Maven resource filtering enabled"));
+         }
+         return (version);
+      }
+      catch(IOException e)
+      {
+         throw (new IllegalStateException("Could not read artifact version from qbit-alerts.properties", e));
+      }
+   }
 
 
 

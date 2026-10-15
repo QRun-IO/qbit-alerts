@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows Keep
 ## [0.1.0] - Unreleased
 
 ### Fixed
+- Read the QBit metadata version from the Maven-filtered artifact version so release builds report their release version.
 - Record-view child lists (e.g. a notification's Recipients) failed with "Error in JSON Serialization": the child table's meta-data includes the qbit config, and `AlertsQBitConfig.getRuntime()` points at a runtime that points back at the config, so Jackson recursed to its 1000-level nesting limit. `getRuntime()` and `getAudienceResolver()` are now `@JsonIgnore`, as in the other qbits' configs. A regression test renders and serializes every child-list widget.
 
 ### Added

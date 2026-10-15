@@ -160,6 +160,7 @@
             <filtering>true</filtering>
             <includes>
                <include>help/*.yaml</include>
+               <include>qbit-alerts.properties</include>
             </includes>
          </resource>
          <resource>
@@ -167,6 +168,7 @@
             <filtering>false</filtering>
             <excludes>
                <exclude>help/*.yaml</exclude>
+               <exclude>qbit-alerts.properties</exclude>
             </excludes>
          </resource>
       </resources>
