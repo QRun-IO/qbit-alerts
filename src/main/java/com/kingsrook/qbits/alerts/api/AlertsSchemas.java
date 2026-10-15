@@ -300,7 +300,7 @@ public final class AlertsSchemas
       @Override
       public Schema toSchema()
       {
-         return (new Schema().withType(Type.OBJECT).withDescription("Framework error response.").withProperties(new TreeMap<>(Map.ofEntries(
+         return (new Schema().withType(Type.OBJECT).withDescription("Deprecated since 1.2.0: errors use BasicErrorResponseV1.").withProperties(new TreeMap<>(Map.ofEntries(
             Map.entry("error", new Schema().withType(Type.STRING).withNullable(true))))));
       }
    }

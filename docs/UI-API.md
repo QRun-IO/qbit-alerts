@@ -1,7 +1,7 @@
 # Alerts UI API and webhook migration
 
-The qbit targets QQQ **4.1.0-RC.6** (pending release). `AlertsQBitProducer` registers the
-`alerts` `MiddlewareSpecExtension`, version `1.1.0`, with the established `/alerts` prefix.
+The qbit targets QQQ **4.1.0-RC.15**, UI API **1.6.0**. `AlertsQBitProducer` registers the
+`alerts` `MiddlewareSpecExtension`, version `1.2.0`, with the established `/alerts` prefix.
 `withRegisterRoutes(false)` opts out of both the extension and webhook registration.
 The six JSON specs extend `AbstractJsonEndpointSpec`; existing `AlertsApi` logic continues
 to enforce caller permissions, recipient ownership and alert visibility.
@@ -20,10 +20,20 @@ discovers the `alerts` extension so clients need not infer installation from an 
 | GET | `/qqq/v1/alerts/record-panel` | `alertsRecordPanel` |
 
 All existing query parameters, selector precedence, paging defaults and clamps, status
-codes, JSON content-type requirements, and response keys remain. IDs refer to recipient
+codes, JSON content-type requirements, and success response keys remain. IDs refer to recipient
 rows for inbox operations; legacy `alertId` selectors remain accepted. `all:true` applies
 only to read/dismiss. Items in a summary omit `body`; page items and banners include it.
 Nullable fields remain serialized as JSON null.
+
+## UI API extension changes
+
+UI API extension alerts 1.2.0 (requires QQQ 4.1.0-RC.15, UI API 1.6.0): operationIds,
+standard error responses with BasicErrorResponseV1, and extension tags. The six existing
+operationIds are preserved. Errors retain their HTTP statuses and now include `error`,
+`code`, `message`, and `traceId` (with `fieldErrors` when applicable). `AlertsErrorV1`
+remains in components with a deprecation description for compatibility. The core upgrade
+also retires the expired Slack shim: capable providers now receive notification
+idempotency keys; providers without that capability keep recipient-row deduplication.
 
 ## Next handoff: additive payload fields
 
@@ -127,12 +137,15 @@ The supplied Next `main` checkout still has no alerts client; the
 
 ## Verification
 
-Use the Maven wrapper with the released QQQ 4.1.0-RC.7 artifacts already installed locally:
+Use the Maven wrapper offline against the locally installed migration build:
 
 ```sh
-./mvnw -o -q verify
+./mvnw -o verify -Dqqq.snapshot.version=4.1.99-SNAPSHOT -Denforcer.skipRules=requireReleaseDeps
 ```
 
 Regenerate intentionally with `-Dtest=AlertsApiContractTest -Dalerts.openapi.update=true test`
 (with `-o` for an offline build). Normal tests compare the fragment without rewriting it.
 Checkstyle uses `checkstyle/config.xml` and the repository's existing short Apache headers.
+
+The Enforcer switch skips only the release-dependency rule for the local SNAPSHOT;
+omit it and the version override when building against the released RC.12 BOM.

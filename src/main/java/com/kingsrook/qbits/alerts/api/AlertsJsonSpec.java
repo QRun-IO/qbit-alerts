@@ -23,6 +23,7 @@ import com.kingsrook.qqq.backend.core.exceptions.QBadRequestException;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.middleware.javalin.specs.BasicResponse;
 import com.kingsrook.qqq.middleware.javalin.specs.extensions.AbstractJsonEndpointSpec;
+import com.kingsrook.qqq.middleware.javalin.specs.v1.responses.BasicErrorResponseV1;
 import com.kingsrook.qqq.openapi.model.Method;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
@@ -79,10 +80,10 @@ abstract class AlertsJsonSpec extends AbstractJsonEndpointSpec
    @Override
    public List<BasicResponse> defineAdditionalBasicResponses()
    {
-      return (List.of(new BasicResponse(HttpStatus.BAD_REQUEST, "Invalid input", "AlertsErrorV1"),
-         new BasicResponse(HttpStatus.UNAUTHORIZED, "Sign in required", "AlertsErrorV1"),
-         new BasicResponse(HttpStatus.FORBIDDEN, "Permission denied", "AlertsErrorV1"),
-         new BasicResponse(HttpStatus.NOT_FOUND, "Not found", "AlertsErrorV1")));
+      return (List.of(new BasicResponse(HttpStatus.BAD_REQUEST, "Invalid input", BasicErrorResponseV1.class.getSimpleName()),
+         new BasicResponse(HttpStatus.UNAUTHORIZED, "Sign in required", BasicErrorResponseV1.class.getSimpleName()),
+         new BasicResponse(HttpStatus.FORBIDDEN, "Permission denied", BasicErrorResponseV1.class.getSimpleName()),
+         new BasicResponse(HttpStatus.NOT_FOUND, "Not found", BasicErrorResponseV1.class.getSimpleName())));
    }
 
 

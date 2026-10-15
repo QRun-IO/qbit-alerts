@@ -21,6 +21,7 @@ package com.kingsrook.qbits.alerts.notifications;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import com.kingsrook.qbits.alerts.AlertsPreferences;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
@@ -42,6 +43,7 @@ import com.kingsrook.qqq.backend.core.model.actions.messaging.SendMessageInput;
 import com.kingsrook.qqq.backend.core.model.actions.messaging.SendMessageOutput;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
 import com.kingsrook.qqq.backend.core.model.metadata.messaging.QMessagingProviderMetaData;
+import com.kingsrook.qqq.backend.core.modules.messaging.MessagingProviderCapability;
 import com.kingsrook.qqq.backend.core.modules.messaging.MessagingProviderInterface;
 import com.kingsrook.qqq.backend.core.modules.messaging.QMessagingProviderDispatcher;
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,7 @@ class NotificationSlackTest extends BaseAlertsTest
    static final List<SendMessageInput> SENT = new CopyOnWriteArrayList<>();
 
    static volatile String failureMode = "NONE";
+   static boolean idempotency;
 
 
 
@@ -72,6 +75,17 @@ class NotificationSlackTest extends BaseAlertsTest
       public String getType()
       {
          return ("alerts-slack-capture");
+      }
+
+
+
+      /*******************************************************************************
+       ** Advertise optional provider deduplication.
+       *******************************************************************************/
+      @Override
+      public Set<MessagingProviderCapability> getCapabilities()
+      {
+         return (idempotency ? Set.of(MessagingProviderCapability.IDEMPOTENCY) : Set.of());
       }
 
 
@@ -107,6 +121,7 @@ class NotificationSlackTest extends BaseAlertsTest
       qInstance.addMessagingProvider(new QMessagingProviderMetaData().withName("slack").withType("alerts-slack-capture"));
       SENT.clear();
       failureMode = "NONE";
+      idempotency = false;
    }
 
 
@@ -187,6 +202,7 @@ class NotificationSlackTest extends BaseAlertsTest
          assertThat(message.getMessagingProviderName()).isEqualTo("slack");
          assertThat(message.getTo().getAddress()).isEqualTo("user:viewer-1");
          assertThat(message.getSubject()).isEqualTo("Export failed");
+         assertThat(message.getIdempotencyKey()).isNull();
          assertThat(text(message)).contains("Export failed").contains("Disk full").contains("https://admin.example.com/app/widget");
       });
       assertThat(slackStatus("viewer-1")).isEqualTo("SENT");
@@ -196,6 +212,22 @@ class NotificationSlackTest extends BaseAlertsTest
 
       assertThat(new NotificationSlackSender(runtime).run().sent()).isEqualTo(0);
       assertThat(SENT).hasSize(1);
+   }
+
+
+
+   /*******************************************************************************
+    ** Capable providers receive a stable key for immediate notifications.
+    *******************************************************************************/
+   @Test
+   void testIdempotencyKey() throws Exception
+   {
+      idempotency = true;
+      slackSettings("viewer-1", "JOB", "IMMEDIATE", "WARNING", null);
+      notifyJob("Export failed", NotificationSeverity.WARNING, "viewer-1");
+      assertThat(new NotificationSlackSender(runtime).run().sent()).isEqualTo(1);
+      assertThat(SENT).singleElement().satisfies(message ->
+         assertThat(message.getIdempotencyKey()).matches("notify:[0-9]+:viewer-1:slack"));
    }
 
 

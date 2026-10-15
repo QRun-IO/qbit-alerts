@@ -224,7 +224,12 @@ class AlertsApiHttpTest extends BaseAlertsTest
       assertThat(request("POST", base + "/record-panel/watch", "{}", ADMIN, null).statusCode()).isEqualTo(404);
       HttpResponse<String> invalidJson = request("POST", base + "/inbox/read", "not json", ADMIN, null);
       assertThat(invalidJson.statusCode()).isEqualTo(400);
-      assertThat(invalidJson.body()).contains("The request body is not valid JSON.");
+      Map<String, Object> error = JsonUtils.toObject(invalidJson.body(), Map.class);
+      assertThat(error).containsKeys("error", "code", "message", "traceId")
+         .containsEntry("message", "The request body is not valid JSON.");
+      assertThat(error.get("error")).isEqualTo(error.get("message"));
+      assertThat(error.get("code")).isNotNull();
+      assertThat((String) error.get("traceId")).isNotBlank();
       assertThat(request("POST", base + "/inbox/read", null, ADMIN, null).statusCode()).isEqualTo(400);
       assertThat(request("GET", base + "/inbox/summary", null, "nobody", null).statusCode()).isEqualTo(403);
       assertThat(request("GET", base + "/record-panel?tableName=widget&recordId=1", null, OUTSIDER, null).statusCode()).isEqualTo(403);
