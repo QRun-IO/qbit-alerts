@@ -24,7 +24,6 @@ import com.kingsrook.qbits.alerts.engine.AlertsProcessListener;
 import com.kingsrook.qbits.alerts.engine.AlertsSinkAdapter;
 import com.kingsrook.qbits.alerts.engine.MonitorEvaluator;
 import com.kingsrook.qbits.alerts.engine.QbitAlertsSink;
-import com.kingsrook.qbits.alerts.metadata.AlertsHelp;
 import com.kingsrook.qbits.alerts.metadata.AlertsTableMetaDataHelper;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsMonitor;
@@ -38,6 +37,7 @@ import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.metadata.MetaDataProducerMultiOutput;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
+import com.kingsrook.qqq.backend.core.model.metadata.help.bundles.HelpBundles;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitMetaDataProducer;
 import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
@@ -174,7 +174,8 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
 
       MetaDataProducerMultiOutput output = QBitMetaDataProducer.super.produce(qInstance);
       output.addSelfToInstance(qInstance);
-      AlertsHelp.apply(qInstance);
+      // Registration is metadata-only; core guards startup sync when helpContent is absent.
+      HelpBundles.register(qInstance, "help/qbit-alerts.yaml");
       return (new MetaDataProducerMultiOutput());
    }
 

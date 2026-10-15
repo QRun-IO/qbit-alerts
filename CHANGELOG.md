@@ -8,8 +8,9 @@ All notable changes to this project are documented here. The format follows Keep
 - Record-view child lists (e.g. a notification's Recipients) failed with "Error in JSON Serialization": the child table's meta-data includes the qbit config, and `AlertsQBitConfig.getRuntime()` points at a runtime that points back at the config, so Jackson recursed to its 1000-level nesting limit. `getRuntime()` and `getAudienceResolver()` are now `@JsonIgnore`, as in the other qbits' configs. A regression test renders and serializes every child-list widget.
 
 ### Added
+- Ship the full host-neutral Alerts help bundle through QQQ 4.1.0-RC.7 core registration, replacing the temporary loader. Cover owned tables, fields, actions, jobs, widgets and possible-value sources with a bundle coverage gate; support HOST overrides and hosts without help tables.
 - Starter defaults changelog `alerts-defaults.changelog.sql` (insert-only, guarded): the `in-app` and `email` channels and the `alerts` and `other` groups, equal to what the runtime creates on first use. Tested through real Liquibase on H2.
-- Help for the Alerts app and every `alerts_*` table (`help/qbit-alerts.yaml`, STAND-IN core#1198): what the table is for and how its rows get created, shown when it is empty.
+- Help for the Alerts app and every `alerts_*` table (`help/qbit-alerts.yaml`): what the table is for and how its rows get created, shown when it is empty.
 - A Setup card first on the Alerts home (alerts admins): each configuration table, its state and the next step.
 - `AlertsTablesGuardrailTest`: every table is used by runtime code, seeded or listed as starting empty with a reason, and has help.
 

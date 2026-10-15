@@ -1,108 +1,1502 @@
 bundle: qbit-alerts
-version: 1
+version: 0.1.0-SNAPSHOT
 layer: QBIT
-# Help for the Alerts app and every alerts_* table, in the QQQ help-bundle format
-# (qqq#1198). Each table entry says what the table is for and how its rows get
-# created, so an empty table explains itself. AlertsHelp applies it until the core
-# HelpBundles registry ships in a QQQ release (a stand-in until core #1198 ships).
-# Summaries stay under 120 characters (AlertsTablesGuardrailTest).
 entries:
-  - key: app:alerts;slot:help
-    summary: "Manage by exception: alerts, who hears about them, how they are delivered, and the checks that raise them."
-    content: |
-      The Setup card on the home (alerts admins) lists every part of Alerts with its status and the next step. A new installation starts with the in-app and email channels and two groups; alert types and their default monitors appear as soon as the first person opens Alerts, because the installed qbits declare them. Nobody is notified until someone subscribes (the first alerts admin gets an in-app subscription to errors and worse automatically) or a group has an owner team.
+- key: app:alerts;slot:help
+  summary: Problems that need a person, who gets told about them, and how, all in one place.
+  content: |
+    Alerts collects things that need attention, such as a monitor finding a problem or a channel that stopped delivering. Each problem is one **{{label:alerts_alert}}** record that you can acknowledge, snooze, assign, comment on and resolve. The same problem repeating does not create duplicates; it updates the open one.
 
-  - key: table:alerts_alert;slot:help
-    summary: "One problem, open or closed, identified by its type and dedup key. Repeats update it; they never duplicate it."
-    content: |
-      **How rows get created:** never by hand. A producer (QAlerts.raise), a monitor that finds its condition true, a failed process, or an Alertmanager webhook raises the alert; the same condition updates the same row. People change its state with the actions Acknowledge, Snooze, Resolve, Reopen, Assign, Comment and Mute. Empty means nothing is wrong right now, or nothing is reporting yet: check Monitors and Alert Types.
+    Behind the scenes, **{{label:alerts_monitor}}** check on a schedule, and **{{label:alerts_type}}** describe each kind of problem. **{{label:alerts_subscription}}**, **{{label:alerts_team}}** and **{{label:alerts_channel}}** decide who is told and where, and **{{label:alerts_mute}}** pauses notifications for a while. **{{label:alerts_user_preference}}** holds your own delivery choices.
 
-  - key: table:alerts_type;slot:help
-    summary: "A kind of problem a source can report (such as cdn.purge.dead): its severity, group, quiet period and escalation."
-    content: |
-      **How rows get created:** from the alert types that the installed qbits and the host declare in code (QAlertTypeMetaData). They are synced the first time someone opens Alerts after a start, and when the first alert of a type is raised. You tune a row here (turn it off, override its severity, move it to a group, set a reminder interval or escalation policy); you do not add types by hand. Empty means the first sync has not run yet: open the Alerts home.
+    You can receive notifications in the in-app bell. Email and external channels require your administrator to configure their providers and destinations.
+- key: table:alerts_alert;slot:help
+  summary: One problem that needs attention, with its status, history and who is handling it.
+  content: |
+    An alert is raised by a monitor or by the application itself when something needs a person. If the same problem is raised again while the alert is open, the existing alert is updated instead of a new one being added. If it comes back within the configured reopening window after resolution (30 minutes by default), the same alert is reopened.
 
-  - key: table:alerts_group;slot:help
-    summary: "A category of alerts (Backups, CDN), optionally nested: used to organize the home, subscriptions and owners."
-    content: |
-      **How rows get created:** the qbit seeds Alerts and Other, and every alert type that names a group creates it on first sync. Add your own to organize types, and nest one inside another. Set an Owner Team on a group: an alert in that group that no subscription matches goes to the owner team's members, so a problem with an owner is never silent. Set an escalation policy on a group to apply it to every type in it that has none.
+    **{{label:alerts_alert.status}}:** Open, Acknowledged (someone has seen it), Snoozed (hidden until a time you chose) or Resolved.
 
-  - key: table:alerts_monitor;slot:help
-    summary: "A configured check that raises alerts of a type: a table query, a threshold, a heartbeat or a failed process."
-    content: |
-      **How rows get created:** qbits ship default monitors for their alert types; they are added on first sync and can be tuned or turned off, not deleted. To add your own, use Create monitor on an alert type, or New here. Run check now tests a monitor on demand. If a monitor cannot run three times in a row, an alert says so. Empty means no installed qbit ships a default monitor; alerts then come only from code that raises them.
+    Use the record actions to **{{label:alertsAcknowledge}}**, **{{label:alertsSnooze}}**, **{{label:alertsResolve}}**, **{{label:alertsReopen}}**, **{{label:alertsAssign}}**, **{{label:alertsAddComment}}** and **Mute**. Alerts cannot be edited directly, so every change is recorded in the **Timeline**.
 
-  - key: table:alerts_record_ref;slot:help
-    summary: "A record an alert is about, so the alert shows on that record and is hidden from people who cannot see it."
-    content: |
-      **How rows get created:** written by the engine when a signal names records (AlertRecordRef) or a table-query monitor finds rows. Never edited by hand. Empty means no alert has been about a specific record yet.
+    You only see alerts you are allowed to see. See also **{{label:alerts_monitor}}**, **{{label:alerts_type}}** and **{{label:alerts_subscription}}**.
 
-  - key: table:alerts_event;slot:help
-    summary: "The alert timeline: raised, repeated, acknowledged, snoozed, resolved, reopened, notified, commented."
-    content: |
-      **How rows get created:** written by the engine and the record actions whenever an alert changes. Read-only history. Empty means no alert exists yet.
+    **How rows get created:** Created automatically when a monitor or an application reports a problem. If the list is empty, you can check Monitors and Alert Types to see what is reporting.
+- key: table:alerts_alert;section:identity
+  summary: What the problem is, how serious it is and where it stands.
+- key: table:alerts_alert;section:problem
+  summary: The details of the problem and the records it affects.
+- key: table:alerts_alert;section:handling
+  summary: Who has acknowledged, snoozed, assigned or resolved the alert, and how.
+- key: table:alerts_alert;section:alerts_alert_join_alerts_event
+  summary: Everything that happened to this alert, newest first.
+- key: table:alerts_alert;section:alerts_alert_join_alerts_record_ref
+  summary: The records in the application that this alert is about.
+- key: table:alerts_alert;section:alerts_alert_join_alerts_delivery
+  summary: Every notification sent, or held back, because of this alert, with the reason.
+- key: table:alerts_alert;section:occurrence
+  summary: How often and when the alert was raised, plus technical details used for matching.
+- key: table:alerts_alert;field:sourceName
+  summary: Which part of the application raised the alert.
+- key: table:alerts_alert;field:attributes
+  summary: Extra labels attached by whatever raised the alert, as JSON, used by attribute-based subscriptions and mutes.
+  content: |
+    Filled in automatically. Subscriptions and mutes whose scope is Attribute match against these labels in the form name=value.
+- key: table:alerts_alert;field:severity
+  summary: 'How serious the alert is: {{values:alerts_severity}}.'
+  content: |
+    Set automatically from the alert type (or its severity override) and the check that raised it. A repeat with a higher severity wakes a snoozed alert and notifies again; a lower one is only recorded in the timeline.
+- key: table:alerts_alert;field:itemCount
+  summary: How many things the problem covers, for example how many pages fail a check.
+- key: table:alerts_alert;field:status
+  summary: 'Where the alert is in its life: {{values:alerts_status}}.'
+  content: |
+    - **Open:** raised and not yet seen.
+    - **Acknowledged:** someone has taken note; reminders stop.
+    - **Snoozed:** hidden until the snooze time, then it returns to what it was. A more severe repeat brings it back early.
+    - **Resolved:** closed, by the check, by the system or by a person.
 
-  - key: table:alerts_subscription;slot:help
-    summary: "Who hears about what: a user, team or channel, scoped to everything, a group, type, monitor, table or record."
-    content: |
-      **How rows get created:** use Subscribe me on an alert type, group or monitor, or New here (pick who, the scope, the minimum severity, which events and how to deliver). The first alerts admin who opens Alerts gets one in-app subscription to errors and worse. Without a subscription an alert reaches nobody, unless its group has an owner team. A subscription can name channels; otherwise the person's default channels apply.
+    Change it with the record actions, not by editing.
+- key: table:alerts_alert;field:groupId
+  summary: The alert group this problem belongs to.
+- key: table:alerts_alert;field:title
+  summary: A short headline saying what is wrong.
+- key: table:alerts_alert;field:lastRaisedAt
+  summary: The most recent time the problem was reported.
+- key: table:alerts_alert;field:resolution
+  summary: How the alert was closed.
+  content: |
+    - **Producer:** the part of the application that raised it reported the problem gone.
+    - **{{label:alerts_alert.monitorId}}:** the monitor's next check came back clean.
+    - **Quiet Period:** nothing new was reported for the type's quiet period.
+    - **Manual:** a person resolved it.
+    - **Expired:** reserved; nothing sets it today.
+- key: table:alerts_alert;field:resolutionNote
+  summary: The note entered when the alert was resolved, or an automatic reason.
+- key: table:alerts_alert;field:occurrenceCount
+  summary: How many times the problem has been reported while this alert existed.
+- key: table:alerts_alert;field:subjectRecordId
+  summary: The id of the main record this alert is about, when there is one.
+- key: table:alerts_alert;field:acknowledgedAt
+  summary: When someone acknowledged the alert.
+- key: table:alerts_alert;field:firstRaisedAt
+  summary: When the problem was first reported.
+- key: table:alerts_alert;field:reopenCount
+  summary: How many times this alert was reopened after being resolved.
+  content: |
+    A repeat within the configured reopening window (30 minutes by default) reopens the same alert; after that a new alert is created.
+- key: table:alerts_alert;field:alertTypeId
+  summary: The kind of problem this is; open it to see its guidance and tuning.
+- key: table:alerts_alert;field:alertTypeName
+  summary: The internal name of the alert type, kept so history still reads correctly if the type changes.
+  content: |
+    If this reads "unregistered", the problem was reported under a name no part of the application declares.
+- key: table:alerts_alert;field:resolvedAt
+  summary: When the alert was closed.
+- key: table:alerts_alert;field:openDedupKey
+  summary: A technical key that stops two open alerts for the same problem; filled in automatically.
+- key: table:alerts_alert;field:recordRefCount
+  summary: How many application records this alert points to.
+- key: table:alerts_alert;field:lastNotifiedAt
+  summary: The last time a notification was sent for this alert.
+- key: table:alerts_alert;field:snoozedUntil
+  summary: When a snooze ends and the alert comes back.
+  content: |
+    Set by the **{{label:alertsSnooze}}** action (4 hours by default). Cleared when it ends, or earlier if the alert is raised again at a higher severity.
+- key: table:alerts_alert;field:assignedUserId
+  summary: The person who owns this alert, set by the Assign action.
+- key: table:alerts_alert;field:assignedTeamId
+  summary: The team that owns this alert, set by the Assign action.
+- key: table:alerts_alert;field:flapping
+  summary: Yes when the alert keeps opening and resolving, so notifications are held back.
+  content: |
+    By default, the alert counts as flapping after 5 open and resolve changes within 60 minutes; your administrator can change these limits. Further notifications are suppressed until it has been stable for the same window.
+- key: table:alerts_alert;field:escalationLevel
+  summary: The last escalation step reached in the current open cycle; reopening resets it.
+- key: table:alerts_alert;field:monitorId
+  summary: The monitor that raised this alert, if a monitor did.
+- key: table:alerts_alert;field:muted
+  summary: Yes when a mute silenced notifications for this alert.
+  content: |
+    The alert still opens and updates normally; only the notifications are held back.
+- key: table:alerts_alert;field:details
+  summary: Longer technical detail about the problem, when the source provides it.
+- key: table:alerts_alert;field:summary
+  summary: One or two sentences explaining the problem.
+- key: table:alerts_alert;field:dedupKey
+  summary: The key that identifies this exact problem so repeats update one alert.
+- key: table:alerts_alert;field:links
+  summary: Shortcuts to the screens related to the problem, as JSON.
+- key: table:alerts_alert;field:subjectTableName
+  summary: The kind of record this alert is mainly about, when there is one.
+- key: table:alerts_alert;field:visibilityPermission
+  summary: A permission needed to see this alert; if set, people without it do not see the alert or get notified.
+- key: table:alerts_alert;field:acknowledgedByUserId
+  summary: Who acknowledged the alert.
+- key: table:alerts_alert;field:resolvedByUserId
+  summary: Who resolved the alert; empty when the system closed it.
+- key: table:alerts_monitor;slot:help
+  summary: A scheduled check that raises an alert when something is wrong and resolves it when it is fine again.
+  content: |
+    A monitor runs on a timer and looks for a problem. When it finds one it raises an alert; when a later check is clean it resolves the alerts it raised.
 
-  - key: table:alerts_user_preference;slot:help
-    summary: "Your alert settings: email address, quiet hours, digest hour, time zone, default channels and a vacation pause."
-    content: |
-      **How rows get created:** one row per person, created automatically with defaults the first time they open Alerts (in-app on, email on once an address is added). Edit yours here. Quiet hours and the pause hold email and other push channels, never the bell; an alert at or above your bypass severity (CRITICAL by default) still gets through. Default Channels, when set, replace the built-in email choice for subscriptions that name no channels; the bell stays unless you turn In-App off.
+    **Kinds:** Table Query (count of matching records), Aggregate (a count, sum, average, minimum or maximum crossing a threshold), Heartbeat (nothing seen within an expected time), Process Failed (a background run failed), Code (a built-in check) and others reserved for later.
 
-  - key: table:alerts_team;slot:help
-    summary: "A named set of people who can be subscribed together, or own a group of alerts."
-    content: |
-      **How rows get created:** an administrator adds teams with New, then adds Team Members, or sets a member source (a role or IdP group, which needs the host's audience resolver). Subscribe a team to a scope, or make it the Owner Team of an alert group so unsubscribed alerts reach it. Empty is normal until you decide who answers for what; the Setup card says what is missing.
+    Installed features can supply default monitors, marked as seeded. You can disable or tune them.
 
-  - key: table:alerts_team_member;slot:help
-    summary: "One person in a team, with an optional role. Teams combine these with any role or IdP-group source."
-    content: |
-      **How rows get created:** add members from a team's Members list, or New here. A team with no members and no member source notifies nobody. Empty means no team has members yet.
+    Use **{{label:alertsRunCheckNow}}** to see what a check would open, update and resolve before anything is written, then run it. Use **{{label:alertsEnableMonitor}}** and **{{label:alertsDisableMonitor}}** to switch checks on or off. After 3 failed checks in a row, an alert is raised saying the monitor cannot run.
 
-  - key: table:alerts_channel;slot:help
-    summary: "A configured destination for alerts: the bell, email, an email list, Slack, Teams, a webhook, PagerDuty."
-    content: |
-      **How rows get created:** the qbit seeds In-App (the bell) and Email (a person's own address) so alerts can be delivered from the first alert. Add Slack, Teams, a webhook or PagerDuty with New: its settings go in the row and its secret stays in your secret store, referenced by name (Secret Ref), never typed here. Use Send test notification to check a channel; Health shows whether recent deliveries worked.
+    See also **{{label:alerts_type}}** and **{{label:alerts_alert}}**.
 
-  - key: table:alerts_mute;slot:help
-    summary: "A maintenance window or mute that silences notifications, or suppresses alerts, for a scope and a time."
-    content: |
-      **How rows get created:** use Mute on an alert, an alert type, a group or a monitor, or New here for a planned maintenance window (scope, start, end, effect). Silence notifications keeps recording alerts; suppress alerts stops raising them. Empty means nothing is muted, which is normal.
+    **How rows get created:** Installed features can supply default monitors. You can also use Create monitor on an alert type or New here, then finish the definition and enable it.
+- key: table:alerts_monitor;section:identity
+  summary: The monitor's name, what it raises, and whether it is on and healthy.
+- key: table:alerts_monitor;section:check
+  summary: What the monitor looks for and how often.
+- key: table:alerts_monitor;section:lastRun
+  summary: The outcome of the most recent check and when the next one is due.
+- key: table:alerts_monitor;section:alerts_monitor_join_alerts_alert
+  summary: Alerts this monitor has raised, newest first.
+- key: table:alerts_monitor;section:system
+  summary: Technical fields the system fills in to schedule and track this monitor.
+- key: table:alerts_monitor;field:description
+  summary: A note on what this monitor is for.
+- key: table:alerts_monitor;field:enabled
+  summary: Turn off to stop the monitor checking; its existing alerts stay as they are.
+- key: table:alerts_monitor;field:sourceName
+  summary: Which part of the application created this monitor; filled in automatically for seeded monitors.
+- key: table:alerts_monitor;field:name
+  summary: A name that shows up in the titles of the alerts this monitor raises.
+- key: table:alerts_monitor;field:definition
+  summary: The check itself, written as JSON; the keys depend on the monitor kind.
+  content: |
+    Keys by kind:
+    - **Table Query:** the table to look at, a filter, an optional threshold (alert when the count is above it; default 0) and an optional field to label each record.
+    - **Aggregate:** the table, a filter, which aggregate to use (count by default), an optional field and group-by, a comparator, and warning, error and critical thresholds that set the severity.
+    - **Heartbeat:** how many seconds to expect between beats, an optional grace period in seconds, and what to watch: a heartbeat key, a process name, or a table with a date field.
+    - **Code:** which built-in check to run, plus its settings.
 
-  - key: table:alerts_delivery;slot:help
-    summary: "The delivery log: one attempt per person and channel, with status, retries and, when held back, the reason."
-    content: |
-      **How rows get created:** written by the router when an alert is sent, and updated by the delivery worker (retries, failures). Suppressed deliveries are logged too, with why (muted, quiet hours, not visible, no address). Retry delivery re-queues a failed one. Empty means no alert has been routed to anyone yet: check Subscriptions.
+    If the JSON is invalid, the check fails and shows the error under **{{label:alerts_monitor.lastError}}**.
+- key: table:alerts_monitor;field:severity
+  summary: Overrides the severity of alerts this monitor raises; leave empty to use the alert type's default.
+  content: |
+    An alert type can also have a severity override, which wins over this.
+- key: table:alerts_monitor;field:alertTypeId
+  summary: The kind of alert this monitor raises, which also sets its guidance, group and who is notified.
+- key: table:alerts_monitor;field:scheduleSeconds
+  summary: How many seconds to wait between checks; the minimum used is 10.
+  content: |
+    How many seconds to wait between checks; the minimum used is 10, and the default is {{default:alerts_monitor.scheduleSeconds}}.
 
-  - key: table:alerts_notification;slot:help
-    summary: "A message for people: an announcement an admin writes, or one a producer sends (failed job, share, release)."
-    content: |
-      **How rows get created:** an administrator writes one with New, previews the audience, and sends or schedules it; producers create them with QAlerts.notify (failed jobs, shares, security notices, releases). Each reaches people through the bell and, by their settings, email or Slack. Empty means nothing has been announced and no producer has sent one.
+    The scheduler checks for due monitors at the interval configured by your administrator, so a check may run later than its due time.
+- key: table:alerts_monitor;field:claimedUntil
+  summary: Marks that a check is running right now; filled in automatically.
+- key: table:alerts_monitor;field:forMinutes
+  summary: How many minutes the problem must keep showing before an alert is raised; 0 raises it immediately.
+  content: |
+    Use it to avoid alerts for brief blips. While waiting, the monitor's last status shows Pending.
+- key: table:alerts_monitor;field:lastRunAt
+  summary: When the monitor last ran; filled in automatically.
+- key: table:alerts_monitor;field:nextRunAt
+  summary: When the monitor will next be checked; filled in automatically from the schedule.
+- key: table:alerts_monitor;field:perRecord
+  summary: Yes raises a separate alert for each matching record instead of one alert for the whole check.
+  content: |
+    Only applies to Table Query monitors. If more records match than the configured limit (50 by default), they are grouped into one alert to avoid a flood.
+- key: table:alerts_monitor;field:claimedBy
+  summary: Which worker is running the check right now; filled in automatically.
+- key: table:alerts_monitor;field:lastStatus
+  summary: The outcome of the last check.
+  content: |
+    - **Ok:** nothing wrong.
+    - **Firing:** a problem was found and an alert is raised.
+    - **Pending:** a problem was found but has not lasted for the Must Hold For time yet.
+    - **Check Failed:** the check itself could not run; see Last Error.
+    - **Skipped Muted:** skipped because a maintenance window that suppresses alerts was active.
+- key: table:alerts_monitor;field:lastValue
+  summary: A short description of what the last check measured, or clean when nothing was found.
+- key: table:alerts_monitor;field:lastElapsedMs
+  summary: How long the last check took, in milliseconds.
+  content: |
+    A check that exceeds the configured timeout (15 seconds by default) is stopped and counted as failed.
+- key: table:alerts_monitor;field:conditionSince
+  summary: When the problem was first seen in an unbroken run, used for the Must Hold For wait; filled in automatically.
+- key: table:alerts_monitor;field:seeded
+  summary: Yes when the application created this monitor automatically for an alert type.
+- key: table:alerts_monitor;field:lastError
+  summary: The error message from the last failed check, empty when it ran.
+- key: table:alerts_monitor;field:kind
+  summary: What sort of check this is.
+  content: |
+    - **Table Query:** alert when records match a filter.
+    - **Aggregate:** alert when a count, sum, average, minimum or maximum crosses a threshold.
+    - **Heartbeat:** alert when nothing has been seen within the expected time.
+    - **Process Failed:** alert when a background run fails; driven by the runs, not the timer.
+    - **Esb Event** and **External:** reserved for later; not checked on a timer.
+    - **Code:** a check supplied by an installed feature.
+- key: table:alerts_monitor;field:consecutiveFailures
+  summary: How many checks in a row have failed to run; at 3 an alert says the monitor cannot run.
+  content: |
+    Resets to 0 after a check runs successfully, and that alert resolves itself.
+- key: table:alerts_type;slot:help
+  summary: A kind of problem the application can report, with its guidance, severity and how it is tuned.
+  content: |
+    Alert types are synced from installed features when Alerts is first opened or an alert is raised. You cannot add or delete them; you tune them.
 
-  - key: table:alerts_notification_recipient;slot:help
-    summary: "One notification for one person: when it reached them and whether they read, dismissed or were emailed it."
-    content: |
-      **How rows get created:** written when a notification is sent, one per person it reaches. Read-only; people change read and dismissed from the bell. Empty means no notification has been sent.
+    **Tuning** includes switching a type off (it then raises nothing), silencing its notifications while still recording alerts, overriding its severity, choosing how it resolves, and moving it to another group. These choices are kept when the application updates the type's text and defaults.
 
-  - key: table:alerts_notification_preference;slot:help
-    summary: "Your settings for one notification category: mute it in-app, and email or Slack off, immediate or daily digest."
-    content: |
-      **How rows get created:** each person adds a row per category (job, share, security, release...) from My Notification Settings when they want to change the default. Without a row the defaults apply: in-app on, email and Slack off. Security notices cannot be muted in-app. Empty means everyone is using the defaults.
+    Use the **{{label:alertsSubscribeToType}}** action to be notified about a type, **{{label:alertsMuteType}}** to pause its notifications for a while, and **{{label:alertsCreateMonitorFromType}}** (admins) to add a new, disabled check for it.
 
-  - key: table:alerts_heartbeat;slot:help
-    summary: "The last time each dead-man's switch beat, watched by heartbeat monitors."
-    content: |
-      **How rows get created:** written when code calls QAlerts.heartbeat(key) or a watched process completes. A Heartbeat monitor raises an alert when a key stops beating. Empty means nothing has beaten yet, which is fine until you add a heartbeat monitor.
+    Types whose code no longer exists show as not installed, so old alerts keep their labels.
 
-  - key: table:alerts_escalation_policy;slot:help
-    summary: "A reusable escalation plan: how long to wait, who to tell next, and how often to repeat."
-    content: |
-      **How rows get created:** an administrator adds a policy with New, adds ordered Escalation Steps, then picks it on an alert type or group (a type's policy overrides its group's). Policies name real people, teams and channels, so the qbit cannot seed them. Empty means alerts are not escalated, only reminded.
+    **How rows get created:** Synced from installed features on the first visit to Alerts or when an alert is raised. You can tune these types, but cannot add them by hand.
+- key: table:alerts_type;section:identity
+  summary: The type's name, group and where it comes from.
+- key: table:alerts_type;section:about
+  summary: What this kind of problem means and how to fix it.
+- key: table:alerts_type;section:tuning
+  summary: Switches and limits that change how alerts of this type behave.
+- key: table:alerts_type;section:alerts_type_join_alerts_monitor
+  summary: Monitors that check for this kind of problem.
+- key: table:alerts_type;section:alerts_type_join_alerts_alert
+  summary: Alerts of this type, newest first.
+- key: table:alerts_type;section:system
+  summary: Whether the type is still in the application, and when it last raised an alert.
+- key: table:alerts_type;field:description
+  summary: Why this kind of problem matters; filled in by the application and refreshed when it starts.
+- key: table:alerts_type;field:enabled
+  summary: Turn off to stop raising alerts of this type at all.
+  content: |
+    Disabled types ignore new reports. Existing open alerts stay open.
+- key: table:alerts_type;field:sourceName
+  summary: Which part of the application declares this type.
+- key: table:alerts_type;field:name
+  summary: The type's internal name, used to match reports to the type; it cannot be changed.
+- key: table:alerts_type;field:label
+  summary: The name people see for this type.
+- key: table:alerts_type;field:groupId
+  summary: The alert group this type is listed under.
+  content: |
+    New types are placed in a group automatically. Your choice is kept when the application restarts.
+- key: table:alerts_type;field:lastRaisedAt
+  summary: The most recent time an alert of this type was raised.
+- key: table:alerts_type;field:installed
+  summary: Yes while the application still declares this type; No for types left over from removed features.
+- key: table:alerts_type;field:openCount
+  summary: How many alerts of this type are open right now.
+- key: table:alerts_type;field:notify
+  summary: Turn off to record alerts of this type without sending notifications.
+  content: |
+    Suppressed notifications are logged with the reason Type Silent. Alerts still show on the Alerts screen.
+- key: table:alerts_type;field:externalDetailCeiling
+  summary: The most detail messages about this type may show on outside channels such as email or webhooks.
+  content: |
+    - **Minimal:** severity, type, group, title, age and a link.
+    - **Standard:** adds the summary and counts.
+    - **Full:** adds details and record labels.
 
-  - key: table:alerts_escalation_step;slot:help
-    summary: "One step of an escalation policy: after how many minutes, tell this user, team or channel."
-    content: |
-      **How rows get created:** add steps from a policy's Steps list. Each has an order, a delay in minutes and one target (a user, a team or a channel). Acknowledging, snoozing or resolving an alert stops the steps. Empty means no policy has steps yet.
+    Each channel has its own level too; the lower of the two is used.
+- key: table:alerts_type;field:defaultSeverity
+  summary: The severity used when the report does not specify one; set by the application.
+- key: table:alerts_type;field:resolveMode
+  summary: How alerts of this type close.
+  content: |
+    - **Producer:** the part of the application that raised it reports it fixed.
+    - **Monitor:** the monitor's next clean check resolves it.
+    - **Quiet Period:** it resolves after no new reports for the quiet period.
+    - **Manual:** only a person resolves it.
+- key: table:alerts_type;field:howToFix
+  summary: Step-by-step guidance for resolving this kind of problem.
+  content: |
+    Shown to anyone looking at an alert of this type.
+- key: table:alerts_type;field:subjectTableName
+  summary: The kind of record alerts of this type are about, when there is one; set by the application.
+- key: table:alerts_type;field:visibilityPermission
+  summary: A permission needed to see alerts of this type; set by the application.
+- key: table:alerts_type;field:severityOverride
+  summary: Forces every alert of this type to this severity; leave empty to use what each report says.
+  content: |
+    Wins over the monitor's own severity and the type's default.
+- key: table:alerts_type;field:reminderIntervalMinutes
+  summary: Minutes between reminders while an alert remains open and unacknowledged.
+  content: |
+    Set zero to disable reminders. If blank, Critical alerts default to 60 minutes; other severities have no reminders. Acknowledgement, snooze, resolution and suppression stop timed notifications.
+- key: table:alerts_type;field:quietPeriodMinutes
+  summary: Minutes with no new reports before an alert resolves itself; used when Resolve Mode is Quiet Period.
+  content: |
+    Checked on the configured monitor evaluation schedule. Empty means no automatic quiet-period resolve.
+- key: table:alerts_group;slot:help
+  summary: A folder for organizing alert types.
+  content: |
+    Groups make it easier to find, subscribe to and mute related alerts at once. A subscription or mute aimed at a group also covers its sub-groups.
+
+    Groups are created automatically for new alert types. You can rename them, give them an icon and sort order, nest them under a parent group, and assign an owning team.
+
+    You can add groups and move alert types into them to match your responsibilities.
+
+    See also **{{label:alerts_type}}**.
+
+    **How rows get created:** Alerts and Other are supplied as defaults; declared alert groups are added during type sync. You can add your own groups and arrange their hierarchy.
+- key: table:alerts_group;section:identity
+  summary: The group's name and where it sits in the group tree.
+- key: table:alerts_group;section:details
+  summary: Description, owner team, icon and ordering.
+- key: table:alerts_group;section:alerts_group_join_alerts_type
+  summary: The alert types in this group.
+- key: table:alerts_group;section:system
+  summary: When the group was created and last changed.
+- key: table:alerts_group;field:description
+  summary: A note on what kinds of problems this group covers.
+- key: table:alerts_group;field:name
+  summary: A short internal name, unique; subscriptions and mutes aimed at a group match on it.
+  content: |
+    Changing it can stop existing group-scoped subscriptions and mutes from matching.
+- key: table:alerts_group;field:label
+  summary: The name people see for the group.
+- key: table:alerts_group;field:icon
+  summary: An icon name shown next to the group, such as folder.
+- key: table:alerts_group;field:sortOrder
+  summary: A number that sets the order groups are listed in; lower comes first.
+- key: table:alerts_group;field:parentGroupId
+  summary: Nest this group inside another one; leave empty for a top-level group.
+  content: |
+    A subscription or mute on the parent also covers this group.
+- key: table:alerts_group;field:ownerTeamId
+  summary: The team responsible for the problems in this group.
+- key: table:alerts_subscription;slot:help
+  summary: A rule saying who is told about which alerts, at what severity and through which channels.
+  content: |
+    A subscription ties a **who** (yourself, a team or a channel) to a **what** (everything, a group, an alert type, a monitor, a table, a record or an attribute) and a minimum severity. When an alert event matches, the notification goes out, unless something suppresses it, such as a mute, a paused user, a disabled channel or the rate limit. Every suppressed notification is listed in the **{{label:alerts_delivery}}** with its reason.
+
+    Anyone with Alerts access can subscribe themselves. You see your own subscriptions; Alerts admins see everyone's. Only Alerts admins can subscribe a team or a channel, or someone else. The first time an admin opens Alerts, a starter subscription is created for them: everything at the configured minimum severity (Error by default), to the in-app bell.
+
+    The **Subscribe me** action on a type, group or monitor creates one for you.
+
+    See also **{{label:alerts_subscription.channelOverrideIds}}**, **{{label:alerts_team}}**, **{{label:alerts_mute}}** and **{{label:alerts_user_preference}}**.
+
+    **How rows get created:** Use Subscribe me on a type, group or monitor, or New here. The first Alerts administrator receives a starter subscription at the configured minimum severity (Error by default).
+- key: table:alerts_subscription;section:identity
+  summary: Who this subscription notifies and whether it is on.
+- key: table:alerts_subscription;section:scope
+  summary: Which alerts it covers, how severe they must be and which events count.
+- key: table:alerts_subscription;section:delivery
+  summary: When and through which channels the notifications go.
+- key: table:alerts_subscription;section:system
+  summary: Who created the subscription and when.
+- key: table:alerts_subscription;field:enabled
+  summary: Turn off to pause this subscription without deleting it.
+- key: table:alerts_subscription;field:subscriberType
+  summary: Who gets notified.
+  content: |
+    - **{{label:alerts_subscription.userId}}:** one person; you, unless an admin picks someone else.
+    - **{{label:alerts_subscription.teamId}}:** every member of a team (admins only).
+    - **{{label:alerts_subscription.channelId}}:** a shared channel such as an email list or webhook (admins only).
+
+    Choose a team or channel in the matching field below.
+- key: table:alerts_subscription;field:channelId
+  summary: The channel to notify; required when the subscriber type is Channel.
+- key: table:alerts_subscription;field:minSeverity
+  summary: 'The lowest severity that triggers a notification: {{values:alerts_severity}}.'
+  content: |
+    The lowest severity that triggers a notification: {{values:alerts_severity}}; the default is {{default:alerts_subscription.minSeverity}}.
+
+    Alerts below it are skipped for this subscription. Channels also have their own minimum.
+- key: table:alerts_subscription;field:scopeRecordId
+  summary: The id of the record to follow; used with the Record scope.
+  content: |
+    Put the table in Scope Value and the record id here.
+- key: table:alerts_subscription;field:deliveryMode
+  summary: 'When you receive notifications: {{values:alerts_delivery_mode}}.'
+  content: |
+    Choose Immediate for individual messages, or an hourly or daily digest for grouped alerts. Reminders and escalations remain immediate. Daily digests use your time zone and digest hour.
+- key: table:alerts_subscription;field:teamId
+  summary: The team to notify; required when the subscriber type is Team.
+- key: table:alerts_subscription;field:createdByUserId
+  summary: Who created the subscription; filled in automatically.
+- key: table:alerts_subscription;field:userId
+  summary: The person this subscription notifies; filled in automatically with you when you create one.
+- key: table:alerts_subscription;field:events
+  summary: Which kinds of notification to send, as a comma-separated list; empty means all.
+  content: |
+    Default is {{default:alerts_subscription.events}}. Raised also covers a reopened alert, a severity increase and an alert starting to flap. Reminders and escalations are sent immediately, including for digest subscriptions.
+- key: table:alerts_subscription;field:scopeValue
+  summary: What the scope matches on; its meaning depends on Scope Type.
+  content: |
+    - **Group:** the group's name or id (sub-groups are included).
+    - **Alert Type:** the type's internal name.
+    - **Monitor:** the monitor's id number.
+    - **Table:** a table name.
+    - **Record:** the table name (with the id in Scope Record).
+    - **Attribute:** name=value, matching an alert's attribute.
+    - **All:** leave empty.
+- key: table:alerts_subscription;field:scopeType
+  summary: What the subscription covers.
+  content: |
+    - **All:** every alert you can see.
+    - **Group:** alerts in one group and its sub-groups.
+    - **Alert Type:** one kind of alert.
+    - **Monitor:** alerts raised by one monitor.
+    - **Table:** alerts about records of one table.
+    - **Record:** alerts about one specific record.
+    - **Attribute:** alerts carrying a name=value label.
+- key: table:alerts_subscription;field:channelOverrideIds
+  summary: Send only through these channels, as channel id numbers separated by commas; empty uses your default delivery.
+  content: |
+    Empty uses your default channels and the in-app bell if enabled. Without valid default channels, email is included if enabled with an address in My Alert Settings. Set ids to route this subscription somewhere else, for example a shared channel.
+- key: table:alerts_user_preference;slot:help
+  summary: 'Your personal delivery choices for alerts: bell, email, pausing and time zone.'
+  content: |
+    Each person has one row, created automatically the first time they open Alerts, and you see only your own (Alerts admins see all). The user is set by the system and cannot be changed.
+
+    Turn **{{label:alerts_user_preference.inAppEnabled}}** off to stop alerts reaching your bell, add an email address and turn on email to get alerts by email when your administrator has configured email delivery, or use **{{label:alerts_user_preference.pausedUntil}}** to go quiet while you are away.
+
+    Quiet hours and pauses suppress personal push channels while leaving the in-app bell available. Your digest hour controls daily digests. Your notification categories are set in **{{label:alerts_notification_preference}}**.
+
+    **How rows get created:** Created with defaults the first time you open Alerts. You can edit your own delivery choices here.
+- key: table:alerts_user_preference;section:identity
+  summary: Who these settings belong to and where your email goes.
+- key: table:alerts_user_preference;section:delivery
+  summary: Which routes alerts use to reach you, and a way to pause them.
+- key: table:alerts_user_preference;section:quiet
+  summary: Time zone, quiet hours and the daily digest hour.
+- key: table:alerts_user_preference;section:system
+  summary: When the settings were created and last changed.
+- key: table:alerts_user_preference;field:timeZone
+  summary: Your time zone, used for quiet hours and your daily digest hour.
+  content: |
+    Your time zone, such as America/New_York; used for quiet hours and your digest hour.
+
+    If empty or not recognised, UTC is used.
+- key: table:alerts_user_preference;field:emailEnabled
+  summary: Turn on to get alerts by email at your address below; needs an email address and a working email setup.
+  content: |
+    Email requires a configured email provider and a recipient address.
+- key: table:alerts_user_preference;field:digestHour
+  summary: The hour of day (0 to 23, your time zone) your daily email digest is sent.
+  content: |
+    The hour of day (0 to 23, your time zone) your daily email digest is sent; the default is {{default:alerts_user_preference.digestHour}}.
+
+    It applies to daily alert digests and ordinary notifications you set to Daily Digest.
+- key: table:alerts_user_preference;field:quietHoursEnd
+  summary: When quiet hours end each day, as HH:MM.
+- key: table:alerts_user_preference;field:inAppEnabled
+  summary: Turn off to stop alerts showing in your notification bell.
+- key: table:alerts_user_preference;field:userLabel
+  summary: The name shown for you in delivery logs; filled in from your account the first time.
+- key: table:alerts_user_preference;field:quietHoursStart
+  summary: When quiet hours begin each day, as HH:MM.
+- key: table:alerts_user_preference;field:pausedUntil
+  summary: Pause personal push notifications until this date and time; leave empty to receive them normally.
+  content: |
+    While paused, personal push notifications are held back and logged as User Paused. The in-app bell is not paused.
+- key: table:alerts_user_preference;field:quietDays
+  summary: Days quiet hours apply to.
+- key: table:alerts_user_preference;field:emailAddress
+  summary: Where your alert emails go.
+  content: |
+    Needed for email delivery. Without it, email notifications for you are logged as No Address.
+- key: table:alerts_user_preference;field:userId
+  summary: Your account; set automatically and cannot be changed.
+- key: table:alerts_user_preference;field:quietBypassSeverity
+  summary: The minimum severity that can bypass your quiet hours.
+  content: |
+    Alerts at or above this severity can reach your personal push channels during quiet hours. The default is {{default:alerts_user_preference.quietBypassSeverity}}. Your in-app bell is not suppressed by quiet hours.
+- key: table:alerts_user_preference;field:defaultChannelIds
+  summary: Default external channels for subscriptions that do not specify their own channels.
+  content: |
+    Enter channel IDs separated by commas. Valid defaults replace personal email delivery; your in-app bell is still included unless you turn it off.
+- key: table:alerts_team;slot:help
+  summary: A named group of people who can be notified together or assigned alerts.
+  content: |
+    Teams let you subscribe a whole group at once and assign an alert or an alert group to a team instead of one person.
+
+    Add people in the **Members** list on the team. Role and identity-provider group membership also contributes when your administrator configures an audience resolver. Without that integration, only explicit members are used.
+
+    Only Alerts admins can subscribe a team.
+
+    See also **{{label:alerts_team_member}}** and **{{label:alerts_subscription}}**.
+
+    **How rows get created:** As an administrator, use New, then add members or configure a member source. An empty list means no teams have been configured.
+- key: table:alerts_team;section:identity
+  summary: The team's name and where its members come from.
+- key: table:alerts_team;section:details
+  summary: A description of what the team handles.
+- key: table:alerts_team;section:alerts_team_join_alerts_team_member
+  summary: The people on this team; add or remove them here.
+- key: table:alerts_team;section:system
+  summary: When the team was created and last changed.
+- key: table:alerts_team;field:description
+  summary: What this team is responsible for.
+- key: table:alerts_team;field:name
+  summary: A short internal name, unique among teams.
+- key: table:alerts_team;field:label
+  summary: The name people see for the team.
+- key: table:alerts_team;field:memberSource
+  summary: Where the team's members come from.
+  content: |
+    - **Manual:** the people you add in the Members list.
+    - **Role** and **IdP Group:** include users from a role or identity-provider group when your administrator has configured an audience resolver.
+- key: table:alerts_team;field:memberSourceValue
+  summary: The role or group to fill the team from; not used while Member Source is Manual.
+- key: table:alerts_team_member;slot:help
+  summary: One person on one team, with their role in it.
+  content: |
+    Add and remove members from the **Members** list on a team. A person can be on a team only once. Team subscriptions notify every member listed here.
+
+    See also **{{label:alerts_team}}**.
+
+    **How rows get created:** Add people from a team's Members list or use New here. These are explicit memberships; resolved role or group members do not require rows here.
+- key: table:alerts_team_member;section:identity
+  summary: Which team, which person and their role.
+- key: table:alerts_team_member;section:system
+  summary: When the membership was added and last changed.
+- key: table:alerts_team_member;field:role
+  summary: '{{values:alerts_team_role}}; the default is {{default:alerts_team_member.role}}.'
+  content: |
+    The role is a label to show who leads the team. It does not change who gets notified.
+- key: table:alerts_team_member;field:teamId
+  summary: The team this person belongs to.
+- key: table:alerts_team_member;field:userId
+  summary: The person's user id, as it appears in their account.
+  content: |
+    Use the exact id shown elsewhere in Alerts, for example in Assigned To or Created By.
+- key: table:alerts_channel;slot:help
+  summary: A place alerts are sent to, such as the in-app bell, email, an email list, Slack, Teams or a webhook.
+  content: |
+    A channel is one destination plus its rules: the lowest severity it accepts, how much detail it shows, an hourly limit and its health. Two channels, the in-app bell and personal email, are created automatically. Others are added by an admin.
+
+    **Types:** In App, Email, Email List (settings hold the addresses), Slack, Teams, Webhook (signed, settings hold the URL), PagerDuty and Alertmanager.
+
+    Secrets such as webhook URLs or keys are never typed in here. **{{label:alerts_channel.secretRef}}** names where the secret is kept (an environment variable), and it is read only when sending.
+
+    Use **{{label:alertsSendTestNotification}}** to check a channel works. Email requires a configured email provider.
+
+    See also **{{label:alerts_subscription}}** and **{{label:alerts_delivery}}**.
+
+    **How rows get created:** In-app and email destinations are supplied as defaults. As an administrator, you can add other destinations and use Send test notification to check them. Email still requires a configured provider.
+- key: table:alerts_channel;section:identity
+  summary: The channel's name, type and whether it is on and healthy.
+- key: table:alerts_channel;section:settings
+  summary: Where it connects, how much it reveals and its severity and rate limits.
+- key: table:alerts_channel;section:health
+  summary: How recent deliveries went and the last error.
+- key: table:alerts_channel;section:alerts_channel_join_alerts_delivery
+  summary: Recent notifications sent through this channel.
+- key: table:alerts_channel;section:system
+  summary: When the channel was created and last changed.
+- key: table:alerts_channel;field:enabled
+  summary: Turn off to stop sending through this channel; notifications are logged as Channel Disabled.
+- key: table:alerts_channel;field:name
+  summary: A short internal name, unique among channels.
+- key: table:alerts_channel;field:label
+  summary: The name people see for the channel in lists and subscriptions.
+- key: table:alerts_channel;field:lastSuccessAt
+  summary: When a notification last went out through this channel without error.
+- key: table:alerts_channel;field:healthStatus
+  summary: How delivery is going, set automatically.
+  content: |
+    - **Healthy:** the last send worked.
+    - **Probation:** a send failed.
+    - **Unhealthy:** three failures in a row; an alert is raised, shown only in the in-app bell so a broken channel cannot loop.
+
+    One successful send makes it Healthy again.
+- key: table:alerts_channel;field:lastFailureAt
+  summary: When a send through this channel last failed.
+- key: table:alerts_channel;field:minSeverity
+  summary: 'The lowest severity this channel accepts: {{values:alerts_severity}}.'
+  content: |
+    The lowest severity this channel accepts: {{values:alerts_severity}}; the default is {{default:alerts_channel.minSeverity}}.
+
+    Lower-severity alerts skip the channel. The in-app bell ignores this setting.
+- key: table:alerts_channel;field:secretRef
+  summary: The name of the environment variable that holds this channel's secret, never the secret itself.
+  content: |
+    You can also write a variable expression such as ${env.NAME}. What it holds depends on the type: the Slack or Teams webhook URL, the signing key for a webhook, the routing key for PagerDuty, or an optional token for Alertmanager. If the reference cannot be resolved, sends fail.
+- key: table:alerts_channel;field:detailLevel
+  summary: 'How much an alert shows in messages through this channel: {{values:alerts_detail_level}}.'
+  content: |
+    How much an alert shows in messages through this channel: {{values:alerts_detail_level}}; the default is {{default:alerts_channel.detailLevel}}.
+
+    - **Minimal:** severity, type, group, title, age and a link.
+    - **Standard:** adds the summary and counts.
+    - **Full:** adds details and record labels.
+
+    The alert type can cap this with its own limit; the lower of the two wins.
+- key: table:alerts_channel;field:channelType
+  summary: 'What kind of destination this is: {{values:alerts_channel_type}}.'
+  content: |
+    Email types need an email provider. Slack, Teams, Webhook, PagerDuty and Alertmanager send over https only.
+- key: table:alerts_channel;field:lastError
+  summary: The message from the last failed send; empty when the last send worked.
+- key: table:alerts_channel;field:consecutiveFailures
+  summary: How many sends in a row have failed; at 3 the channel becomes Unhealthy.
+- key: table:alerts_channel;field:rateLimitPerHour
+  summary: The most notifications this channel sends per hour; 0 means no limit.
+  content: |
+    The most notifications this channel sends per hour; 0 means no limit, and the default is {{default:alerts_channel.rateLimitPerHour}}.
+
+    Extra notifications are not sent and are logged as Rate Limited. The in-app bell is not limited.
+- key: table:alerts_channel;field:settings
+  summary: Extra connection settings as JSON; what is needed depends on the channel type.
+  content: |
+    - **Email List:** {"addresses": ["ops@example.com"]}
+    - **Webhook:** {"url": "https://receiver"}
+    - **PagerDuty:** optional url and source
+    - **Alertmanager:** {"url": "https://alertmanager:9093"}
+    - **Slack, Teams, In App, Email:** none
+
+    Links must be https. Only local test receivers may opt out, and that is not recommended.
+- key: table:alerts_mute;slot:help
+  summary: A time-limited pause on notifications, or a maintenance window that stops alerts from being raised at all.
+  content: |
+    Use a mute when you already know about a problem or are doing planned work and do not want to be notified.
+
+    **What it does:**
+    - **Silence Notifications:** alerts still open and update, but no notifications go out. Any user who can add mutes may create one.
+    - **Suppress Alerts:** a maintenance window. Matching alerts are not raised at all and monitors skip their checks. Only Alerts admins can create one.
+
+    A mute applies between its start and end times, and only while it is turned on. It covers all alerts, or one group, alert type, monitor, table, record or attribute. The **Mute** action on alerts, types, groups and monitors creates one quickly, asking for a reason and a number of minutes (60 by default).
+
+    **How rows get created:** Use a Mute action or New here to choose a scope, time window and effect. An empty list means no mutes have been recorded.
+- key: table:alerts_mute;section:identity
+  summary: The mute's name, whether it is on and what it does.
+- key: table:alerts_mute;section:scope
+  summary: Which alerts it covers and the times it applies, plus the reason.
+- key: table:alerts_mute;section:system
+  summary: Who created the mute and when.
+- key: table:alerts_mute;field:name
+  summary: A short label for this mute or maintenance window, so you can recognise it in the list.
+- key: table:alerts_mute;field:reason
+  summary: Why the mute exists, for example planned maintenance or a known noisy source.
+  content: |
+    Up to {{maxLength:alerts_mute.reason}} characters. The Mute actions on alerts, alert types, groups and monitors fill this in from the reason you type.
+- key: table:alerts_mute;field:scopeType
+  summary: 'What the mute covers: everything, one group, one alert type, one monitor, a table or an attribute.'
+  content: |
+    Pick the kind of thing to mute, then put the matching name in **{{label:alerts_mute.scopeValue}}**. See the scope list for what each kind means.
+- key: table:alerts_mute;field:scopeValue
+  summary: The name or id the scope applies to, such as an alert type name, a group name or a monitor id.
+  content: |
+    What to enter depends on the scope: the alert type's name, the group's name, the monitor's id, a table name, or **key=value** for an attribute. Leave it empty for a scope of All. A mute whose value matches nothing does nothing.
+- key: table:alerts_mute;field:startsAt
+  summary: When the mute begins. It does nothing before this time.
+- key: table:alerts_mute;field:endsAt
+  summary: When the mute ends. After this time it stops applying on its own.
+- key: table:alerts_mute;field:effect
+  summary: Whether the mute only silences notifications or stops matching alerts being raised at all.
+  content: |
+    - **Silence Notifications**: alerts still open and show in the list, but nobody is notified.
+    - **Suppress Alerts**: a maintenance window. Matching alerts are suppressed and monitors it covers are not checked. Only alerts admins can create these.
+- key: table:alerts_mute;field:enabled
+  summary: Turn the mute off without deleting it. It only applies while enabled and inside its time window.
+- key: table:alerts_mute;field:createdByUserId
+  summary: Who created the mute. Filled in automatically from the signed-in user and cannot be changed.
+- key: table:alerts_delivery;slot:help
+  summary: A log of every notification the alerts system tried to send, who it was for and whether it arrived.
+  content: |
+    Each row is one message to one person or channel for one alert event. Use it to answer "why didn't I get that?" or "did the email go out?".
+
+    - Rows are written by the system and are read-only.
+    - Suppressed rows are kept too, with the reason they were not sent.
+    - Failed or dead rows can be sent again with **{{label:alertsRetryDelivery}}**, which needs the alerts admin permission.
+    - Failed sends are retried automatically after 1 minute, 5 minutes, 15 minutes, 1 hour and 4 hours; after that the row is marked dead.
+
+    See also **{{label:alerts_channel}}** and **{{label:alerts_alert}}**.
+
+    **How rows get created:** Written automatically when alerts are routed, including suppressed deliveries. If the list is empty, check your subscriptions and whether any alerts have been raised.
+- key: table:alerts_delivery;section:identity
+  summary: Which alert, event, subscription and channel this delivery belongs to.
+- key: table:alerts_delivery;section:delivery
+  summary: Who it was sent to, the kind of message and how the send went.
+- key: table:alerts_delivery;section:system
+  summary: Tracking details the system fills in while sending.
+- key: table:alerts_delivery;field:alertId
+  summary: The alert this message was about.
+- key: table:alerts_delivery;field:alertEventId
+  summary: The timeline entry (raised, escalated, resolved and so on) that caused this message.
+- key: table:alerts_delivery;field:subscriptionId
+  summary: The subscription that routed this message to its recipient.
+- key: table:alerts_delivery;field:channelId
+  summary: The channel the message was sent through, such as in-app or email.
+- key: table:alerts_delivery;field:recipientUserId
+  summary: The person the message was for. Filled in automatically from the subscription or team.
+- key: table:alerts_delivery;field:recipientLabel
+  summary: The address or name the message actually went to, for example an email address.
+- key: table:alerts_delivery;field:kind
+  summary: 'Why the message was sent: {{values:alerts_delivery_kind}}.'
+- key: table:alerts_delivery;field:status
+  summary: Where the delivery stands, from pending through sent, or failed, dead or suppressed.
+  content: |
+    See the delivery status list for what each value means. Only failed and dead rows can be retried.
+- key: table:alerts_delivery;field:suppressedReason
+  summary: Why a suppressed message was deliberately not sent. Empty for anything that was sent or tried.
+- key: table:alerts_delivery;field:attempts
+  summary: How many times the system has tried to send this message.
+  content: |
+    Resets to 0 when you run **{{label:alertsRetryDelivery}}**.
+- key: table:alerts_delivery;field:nextAttemptAt
+  summary: When the system will try again after a failure.
+- key: table:alerts_delivery;field:claimedUntil
+  summary: A temporary claim showing that a delivery worker is handling this message.
+  content: |
+    It lasts 2 minutes. Filled in automatically.
+- key: table:alerts_delivery;field:sentAt
+  summary: When the message was handed to the channel successfully.
+- key: table:alerts_delivery;field:providerMessageId
+  summary: The id the sending service gave the message, useful when tracing it there.
+- key: table:alerts_delivery;field:lastError
+  summary: The error from the most recent failed attempt, to help you diagnose a bad channel or address.
+- key: table:alerts_event;slot:help
+  summary: 'The history of one alert: when it was raised, acknowledged, snoozed, commented on, resolved and more.'
+  content: |
+    Every change to an alert writes a row here, so you can see who did what and when. Rows are written by the system and cannot be edited.
+
+    Comments you add with **{{label:alertsAddComment}}** also appear here. This table is mostly seen as the **Timeline** panel on an alert, newest information first for the alert you are viewing.
+
+    See also **{{label:alerts_alert}}** and **{{label:alerts_delivery}}**.
+
+    **How rows get created:** Written automatically when an alert changes or you add a comment. You cannot edit this history.
+- key: table:alerts_event;section:identity
+  summary: Which alert this entry is about and what kind of entry it is.
+- key: table:alerts_event;section:details
+  summary: Who did it, what changed and any note that came with it.
+- key: table:alerts_event;section:system
+  summary: When the entry was written.
+- key: table:alerts_event;field:alertId
+  summary: The alert this timeline entry belongs to.
+- key: table:alerts_event;field:eventType
+  summary: What happened, such as raised, acknowledged, snoozed, assigned, commented or resolved.
+  content: |
+    See the event type list for every value.
+- key: table:alerts_event;field:at
+  summary: When the event happened.
+- key: table:alerts_event;field:userId
+  summary: The person who caused it. Empty when the system did it, for example a monitor or a timer.
+- key: table:alerts_event;field:fromValue
+  summary: The value before the change, for example the old status.
+- key: table:alerts_event;field:toValue
+  summary: The value after the change, for example the new status or the person it was assigned to.
+- key: table:alerts_event;field:note
+  summary: Free text that came with the event, such as a comment, a resolution note or when a snooze ends.
+- key: table:alerts_record_ref;slot:help
+  summary: The records an alert is about, so you can jump from an alert to the page, order or item it concerns.
+  content: |
+    Each row links one alert to one record in another table. Rows are written by the system when an alert is raised and cannot be edited.
+
+    - The label is shown in the app only, and only to people who are allowed to see that record.
+    - A link is active while the alert still concerns that record.
+
+    You normally see these as the **Records** panel on an alert. See also **{{label:alerts_alert}}**.
+
+    **How rows get created:** Created when an alert names affected records. An empty list means no record links have been recorded.
+- key: table:alerts_record_ref;section:identity
+  summary: Which alert and which record this link joins.
+- key: table:alerts_record_ref;section:system
+  summary: Whether the link is still in use, filled in by the system.
+- key: table:alerts_record_ref;field:alertId
+  summary: The alert that concerns this record.
+- key: table:alerts_record_ref;field:tableName
+  summary: The kind of record the alert is about, such as a page or a file.
+- key: table:alerts_record_ref;field:recordId
+  summary: The id of the record the alert is about. Together with the table it points to one record.
+- key: table:alerts_record_ref;field:label
+  summary: A human-readable name for the record, shown in the app to people who can see it.
+- key: table:alerts_record_ref;field:active
+  summary: Whether the alert currently concerns this record. Cleared by the system when the alert no longer does.
+- key: table:alerts_heartbeat;slot:help
+  summary: The last time each regular job or check reported in, used to notice when something has gone quiet.
+  content: |
+    Each row is one "I am still alive" signal, identified by a key. A heartbeat monitor watches a row and raises an alert when no beat arrives within the expected interval.
+
+    - Rows are created and updated by the system whenever a beat arrives, or when a watched job finishes successfully.
+    - You cannot edit them.
+    - To be warned about a missing beat, use a heartbeat monitor under **{{label:alerts_monitor}}**.
+
+    **How rows get created:** Created or updated when an application reports a heartbeat or a watched process completes successfully. Add a Heartbeat monitor if you need to be warned when a signal stops.
+- key: table:alerts_heartbeat;section:identity
+  summary: The key that names this signal.
+- key: table:alerts_heartbeat;section:system
+  summary: When it last reported and how many times, filled in by the system.
+- key: table:alerts_heartbeat;field:heartbeatKey
+  summary: The unique name of the signal. For a job it is built from the job's name in lowercase with hyphens.
+- key: table:alerts_heartbeat;field:lastBeatAt
+  summary: The most recent time this signal reported in.
+- key: table:alerts_heartbeat;field:beatCount
+  summary: How many times this signal has reported in since it was first seen.
+- key: table:alerts_notification;slot:help
+  summary: 'Messages for people in the admin app: announcements you write and notices the system sends.'
+  content: |
+    A notification shows in each recipient's bell, on the notifications page, and as a banner if it is sticky. Alerts you are subscribed to also appear here, in the Alert category.
+
+    **To send one:** create a notification, which starts as a draft, then use a record action.
+    - **{{label:alertsPreviewAudience}}** shows who it would reach without sending.
+    - **{{label:alertsSendNotification}}** delivers it. Sending again only adds people who have not got it yet.
+    - **{{label:alertsScheduleNotification}}** sends a draft at its **{{label:alerts_notification.publishAt}}** time, which must be in the future.
+    - **{{label:alertsRetractNotification}}** removes it from everyone's bell. It cannot be sent again.
+
+    You need the notification admin permission to write and send. Sent and retracted notifications are deleted after the configured retention period (180 days by default). Email and Slack delivery depend on your preferences and configured providers.
+
+    See also **{{label:alerts_notification_recipient}}**.
+
+    **How rows get created:** As a notification administrator, use New, preview the audience, then send or schedule the message. Installed features can also send notifications automatically.
+- key: table:alerts_notification;section:identity
+  summary: The title, severity and category, and where the notification came from.
+- key: table:alerts_notification;section:message
+  summary: 'What people read: the text and an optional link.'
+- key: table:alerts_notification;section:audience
+  summary: Who receives the notification.
+- key: table:alerts_notification;section:schedule
+  summary: When it appears and when it goes away.
+- key: table:alerts_notification;section:alerts_notification_join_alerts_notification_recipient
+  summary: The people it was delivered to, and whether each has read it.
+- key: table:alerts_notification;section:system
+  summary: Status, author and counts, filled in automatically.
+- key: table:alerts_notification;field:title
+  summary: The headline people see in the bell and list. Up to {{maxLength:alerts_notification.title}} characters.
+- key: table:alerts_notification;field:body
+  summary: The message text. Markdown is supported.
+  content: |
+    Keep it short. For security notices, the body is left out of email.
+- key: table:alerts_notification;field:severity
+  summary: 'How important it is: {{values:alerts_notification_severity}}.'
+  content: |
+    This sets how it looks in the bell. Critical is meant for a sticky banner. People can choose to be emailed only from a minimum severity.
+- key: table:alerts_notification;field:category
+  summary: What kind of message it is, which decides how people can mute it.
+  content: |
+    Each person can mute categories in-app from **{{label:alerts_notification_preference}}**, except Security, which can never be muted. See the category list for the values.
+- key: table:alerts_notification;field:status
+  summary: 'Where it is in its life: {{values:alerts_notification_status}}. Changed by the record actions, not by hand.'
+- key: table:alerts_notification;field:sourceName
+  summary: Who produced it. Notifications you write here are marked admin automatically.
+- key: table:alerts_notification;field:sourceKey
+  summary: A de-duplication key from the sending system. Leave empty for announcements you write.
+  content: |
+    If a system sends again with the same key and audience, the existing notification is updated and goes back to unread, instead of a second one being created.
+- key: table:alerts_notification;field:sourceTableName
+  summary: The kind of record the notification is about, set by the system that sent it.
+- key: table:alerts_notification;field:sourceRecordId
+  summary: The id of that record, set by the system that sent it.
+- key: table:alerts_notification;field:linkUrl
+  summary: 'Where clicking the notification goes: an app path starting with / or a full https address.'
+  content: |
+    Up to {{maxLength:alerts_notification.linkUrl}} characters. Other kinds of address, such as http or links with spaces, are refused.
+- key: table:alerts_notification;field:linkLabel
+  summary: The text on the link. In email it shows "Open" if left empty.
+- key: table:alerts_notification;field:audienceType
+  summary: 'How the recipients are chosen: all users, by role, by permission or a named list of users.'
+  content: |
+    Put the matching names in **{{label:alerts_notification.audienceValue}}**. See the audience list for the values. Use **{{label:alertsPreviewAudience}}** to check who it will reach.
+- key: table:alerts_notification;field:audienceValue
+  summary: The roles, permission or users the audience type refers to.
+  content: |
+    - Roles: role names, separated by commas or new lines.
+    - Users: user ids, separated by commas or new lines.
+    - Permission: a single permission name.
+    - All Users: leave empty.
+
+    Saving a notification that needs names but has none is refused.
+- key: table:alerts_notification;field:publishAt
+  summary: When the notification becomes visible. Required for scheduling, and must be in the future then.
+  content: |
+    Filled in automatically with the send time if you send it immediately.
+- key: table:alerts_notification;field:expireAt
+  summary: When the notification disappears from everyone's bell. Leave empty to keep it.
+  content: |
+    It is deleted for good about a week after this time.
+- key: table:alerts_notification;field:sticky
+  summary: Show it as a banner at the top of the page until each person dismisses it. Meant for critical notices.
+  content: |
+    The banner area shows up to three sticky notifications at a time.
+- key: table:alerts_notification;field:authorUserId
+  summary: Who wrote it. Filled in automatically from the signed-in user.
+- key: table:alerts_notification;field:sentAt
+  summary: When it was first sent. Empty for drafts and scheduled notifications.
+- key: table:alerts_notification;field:retractedAt
+  summary: When it was retracted. Empty if it never was.
+- key: table:alerts_notification;field:recipientCount
+  summary: How many people it has been delivered to.
+  content: |
+    People who muted the category in-app are not counted, except for Security notices.
+- key: table:alerts_notification;field:readCount
+  summary: How many of the recipients have read it.
+- key: table:alerts_notification_recipient;slot:help
+  summary: One row per person a notification reached, showing whether they read it, dismissed it or were emailed.
+  content: |
+    Rows are created by the system when a notification is sent. A person can only change their own read and dismissed times; admins cannot edit anything else here.
+
+    Use this to see who has and has not seen an announcement. Retracting a notification keeps its recipient rows for the record.
+
+    See also **{{label:alerts_notification}}**.
+
+    **How rows get created:** Created when a notification reaches a person. You can mark your own notifications read or dismissed from the bell.
+- key: table:alerts_notification_recipient;section:identity
+  summary: Which notification and which person this row is for.
+- key: table:alerts_notification_recipient;section:email
+  summary: Whether and when this person was emailed about it.
+- key: table:alerts_notification_recipient;section:system
+  summary: Delivery and read times, tracked by the system.
+- key: table:alerts_notification_recipient;field:notificationId
+  summary: The notification this row is for.
+- key: table:alerts_notification_recipient;field:userId
+  summary: The person it was delivered to.
+- key: table:alerts_notification_recipient;field:deliveredAt
+  summary: When it reached this person's bell.
+- key: table:alerts_notification_recipient;field:readAt
+  summary: When this person read it. Empty means unread.
+- key: table:alerts_notification_recipient;field:dismissedAt
+  summary: When this person dismissed it, which hides it from their bell and banner.
+- key: table:alerts_notification_recipient;field:emailedAt
+  summary: When the email for this notification was sent to this person.
+- key: table:alerts_notification_recipient;field:emailStatus
+  summary: Whether this person was emailed about it and how that went.
+  content: |
+    See the email status list to distinguish requested, pending, sent, digested, skipped and failed delivery.
+- key: table:alerts_notification_preference;slot:help
+  summary: 'Your own choices for each kind of notification: mute it in-app, or have it emailed.'
+  content: |
+    You get one row per category, and you see and change only your own settings.
+
+    - **{{label:alerts_notification_preference.inAppMuted}}** hides that category from your bell. Security notices can never be muted.
+    - **{{label:alerts_notification_preference.emailMode}}** chooses off, immediately, or one daily digest.
+    - **{{label:alerts_notification_preference.emailMinSeverity}}** sets the lowest severity that is emailed. If empty, the default is Warning.
+
+    Alert notifications are never emailed from here; use your alert subscriptions for that. Email requires a configured provider.
+
+    See also **{{label:alerts_user_preference}}**.
+
+    **How rows get created:** Save your per-category choices to override the defaults. Without a saved choice, in-app delivery is enabled and email and Slack are off. Security cannot be muted in-app.
+- key: table:alerts_notification_preference;section:identity
+  summary: Whose settings these are and which category they cover.
+- key: table:alerts_notification_preference;section:system
+  summary: Created and changed times, tracked by the system.
+- key: table:alerts_notification_preference;field:userId
+  summary: The person these settings belong to. Filled in automatically with your own user.
+- key: table:alerts_notification_preference;field:category
+  summary: The kind of notification these settings apply to.
+  content: |
+    See the category list for the values.
+- key: table:alerts_notification_preference;field:inAppMuted
+  summary: Hide this category from your bell and notifications page. Not allowed for Security.
+- key: table:alerts_notification_preference;field:emailMode
+  summary: 'Whether to be emailed about this category: off, immediately, or in one daily digest.'
+  content: |
+    Daily digest sends one email at your digest hour, listing unread notifications. Your digest hour and time zone are in **{{label:alerts_user_preference}}**.
+- key: table:alerts_notification_preference;field:emailMinSeverity
+  summary: The lowest severity that triggers an email for this category. Lower ones are not emailed.
+- key: process:alertsAcknowledge;slot:help
+  summary: Mark open alerts as seen so others know someone is on them.
+  content: |
+    Select one or more alerts and run this. Only alerts that are open and not yet acknowledged are changed; anything else is skipped and listed on the review screen. The alert moves to Acknowledged and a timeline entry records who did it and when.
+
+    Acknowledging stops timed reminders and escalation but does not resolve the alert. Use **{{label:alertsResolve}}** when the problem is fixed. Needs the alerts manage permission.
+- key: process:alertsSnooze;slot:help
+  summary: Hide an alert for a number of hours; it comes back on its own if it is still there.
+  content: |
+    Select one or more alerts, choose how long, and run it. The alert moves to Snoozed until the end time. When the time passes, the system puts it back to Open, or Acknowledged if it had been acknowledged before.
+
+    Resolved alerts are skipped. Needs the alerts manage permission.
+- key: process:alertsSnooze;field:alertsSnoozeHours
+  summary: How many whole hours to snooze for. Defaults to 4; anything below 1 is treated as 4.
+- key: process:alertsResolve;slot:help
+  summary: Close alerts by hand once the problem is fixed, with a note saying what was done.
+  content: |
+    Select alerts, write a resolution note and run it. The alerts move to Resolved, recorded as resolved by a person, and the note goes on the timeline. Already resolved alerts are skipped.
+
+    If an alert comes from an enabled monitor that is still firing, the review screen warns you: the alert will reopen at the next check. Fix the cause or disable the monitor first. Needs the alerts manage permission.
+- key: process:alertsResolve;field:alertsNote
+  summary: What you did or found. Required, and saved on the alert's timeline.
+- key: process:alertsReopen;slot:help
+  summary: Bring a resolved alert back to open when the problem has returned.
+  content: |
+    Works on one resolved alert at a time. If an alert with the same type and key is already open, nothing is changed, so you do not end up with a duplicate. The reopening, who did it and your reason go on the timeline.
+
+    Needs the alerts manage permission.
+- key: process:alertsReopen;field:alertsNote
+  summary: Optional reason for reopening, saved on the timeline.
+- key: process:alertsAssign;slot:help
+  summary: Hand alerts to a person or a team so someone owns them.
+  content: |
+    Select one or more alerts, then enter a user id, choose a team, or both. Leaving both empty clears the assignment. The change is recorded on the timeline. Assigned alerts appear in that person's **My Alerts** on the Alerts home.
+
+    Needs the alerts manage permission.
+- key: process:alertsAssign;field:alertsAssignUserId
+  summary: The sign-in id of the person to assign to. Leave empty to assign to a team only, or to clear.
+- key: process:alertsAssign;field:alertsAssignTeamId
+  summary: A team to assign the alert to, chosen from the list of teams.
+- key: process:alertsAddComment;slot:help
+  summary: Add a note to an alert's timeline for the next person.
+  content: |
+    Works on one alert at a time. The comment is saved with your name and the time and shows in the alert's **Timeline**. It does not change the alert's status. Anyone who can view alerts can comment.
+- key: process:alertsAddComment;field:alertsNote
+  summary: Your comment. Required.
+- key: process:alertsMuteAlert;slot:help
+  summary: Silence notifications for this alert or its subject record for a chosen time.
+  content: |
+    Select one alert and enter a reason and duration. If the alert has a subject record, the mute covers that record; otherwise it covers this alert type and problem key. Other problems of the same type are not muted unless they match that scope.
+
+    You can review or end the mute in **{{label:alerts_mute}}**. To silence the entire type, use **{{label:alertsMuteAlertType}}**. You need permission to manage alerts.
+- key: process:alertsMuteAlert;field:alertsMuteMinutes
+  summary: How many minutes to silence notifications for. Defaults to 60; anything below 1 is treated as 60.
+- key: process:alertsMuteAlert;field:alertsNote
+  summary: Why you are muting. Required, and saved on the mute.
+- key: process:alertsSubscribeToType;slot:help
+  summary: Get notified about alerts of this type.
+  content: |
+    Works on one alert type at a time. It creates a subscription for you at the minimum severity and delivery you choose; you are notified when an alert is raised, escalated, reminded or resolved. If you already subscribe to this type, it is skipped.
+
+    You can edit or turn off your subscription later in **{{label:alerts_subscription}}**.
+- key: process:alertsSubscribeToType;field:alertsMinSeverity
+  summary: The lowest severity you want to hear about. Defaults to Warning.
+- key: process:alertsSubscribeToType;field:alertsDeliveryMode
+  summary: 'When to be notified: immediately, or in an hourly or daily digest. Defaults to Immediate.'
+- key: process:alertsMuteType;slot:help
+  summary: Silence notifications for every alert of this type for a while.
+  content: |
+    Works on one alert type. Alerts still open and show in the list; only notifications are held back. The mute starts now, lasts the minutes you enter, and can be seen and changed in **{{label:alerts_mute}}**.
+
+    Needs the alerts manage permission.
+- key: process:alertsMuteType;field:alertsMuteMinutes
+  summary: How many minutes to silence notifications for. Defaults to 60; anything below 1 is treated as 60.
+- key: process:alertsMuteType;field:alertsNote
+  summary: Why you are muting. Required, and saved on the mute.
+- key: process:alertsCreateMonitorFromType;slot:help
+  summary: Start a monitor for an alert type, as a disabled draft for you to finish and switch on.
+  content: |
+    Works on one alert type and needs the alerts admin permission. If the type has a subject table, you get a table-query monitor that counts matching rows; otherwise you get a heartbeat monitor that expects a signal once a day with an hour of grace. Either way it checks every 5 minutes once enabled.
+
+    The new monitor is disabled and marked as not built in. Open it in **{{label:alerts_monitor}}**, edit its definition, then use **{{label:alertsEnableMonitor}}**.
+- key: process:alertsSubscribeToGroup;slot:help
+  summary: Get notified about every alert in this group.
+  content: |
+    Works on one group at a time. It creates a subscription for you at the minimum severity and delivery you choose, for alerts raised, escalated, reminded or resolved. If you already subscribe to this group, it is skipped. Manage it later in **{{label:alerts_subscription}}**.
+- key: process:alertsSubscribeToGroup;field:alertsMinSeverity
+  summary: The lowest severity you want to hear about. Defaults to Warning.
+- key: process:alertsSubscribeToGroup;field:alertsDeliveryMode
+  summary: 'When to be notified: immediately, or in an hourly or daily digest. Defaults to Immediate.'
+- key: process:alertsMuteGroup;slot:help
+  summary: Silence notifications for every alert in this group for a while.
+  content: |
+    Works on one group. Alerts still open and show in the list; only notifications are held back. The mute starts now, lasts the minutes you enter, and can be seen and changed in **{{label:alerts_mute}}**.
+
+    Needs the alerts manage permission.
+- key: process:alertsMuteGroup;field:alertsMuteMinutes
+  summary: How many minutes to silence notifications for. Defaults to 60; anything below 1 is treated as 60.
+- key: process:alertsMuteGroup;field:alertsNote
+  summary: Why you are muting. Required, and saved on the mute.
+- key: process:alertsSubscribeToMonitor;slot:help
+  summary: Get notified about alerts raised by this monitor.
+  content: |
+    Works on one monitor at a time. It creates a subscription for you at the minimum severity and delivery you choose, for alerts raised, escalated, reminded or resolved. If you already subscribe to this monitor, it is skipped. Manage it later in **{{label:alerts_subscription}}**.
+- key: process:alertsSubscribeToMonitor;field:alertsMinSeverity
+  summary: The lowest severity you want to hear about. Defaults to Warning.
+- key: process:alertsSubscribeToMonitor;field:alertsDeliveryMode
+  summary: 'When to be notified: immediately, or in an hourly or daily digest. Defaults to Immediate.'
+- key: process:alertsMuteMonitor;slot:help
+  summary: Silence notifications from this monitor for a while.
+  content: |
+    Works on one monitor. The monitor keeps checking and alerts still open; only notifications are held back. The mute starts now, lasts the minutes you enter, and can be seen and changed in **{{label:alerts_mute}}**.
+
+    Needs the alerts manage permission.
+- key: process:alertsMuteMonitor;field:alertsMuteMinutes
+  summary: How many minutes to silence notifications for. Defaults to 60; anything below 1 is treated as 60.
+- key: process:alertsMuteMonitor;field:alertsNote
+  summary: Why you are muting. Required, and saved on the mute.
+- key: process:alertsRunCheckNow;slot:help
+  summary: Run a monitor's check immediately instead of waiting for its schedule.
+  content: |
+    Works on one monitor and needs the alerts admin permission. The review screen shows what would happen without changing anything: the check result and how many alerts would open, update or resolve. Confirming runs the check for real, so alerts really are opened, updated or resolved and notifications can go out.
+
+    If a maintenance window covers the monitor, it is not checked. If the check itself fails, the error is shown.
+- key: process:alertsEnableMonitor;slot:help
+  summary: Turn monitors on so they start checking.
+  content: |
+    Select one or more monitors. Enabled monitors are checked on their schedule, beginning at the next pass. Monitors that are already enabled are skipped. Needs the alerts admin permission.
+- key: process:alertsDisableMonitor;slot:help
+  summary: Turn monitors off so they stop checking and raising alerts.
+  content: |
+    Select one or more monitors. Existing alerts from them stay as they are; resolve them separately if needed. Monitors that are already disabled are skipped. Needs the alerts admin permission.
+- key: process:alertsSendTestNotification;slot:help
+  summary: Send a test message through a channel to check it works.
+  content: |
+    Works on one channel and needs the alerts admin permission. A test message is actually sent to the channel's destination, so the people or address behind it will receive it. The result tells you whether it went out and shows the error if it did not.
+
+    Check the outcome in **{{label:alerts_delivery}}**, where test messages show with the kind Test.
+- key: process:alertsRetryDelivery;slot:help
+  summary: Queue failed or dead messages to be sent again.
+  content: |
+    Select one or more rows in **{{label:alerts_delivery}}**. Only failed or dead ones are queued; others are skipped. Their attempt count is reset and they go out on the next delivery pass. Needs the alerts admin permission.
+
+    If it keeps failing, check the channel and its address; see the last error on the row.
+- key: process:alertsPreviewAudience;slot:help
+  summary: See who a notification would reach, without sending anything.
+  content: |
+    Works on one notification and changes nothing. It lists how many people would receive it, a sample of names, and any warnings, for example when a role or user could not be found. Retracted notifications are skipped. Needs the notification admin permission.
+- key: process:alertsSendNotification;slot:help
+  summary: Send a notification to its audience now.
+  content: |
+    Select notifications and review who they will reach, then confirm. Each person in the audience gets it in their bell, except people who muted its category in-app (Security cannot be muted). The notification becomes Sent. Sending again only adds people who were not already recipients.
+
+    Retracted notifications cannot be sent again. Needs the notification admin permission.
+- key: process:alertsScheduleNotification;slot:help
+  summary: Queue a draft notification to go out automatically at its Publish At time.
+  content: |
+    Only drafts can be scheduled, and **Publish At** must be set to a time in the future first or the action is refused. The notification moves to Scheduled and is sent by the system once that time passes. Use **{{label:alertsRetractNotification}}** to cancel a scheduled one. Needs the notification admin permission.
+- key: process:alertsRetractNotification;slot:help
+  summary: Withdraw a sent or scheduled notification so it disappears from everyone's bell.
+  content: |
+    Only sent or scheduled notifications can be retracted. The recipient list is kept for the record, but nobody sees the notification any more, and it cannot be sent again; copy it instead. Needs the notification admin permission.
+- key: process:alertsEvaluateMonitors;slot:help
+  summary: The background job that checks monitors and tidies alerts, run by the system on a timer.
+  content: |
+    Runs on the configured evaluation schedule when a scheduler is enabled (every 30 seconds by default). It runs each monitor that is due, ends snoozes that have expired, resolves alerts whose quiet period has passed and ends flapping once things calm down. You do not run this yourself; use **{{label:alertsRunCheckNow}}** to check one monitor.
+- key: process:alertsDeliverNotifications;slot:help
+  summary: The background job that sends alert messages and notifications, run by the system on a timer.
+  content: |
+    Runs on the configured delivery schedule when a scheduler is enabled (every 15 seconds by default). It sends scheduled notifications that are due, deletes old ones, sends notification email when it is set up, and delivers pending and retrying alert messages. You do not run this yourself; see **{{label:alerts_delivery}}** for the results.
+- key: widget:alerts_alert_join_alerts_event;slot:help
+  summary: 'The history of this alert: raised, acknowledged, snoozed, commented on, resolved and so on.'
+- key: widget:alerts_alert_join_alerts_record_ref;slot:help
+  summary: The records this alert is about, with links to them for people who can see them.
+- key: widget:alerts_alert_join_alerts_delivery;slot:help
+  summary: The notifications sent for this alert, to whom, and whether each one arrived.
+- key: widget:alerts_type_join_alerts_alert;slot:help
+  summary: Alerts raised for this alert type, open and resolved.
+- key: widget:alerts_type_join_alerts_monitor;slot:help
+  summary: The monitors that raise alerts of this type.
+- key: widget:alerts_group_join_alerts_type;slot:help
+  summary: The alert types that belong to this group.
+- key: widget:alerts_monitor_join_alerts_alert;slot:help
+  summary: Alerts this monitor has raised.
+- key: widget:alerts_team_join_alerts_team_member;slot:help
+  summary: The people on this team and how each one joined.
+- key: widget:alerts_channel_join_alerts_delivery;slot:help
+  summary: Messages sent through this channel, including failures, to help you check that it works.
+- key: widget:alerts_notification_join_alerts_notification_recipient;slot:help
+  summary: The people this notification reached, and whether each has read or dismissed it.
+- key: widget:alertsHomeOpenBySeverity;slot:help
+  summary: Four tiles, one per severity, with how many open alerts are unacknowledged and how old the oldest is.
+- key: widget:alertsHomeMyAlerts;slot:help
+  summary: Open alerts assigned to you or sent to your bell, with unacknowledged ones first.
+- key: widget:alertsHomeNeedsAction;slot:help
+  summary: Open alerts nobody has acknowledged or snoozed, worst severity and oldest first.
+- key: widget:alertsHomeByGroup;slot:help
+  summary: Each alert group with its open alerts, the oldest age and a 7-day trend of newly opened alerts.
+- key: widget:alertsHomeTrend;slot:help
+  summary: Alerts opened and resolved per day over the last 30 days, with average time to acknowledge and resolve.
+- key: widget:alertsHomeNoisy;slot:help
+  summary: The alert types that opened, reopened or flapped most in the last 7 days.
+- key: widget:alertsHomeDeliveryHealth;slot:help
+  summary: Channels that are unhealthy or had failed messages in the last 24 hours. Shown to alerts admins only.
+- key: widget:alertsHomeNotifications;slot:help
+  summary: Counts of scheduled notifications, those sent in the last 7 days and drafts. Shown to notification admins only.
+- key: widget:alertsHomeRecentlyResolved;slot:help
+  summary: The five most recently resolved alerts, with how they were resolved and how long they lasted.
+- key: possibleValueSource:alerts_severity;slot:help
+  summary: How serious an alert is.
+  content: |
+    - **Info**: for your awareness, nothing is wrong.
+    - **Warning**: something needs attention soon.
+    - **Error**: something is broken.
+    - **Critical**: urgent, act now.
+
+    Subscriptions, channels and monitors use these as a minimum: you hear about that severity and anything above it.
+- key: possibleValueSource:alerts_status;slot:help
+  summary: Where an alert is in its life.
+  content: |
+    - **Open**: raised and nobody has acknowledged it.
+    - **Acknowledged**: someone has seen it and is on it.
+    - **Snoozed**: hidden until a set time, then it returns on its own.
+    - **Resolved**: closed, by a person, a monitor, a quiet period or the system.
+- key: possibleValueSource:alerts_resolve_mode;slot:help
+  summary: How alerts of a type are closed.
+  content: |
+    - **Producer**: the system that raised it closes it when the problem clears.
+    - **Monitor**: the monitor that raised it closes it when its next check is clean.
+    - **Quiet Period**: it closes by itself when it has not been raised again for the type's quiet period.
+    - **Manual**: only a person can resolve it.
+- key: possibleValueSource:alerts_detail_level;slot:help
+  summary: How much of an alert a notification may reveal.
+  content: |
+    - **Minimal**: severity, type, group, title, age and a link back to the alert.
+    - **Standard**: Minimal plus the summary and the counts.
+    - **Full**: Standard plus the details and record names. Must be turned on deliberately.
+- key: possibleValueSource:alerts_monitor_kind;slot:help
+  summary: What a monitor checks.
+  content: |
+    - **Table Query**: the number of rows matching a filter passes a threshold.
+    - **Aggregate**: a count, sum, average, minimum or maximum crosses a limit.
+    - **Heartbeat**: nothing has been seen within an expected interval, such as a job that stopped running.
+    - **Process Failed**: a job run failed.
+    - **Esb Event**: reserved; there is no timer-based check for this kind.
+    - **Code**: a built-in check reports the problems that currently exist.
+    - **External**: alerts arriving from another system, such as Alertmanager.
+- key: possibleValueSource:alerts_monitor_status;slot:help
+  summary: The result of a monitor's last check.
+  content: |
+    - **Ok**: the condition is fine.
+    - **Firing**: the condition is bad and an alert is open.
+    - **Pending**: the condition holds but not yet for the monitor's required time, so no alert yet.
+    - **Check Failed**: the check itself could not run; look at the error.
+    - **Skipped Muted**: a maintenance window covered the monitor, so it was not checked.
+- key: possibleValueSource:alerts_event_type;slot:help
+  summary: The kind of entry on an alert's timeline.
+  content: |
+    - **Raised**: the alert was created.
+    - **Repeated**: it was seen again while open (logged at most once an hour).
+    - **Severity Changed**: its severity went up.
+    - **Acknowledged**, **Snoozed**, **Unsnoozed**: someone saw it, hid it, or the snooze ended.
+    - **Assigned**, **Commented**: someone took it or added a note.
+    - **Escalated**: the alert was escalated.
+    - **Notified**: a notification was sent.
+    - **Muted**: a mute applied.
+    - **Flapping Started**, **Flapping Ended**: it kept opening and closing, so notifications were held until it settled.
+    - **Resolved**, **Reopened**: it was closed or brought back.
+- key: possibleValueSource:alerts_resolution;slot:help
+  summary: How a resolved alert was closed.
+  content: |
+    - **Producer**: the system that raised it reported the problem cleared.
+    - **Monitor**: its monitor's check came back clean.
+    - **Quiet Period**: it was not raised again for the quiet period.
+    - **Manual**: a person resolved it.
+    Expired is reserved and is not selectable; alerts do not expire automatically.
+- key: possibleValueSource:alerts_subscriber_type;slot:help
+  summary: Who a subscription notifies.
+  content: |
+    - **User**: one person.
+    - **Team**: every member of a team.
+    - **Channel**: a shared channel, such as an email list.
+- key: possibleValueSource:alerts_scope_type;slot:help
+  summary: What a subscription or mute applies to.
+  content: |
+    - **All**: every alert.
+    - **Group**: alerts in one alert group, including its sub-groups.
+    - **Alert Type**: one alert type, by name.
+    - **Monitor**: alerts from one monitor, by its id.
+    - **Table**: alerts about records in one table.
+    - **Record**: alerts about one specific record (use the table and record ID).
+    - **Attribute**: alerts whose attributes match a key=value pair.
+- key: possibleValueSource:alerts_delivery_mode;slot:help
+  summary: When a subscription's notifications are sent.
+  content: |
+    - **Immediate**: as soon as they happen.
+    - **Digest Hourly**: bundled into one message each hour.
+    - **Digest Daily**: bundled into one message each day.
+- key: possibleValueSource:alerts_member_source;slot:help
+  summary: How a person came to be on a team.
+  content: |
+    - **Manual**: added by hand.
+    - **Role**: added because they hold a role.
+    - **Idp Group**: added because they are in a group in the sign-in provider.
+- key: possibleValueSource:alerts_team_role;slot:help
+  summary: A person's part in a team.
+  content: |
+    - **Member**: an ordinary team member.
+    - **Lead**: the team's lead.
+- key: possibleValueSource:alerts_channel_type;slot:help
+  summary: The way a channel sends messages.
+  content: |
+    - **In App**: the bell and notifications page in the admin app.
+    - **Email**: one email address.
+    - **Email List**: several email addresses.
+    - **Slack**, **Teams**, **Webhook**, **Pager Duty**, **Alertmanager**: external destinations that require settings and, where applicable, a secret reference.
+- key: possibleValueSource:alerts_health_status;slot:help
+  summary: How reliably a channel has been delivering.
+  content: |
+    - **Healthy**: recent messages went through.
+    - **Probation**: the last send failed; it is still being tried.
+    - **Unhealthy**: three failures in a row. An alert is raised in-app (never through the broken channel) and stays until a send succeeds, which makes it Healthy again.
+- key: possibleValueSource:alerts_mute_effect;slot:help
+  summary: What a mute does while it is active.
+  content: |
+    - **Silence Notifications**: matching alerts still open and show, but nobody is notified.
+    - **Suppress Alerts**: a maintenance window. Matching alerts are suppressed and covered monitors are not checked. Only alerts admins can create these.
+- key: possibleValueSource:alerts_delivery_kind;slot:help
+  summary: Why a message was sent.
+  content: |
+    - **Raised**: a new alert.
+    - **Escalated**: the alert was escalated.
+    - **Reminder**: a repeat reminder that it is still open.
+    - **Resolved**: the alert was closed.
+    - **Digest**: a bundled summary.
+    - **Test**: a test sent from a channel.
+- key: possibleValueSource:alerts_delivery_status;slot:help
+  summary: How a delivery is going.
+  content: |
+    - **Pending**: waiting to be sent.
+    - **Sending**: being sent now.
+    - **Sent**: delivered to the channel.
+    - **Retrying**: failed, will try again after a delay (1 minute, 5 minutes, 15 minutes, 1 hour, 4 hours).
+    - **Failed**: failed for good, for example a permanent error. Can be retried by an admin.
+    - **Dead**: still failing after every retry. Can be retried by an admin.
+    - **Suppressed**: deliberately not sent; see the reason.
+- key: possibleValueSource:alerts_suppressed_reason;slot:help
+  summary: Why a message was deliberately not sent.
+  content: |
+    - **Quiet Hours**: personal push delivery was suppressed during your configured quiet hours.
+    - **Muted**: a mute covers the alert.
+    - **Flapping**: the alert keeps opening and closing.
+    - **Rate Limited**: the channel hit its send limit.
+    - **Not Visible**: the person is not allowed to see the alert.
+    - **Channel Disabled**: the channel is switched off.
+    - **Duplicate**: the same message went out in the last 10 minutes.
+    - **User Paused**: the person paused their notifications.
+    - **Type Silent**: the alert type has notifications turned off.
+    - **No Address**: no email address to send to.
+- key: possibleValueSource:alerts_notification_severity;slot:help
+  summary: How important a notification is.
+  content: |
+    - **Info**: general news.
+    - **Success**: something worked.
+    - **Warning**: needs attention.
+    - **Error**: something failed.
+    - **Critical**: urgent. Often shown as a sticky banner.
+- key: possibleValueSource:alerts_notification_category;slot:help
+  summary: What a notification is about, which people can mute or email separately.
+  content: |
+    - **System**: platform messages.
+    - **Job**: a background or admin job that failed or partly failed.
+    - **Security**: security notices. Cannot be muted in-app.
+    - **Release**: new versions and changes.
+    - **Marketing**: promotional news.
+    - **Share**: something was shared with you.
+    - **Alert**: an alert you are subscribed to.
+- key: possibleValueSource:alerts_notification_status;slot:help
+  summary: Where a notification is in its life.
+  content: |
+    - **Draft**: written but not sent.
+    - **Scheduled**: will be sent at its Publish At time.
+    - **Sent**: delivered to its audience.
+    - **Retracted**: withdrawn and hidden from everyone.
+- key: possibleValueSource:alerts_audience_type;slot:help
+  summary: How a notification's recipients are chosen.
+  content: |
+    - **All Users**: everyone who uses the app.
+    - **Roles**: everyone holding one of the listed roles.
+    - **Permission**: everyone who has one named permission.
+    - **Users**: the listed people, by user id.
+- key: possibleValueSource:alerts_email_status;slot:help
+  summary: Whether a recipient was emailed about a notification.
+  content: |
+    - **None**: not emailed, or not yet considered.
+    - **Pending**: waiting to be emailed.
+    - **Sent**: emailed straight away.
+    - **Digested**: included in a daily digest email.
+    - **Skipped**: their settings did not call for an email, for example the severity was too low.
+    - **Failed**: the email could not be sent or there was no address.
+- key: possibleValueSource:alerts_email_mode;slot:help
+  summary: How a person wants a notification category emailed.
+  content: |
+    - **Off**: no email.
+    - **Immediate**: one email per notification.
+    - **Daily Digest**: one email a day at your digest hour listing unread notifications.
+- key: table:alerts_escalation_policy;slot:help
+  summary: An ordered notification plan for alerts that remain open and unacknowledged.
+  content: |
+    Add **{{label:alerts_escalation_step}}** records to choose when and whom to notify. The policy on **{{label:alerts_type}}** takes precedence over the policy on **{{label:alerts_group}}**. Only enabled policies run.
+
+    Steps are timed from the first raise or most recent reopening. Acknowledging, snoozing or resolving the alert stops timed notifications; mutes also stop them. The final step can repeat when both repeat settings are positive.
+
+    **How rows get created:** As an administrator, use New, add ordered steps and select the policy on a type or group. An empty list means no escalation policies have been configured.
+- key: table:alerts_escalation_policy;field:description
+  summary: Explain when this policy should be used and who is responsible for responding.
+- key: table:alerts_escalation_policy;field:name
+  summary: The name used to choose this escalation policy on alert types and groups.
+- key: table:alerts_escalation_policy;field:maxRepeats
+  summary: Maximum extra repetitions of the final step in one open cycle; zero or blank disables repeats.
+- key: table:alerts_escalation_policy;field:enabled
+  summary: Whether this policy can send escalation notifications.
+- key: table:alerts_escalation_policy;field:repeatAfterMinutes
+  summary: Minutes between repetitions of the final step; zero or blank disables repeats.
+- key: table:alerts_escalation_step;slot:help
+  summary: One timed notification destination within an escalation policy.
+  content: |
+    Choose a user, team or channel and set the delay and order. User and team targets use each user's normal notification destinations. A channel target uses the selected channel directly.
+
+    Steps run in order, at most one per alert per minute. The worker only processes open, unacknowledged alerts; set **{{label:alerts_escalation_step.onlyIfStatus}}** to Open.
+
+    **How rows get created:** Add steps from a policy's Steps list. Each step needs a delay, an order and exactly one user, team or channel target.
+- key: table:alerts_escalation_step;field:policyId
+  summary: The escalation policy this step belongs to.
+- key: table:alerts_escalation_step;field:stepOrder
+  summary: The step position within its policy; use positive numbers in the order notifications should run.
+- key: table:alerts_escalation_step;field:afterMinutes
+  summary: Minutes from the first raise or latest reopening before this step is eligible; zero means immediately.
+- key: table:alerts_escalation_step;field:onlyIfStatus
+  summary: The alert status required for this step; the current worker supports Open only.
+- key: table:alerts_escalation_step;field:channelId
+  summary: The delivery channel to notify when the target type is Channel.
+- key: table:alerts_escalation_step;field:targetType
+  summary: Choose whether this step notifies a user, a team or a channel.
+- key: table:alerts_escalation_step;field:userId
+  summary: The user to notify when the target type is User.
+- key: table:alerts_escalation_step;field:teamId
+  summary: The team whose members are notified when the target type is Team.
+- key: table:alerts_alert;field:timedNotificationCheckedAt
+  summary: The last timed-notification check, used to avoid processing the alert twice in one minute.
+- key: table:alerts_type;field:escalationPolicyId
+  summary: The escalation policy for this alert type; takes precedence over the group policy.
+- key: table:alerts_group;field:escalationPolicyId
+  summary: The fallback escalation policy when an alert type has no policy of its own.
+- key: table:alerts_mute;field:scopeRecordId
+  summary: The record ID to mute when the scope is Record.
+  content: |
+    Set **{{label:alerts_mute.scopeValue}}** to the table name and this field to the record ID. Together they identify the affected record.
+- key: table:alerts_delivery;field:digestClaimKey
+  summary: Generated unique claim for one digest and channel, preventing duplicate digest work.
+- key: table:alerts_delivery;field:digestKey
+  summary: Generated grouping key for the recipient, time window and digest delivery mode.
+- key: table:alerts_delivery;field:digestLastItemId
+  summary: The last delivery item included when the digest was claimed; separates later arrivals.
+- key: process:alertsMuteAlertType;slot:help
+  summary: Silence notifications for the selected alert's entire type for a chosen time.
+  content: |
+    Provide a reason and duration. This creates a **{{label:alerts_mute}}** for the type, so other alerts of the same type are silenced too; it does not resolve them.
+- key: process:alertsSendDigests;slot:help
+  summary: Send due hourly and daily alert digests.
+  content: |
+    The scheduled worker groups waiting **{{label:alerts_delivery}}** items by recipient, time window and channel, then delivers the digest. Immediate notifications do not wait for this job.
+- key: process:alertsEscalateAndRemind;slot:help
+  summary: Apply due escalation steps and reminders to open, unacknowledged alerts.
+  content: |
+    The scheduled worker checks **{{label:alerts_escalation_policy}}** and the alert type's reminder interval. Acknowledged, snoozed, resolved or muted alerts do not receive these timed notifications.
+- key: widget:alerts_escalation_policy_join_alerts_escalation_step;slot:help
+  summary: The timed notification steps belonging to this escalation policy.
+- key: widget:alertsHomeSetup;slot:help
+  summary: Check your Alerts configuration and see the next setup step for each part.
+- key: table:alerts_notification_recipient;field:slackStatus
+  summary: Whether your Slack direct message is pending, sent, digested, skipped or failed.
+- key: table:alerts_notification_recipient;field:slackMessageId
+  summary: The message identifier returned by Slack for this recipient.
+- key: table:alerts_notification_preference;field:slackMode
+  summary: Choose whether you receive this category in Slack immediately, in a daily digest, or not at all.
+  content: |
+    Slack delivery needs a configured provider and your Slack connection. Your pause and quiet hours apply, with exceptions for Security notices and critical messages during quiet hours.
+- key: table:alerts_notification_preference;field:slackMinSeverity
+  summary: The lowest severity you want sent to Slack for this notification category.
+- key: table:alerts_notification_preference;field:inAppMinSeverity
+  summary: The lowest severity you want in your bell for this category; Security always arrives.
+- key: possibleValueSource:alerts_slack_status;slot:help
+  summary: The delivery outcome of a notification sent to Slack.
+  content: |
+    You can distinguish messages waiting to send, individual sends, daily digests, skipped recipients and failures. None means no Slack delivery has been recorded.
+- key: possibleValueSource:alerts_escalation_policy;slot:help
+  summary: Choose a record from {{label:alerts_escalation_policy}}.
+- key: possibleValueSource:alerts_alert;slot:help
+  summary: Choose a record from {{label:alerts_alert}}.
+- key: possibleValueSource:alerts_type;slot:help
+  summary: Choose a record from {{label:alerts_type}}.
+- key: possibleValueSource:alerts_group;slot:help
+  summary: Choose a record from {{label:alerts_group}}.
+- key: possibleValueSource:alerts_monitor;slot:help
+  summary: Choose a record from {{label:alerts_monitor}}.
+- key: possibleValueSource:alerts_team;slot:help
+  summary: Choose a record from {{label:alerts_team}}.
+- key: possibleValueSource:alerts_channel;slot:help
+  summary: Choose a record from {{label:alerts_channel}}.
+- key: possibleValueSource:alerts_subscription;slot:help
+  summary: Choose a record from {{label:alerts_subscription}}.
+- key: possibleValueSource:alerts_notification;slot:help
+  summary: Choose a record from {{label:alerts_notification}}.
+- key: possibleValueSource:alerts_digest_hour;slot:help
+  summary: Choose the hour for your daily digest in your configured time zone.
