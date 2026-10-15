@@ -280,6 +280,23 @@ assigned automatically. The Resolve action continues to record MANUAL.
 - **Alertmanager sink:** open alerts are sent with an `endsAt` a week out, not re-posted.
 - **Not built yet:** Micrometer metrics, mirrored lock columns and a configurable table namespace. These are the rest of design phases P4 to P6.
 
+## In-app help
+
+The producer registers [`help/qbit-alerts.yaml`](src/main/resources/help/qbit-alerts.yaml)
+with QQQ's help-bundle registry. It covers the Alerts app, tables and fields,
+actions, scheduled jobs, widgets and possible-value sources. QQQ syncs the bundle
+when the host installs the help-content tables; registration is harmless without them.
+
+Hosts can override individual entries by registering their own bundle with
+`layer: HOST`, using the same entry `key` and `role` (default `ALL_SCREENS`).
+Register it with `HelpBundles.register(qInstance, "help/my-host.yaml")`. Host
+bundles take precedence over this `QBIT` bundle, and edits made by users remain protected.
+
+`AlertsTablesGuardrailTest` runs `HelpBundleAssertions` against the produced instance
+to check owned-object coverage, summary length and live references. It also requires
+widget and possible-value-source help and preserves the table empty-state guidance.
+When releasing, keep the bundle's literal version aligned with the POM's revision.
+
 ## Build
 
 ```bash
