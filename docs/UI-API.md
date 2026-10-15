@@ -1,6 +1,6 @@
 # Alerts UI API and webhook migration
 
-The qbit targets QQQ **4.1.0-RC.14**, UI API **1.6.0**. `AlertsQBitProducer` registers the
+The qbit targets QQQ **4.1.0-RC.15**, UI API **1.6.0**. `AlertsQBitProducer` registers the
 `alerts` `MiddlewareSpecExtension`, version `1.2.0`, with the established `/alerts` prefix.
 `withRegisterRoutes(false)` opts out of both the extension and webhook registration.
 The six JSON specs extend `AbstractJsonEndpointSpec`; existing `AlertsApi` logic continues
@@ -27,7 +27,7 @@ Nullable fields remain serialized as JSON null.
 
 ## UI API extension changes
 
-UI API extension alerts 1.2.0 (requires QQQ 4.1.0-RC.14, UI API 1.6.0): operationIds,
+UI API extension alerts 1.2.0 (requires QQQ 4.1.0-RC.15, UI API 1.6.0): operationIds,
 standard error responses with BasicErrorResponseV1, and extension tags. The six existing
 operationIds are preserved. Errors retain their HTTP statuses and now include `error`,
 `code`, `message`, and `traceId` (with `fieldErrors` when applicable). `AlertsErrorV1`
