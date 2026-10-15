@@ -47,6 +47,7 @@ import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperat
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QFilterOrderBy;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter;
 import com.kingsrook.qqq.backend.core.model.data.QRecord;
+import com.kingsrook.qqq.backend.core.modules.messaging.MessagingProviderCapability;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
 import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
@@ -232,9 +233,8 @@ public class NotificationSlackSender
     ** when the provider says the user can't be reached (no Slack connection),
     ** with no retry; FAILED for anything else.
     **
-    ** STAND-IN(core=QRun-IO/qqq#1194, removeBy=4.1.0-RC.8): RC.6 SendMessageInput has no
-    ** idempotency key (notify:<notificationId>:<userId>:slack), so the
-    ** recipient row's slackStatus is what prevents a resend.
+    ** Pass the notification idempotency key when the provider supports it.
+    ** The recipient row's slackStatus also prevents a resend.
     *******************************************************************************/
    private SlackStatus sendExternal(String userId, String subject, List<QRecord> items, Integer notificationId)
    {
@@ -258,6 +258,7 @@ public class NotificationSlackSender
       {
          new SendMessageAction().execute(new SendMessageInput()
             .withMessagingProviderName(runtime.getConfig().getSlackProviderName())
+            .withIdempotencyKey(SendMessageAction.capabilities(runtime.getConfig().getSlackProviderName()).contains(MessagingProviderCapability.IDEMPOTENCY) ? key : null)
             .withTo(new Party().withAddress("user:" + userId))
             .withSubject(subject)
             .withContentList(List.of(new Content().withContentRole(ContentRole.Default.DEFAULT).withBody(text.toString().stripTrailing()))));

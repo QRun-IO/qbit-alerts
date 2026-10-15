@@ -83,7 +83,7 @@ Grant `getNotificationAdminPermissionNames()` to authors. Viewers' permissions i
 
 **Upgrading from 0.1.0-RC.1:** changeset 16 renames the delivery log `alerts_notification` to `alerts_delivery`, and changeset 17 drops `alerts_inbox_item` (bell state only). Both are guarded, so a fresh schema and an RC.1 schema both end up the same.
 
-The UI routes are published as the `alerts` extension (`1.0.0`, established prefix `/alerts`), with
+The UI routes are published as the `alerts` extension (`1.2.0`, established prefix `/alerts`), with
 [the OpenAPI fragment](src/main/resources/openapi/qqq-v1/alerts.yaml) and a contract test.
 See [UI API and webhook migration](docs/UI-API.md) for operation IDs and the complete Next handoff.
 Summary `inboxHref`, item/alert `actions`, and panel `follow.available` are additive. Existing
