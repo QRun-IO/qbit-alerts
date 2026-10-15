@@ -40,7 +40,8 @@ import com.kingsrook.qqq.backend.core.utils.CollectionUtils;
 /*******************************************************************************
  ** Small helpers over QQQ's table actions, for the engine. They run in
  ** whatever context the caller set up (the engine uses the system user), so
- ** customizers, audits and ESB listeners apply as for any other write.
+ ** customizers, audits and ESB listeners apply as for any other write, except
+ ** that bookkeeping-only updates (RuntimeFields) are not record-audited.
  *******************************************************************************/
 public final class AlertsDb
 {
@@ -114,11 +115,14 @@ public final class AlertsDb
 
 
    /*******************************************************************************
-    ** Update one row (it must carry its id); throws on an error.
+    ** Update one row (it must carry its id); throws on an error. An update of
+    ** engine bookkeeping fields only (RuntimeFields) is not record-audited.
     *******************************************************************************/
    public static QRecord update(String tableName, QRecord record) throws QException
    {
-      List<QRecord> updated = UpdateAction.executeForRecords(new UpdateInput(tableName).withRecord(record).withTransaction(QContext.getQBackendTransaction()));
+      UpdateInput   input   = new UpdateInput(tableName).withRecord(record).withTransaction(QContext.getQBackendTransaction())
+         .withOmitDmlAudit(RuntimeFields.onlyRuntime(tableName, record));
+      List<QRecord> updated = UpdateAction.executeForRecords(input);
       QRecord       result  = updated.get(0);
       throwIfErrors(tableName, result);
       return (result);
