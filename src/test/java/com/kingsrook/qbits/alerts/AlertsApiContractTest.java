@@ -51,12 +51,12 @@ class AlertsApiContractTest extends BaseAlertsTest
       assertThat(UiApiContract.check(generated, Files.readString(path), null, 1,
          "mvnw.cmd -Dtest=AlertsApiContractTest -Dalerts.openapi.update=true test")).isEmpty();
       var model = version.generateExtensionOpenAPIModel("qqq", extension);
-      assertThat(model.getComponents().getSchemas().keySet()).allMatch(name -> name.startsWith("Alerts"));
+      assertThat(model.getComponents().getSchemas().keySet()).allMatch(name -> name.startsWith("Alerts") || name.equals("BasicErrorResponseV1"));
       assertThat(model.getPaths().keySet()).containsExactlyInAnyOrder(
          "/qqq/v1/alerts/inbox/summary", "/qqq/v1/alerts/inbox", "/qqq/v1/alerts/inbox/read",
          "/qqq/v1/alerts/inbox/unread", "/qqq/v1/alerts/inbox/dismiss", "/qqq/v1/alerts/record-panel");
       assertThat(extension.getSpecs()).hasSize(6);
-      assertThat(extension.getSemanticVersion()).isEqualTo("1.1.0");
+      assertThat(extension.getSemanticVersion()).isEqualTo("1.2.0");
       assertThat(generated).contains("alertsInboxSummary", "alertsInboxRead", "alertsInboxUnread", "alertsInboxDismiss", "alertsRecordPanel", "inboxHref", "preferencesSection", "actions", "follow");
       assertThat(generated).doesNotContain("/watch", "/ingest/", "/hooks/");
    }
