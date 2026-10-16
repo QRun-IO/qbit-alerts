@@ -49,4 +49,41 @@ class AlertsServicePrincipalTest extends BaseAlertsTest
       assertThat(ServiceIdentities.principalOf(after)).isEqualTo("alerts");
       assertThat(ServiceIdentities.attributionName(after)).endsWith("via service:alerts");
    }
+
+
+
+   /*******************************************************************************
+    ** Owner decision 2026-10-16: a recipient check sees exactly what the
+    ** recipient can see - the recipient's own permissions and record-lock keys,
+    ** even though the alerts principal itself holds nothing.
+    *******************************************************************************/
+   @Test
+   void recipientCheckHasExactlyTheRecipientsAccess() throws Exception
+   {
+      qInstance.getAuthentication().setCustomizer(new com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference(RecipientCustomizer.class));
+      ServiceIdentitiesMetaData.declare(qInstance, new QServicePrincipalMetaData().withName("alerts").withMayActOnBehalfOfUsers(true));
+
+      QSession own      = new com.kingsrook.qqq.backend.core.modules.authentication.implementations.MockAuthenticationModule().createAutomatedSessionForUser(qInstance, "alice");
+      QSession viaAlert = AlertsSecurity.recipientSession(qInstance, config.getServicePrincipal(), "alice");
+      assertThat(viaAlert.getPermissions()).isEqualTo(own.getPermissions()).contains("widget.read");
+      assertThat(new java.util.HashMap<>(viaAlert.getSecurityKeyValues())).isEqualTo(new java.util.HashMap<>(own.getSecurityKeyValues()));
+   }
+
+
+
+   /*******************************************************************************
+    ** A recipient with a table grant and a record-lock key of their own.
+    *******************************************************************************/
+   public static class RecipientCustomizer implements com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleCustomizerInterface
+   {
+      /***************************************************************************
+       **
+       ***************************************************************************/
+      @Override
+      public void customizeAutomatedSessionForUser(com.kingsrook.qqq.backend.core.model.metadata.QInstance qInstance, QSession session, java.io.Serializable userId)
+      {
+         session.withPermissions("widget.read", "alerts_alert.read");
+         session.withSecurityKeyValue("recipientOnly", String.valueOf(userId));
+      }
+   }
 }
