@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows Keep
 
 ## [0.1.0] - Unreleased
 
+### Removed
+- `AlertsNotices.apiKeyCreated`: it told people about an API key they had just created. API key expiry, access-change and share notices stay. `newSignIn` is unchanged (the qbit has no sign-in history to tell a new device or address from a known one); its Javadoc now says hosts call it only for an unfamiliar device or address.
+
 ### Fixed
 - "Alert signals are being dropped" (`alerts.sink.overflow`) stayed open forever: it had no dedup key, was manual-resolve, and the sink never re-armed it. It now has a stable dedup key, and the drain thread resolves it once the queue has stayed below half full for a minute, so a later overflow raises it again. Still ERROR, admins only.
 - Duplicate health alerts: a health check that failed again more than 30 minutes after its last resolve created a second alert and a second bell entry for the same problem. The reopen window is now per type: `alerts_type.reopenWindowMinutes` (changeset 55), else the longest matching prefix in `AlertsQBitConfig.reopenWindowMinutesByTypePrefix` (default `health.` = 360 minutes), else `reopenWindowMinutes` (30). A reopen updates the existing alert and its bell entry; flapping detection is unchanged.
