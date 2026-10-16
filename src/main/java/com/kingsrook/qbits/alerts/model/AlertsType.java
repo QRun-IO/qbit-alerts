@@ -90,6 +90,9 @@ public class AlertsType extends QRecordEntity
    @QField()
    private Integer reminderIntervalMinutes;
 
+   @QField()
+   private Integer reopenWindowMinutes;
+
    @QField(isEditable = false)
    private Instant lastRaisedAt;
 
@@ -679,6 +682,37 @@ public class AlertsType extends QRecordEntity
    public AlertsType withReminderIntervalMinutes(Integer reminderIntervalMinutes)
    {
       this.reminderIntervalMinutes = reminderIntervalMinutes;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for reopenWindowMinutes
+    *******************************************************************************/
+   public Integer getReopenWindowMinutes()
+   {
+      return (this.reopenWindowMinutes);
+   }
+
+
+
+   /*******************************************************************************
+    ** Setter for reopenWindowMinutes
+    *******************************************************************************/
+   public void setReopenWindowMinutes(Integer reopenWindowMinutes)
+   {
+      this.reopenWindowMinutes = reopenWindowMinutes;
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for reopenWindowMinutes
+    *******************************************************************************/
+   public AlertsType withReopenWindowMinutes(Integer reopenWindowMinutes)
+   {
+      this.reopenWindowMinutes = reopenWindowMinutes;
       return (this);
    }
 

@@ -159,7 +159,7 @@ public final class AlertsTableMetaDataHelper
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "label", "name", "groupId", "sourceName", "openCount")))
          .withSection(new QFieldSection("about", "About", new QIcon("info"), Tier.T2, List.of("description", "howToFix", "subjectTableName", "visibilityPermission")))
          .withSection(new QFieldSection("tuning", "Tuning", new QIcon("tune"), Tier.T2, List.of("enabled", "notify", "defaultSeverity", "severityOverride", "resolveMode",
-            "quietPeriodMinutes", "reminderIntervalMinutes", "escalationPolicyId", "externalDetailCeiling")))
+            "quietPeriodMinutes", "reopenWindowMinutes", "reminderIntervalMinutes", "escalationPolicyId", "externalDetailCeiling")))
          .withSection(widgetSection(JOIN_TYPE_MONITOR, "Monitors", "monitor_heart"))
          .withSection(widgetSection(JOIN_TYPE_ALERT, "Alerts", "notifications_active"))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("installed", "lastRaisedAt", "createDate", "modifyDate")));

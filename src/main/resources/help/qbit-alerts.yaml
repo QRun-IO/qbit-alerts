@@ -321,6 +321,10 @@ entries:
   summary: Minutes between reminders while an alert remains open and unacknowledged.
   content: |
     Set zero to disable reminders. If blank, Critical alerts default to 60 minutes; other severities have no reminders. Acknowledgement, snooze, resolution and suppression stop timed notifications.
+- key: table:alerts_type;field:reopenWindowMinutes
+  summary: Minutes after a resolve during which the same problem reopens its alert instead of starting a new one.
+  content: |
+    Empty uses the default: 6 hours for health checks (types named health.*) and 30 minutes for the rest, set by the application. A reopen updates the existing alert and its bell entry, so a short blip does not show up twice.
 - key: table:alerts_type;field:quietPeriodMinutes
   summary: Minutes with no new reports before an alert resolves itself; used when Resolve Mode is Quiet Period.
   content: |

@@ -18,7 +18,9 @@ package com.kingsrook.qbits.alerts;
 
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
@@ -77,6 +79,9 @@ public class AlertsQBitConfig implements QBitConfig
 
    public static final String APP_NAME = "alerts";
 
+   /** Alert types named with this prefix are health checks (6-hour reopen window by default). */
+   public static final String HEALTH_TYPE_PREFIX = "health.";
+
    private Boolean legacyAlertmanagerPath = false;
 
    private String backendName;
@@ -88,6 +93,8 @@ public class AlertsQBitConfig implements QBitConfig
    private String publicBaseUrl;
 
    private Integer reopenWindowMinutes   = 30;
+
+   private Map<String, Integer> reopenWindowMinutesByTypePrefix = new LinkedHashMap<>(Map.of(HEALTH_TYPE_PREFIX, 360));
    private Integer flapThreshold         = 5;
    private Integer flapWindowMinutes     = 60;
    private Integer maxOpenPerMonitor     = 50;
@@ -162,6 +169,14 @@ public class AlertsQBitConfig implements QBitConfig
          maxAudienceSize, notificationRetentionDays})
       {
          assertCondition(value != null && value > 0, "Alerts QBit timing and limit settings must be positive", errors);
+      }
+      if(reopenWindowMinutesByTypePrefix != null)
+      {
+         for(Map.Entry<String, Integer> entry : reopenWindowMinutesByTypePrefix.entrySet())
+         {
+            assertCondition(StringUtils.hasContent(entry.getKey()) && entry.getValue() != null && entry.getValue() > 0,
+               "Alerts QBit reopen windows by type prefix need a prefix and a positive number of minutes", errors);
+         }
       }
    }
 
@@ -424,12 +439,78 @@ public class AlertsQBitConfig implements QBitConfig
 
    /*******************************************************************************
     ** Fluent setter for reopenWindowMinutes (a raise this soon after a resolve
-    ** reopens the same alert; default 30)
+    ** reopens the same alert; default 30, for types that no prefix in
+    ** reopenWindowMinutesByTypePrefix matches and that set no window of their own)
     *******************************************************************************/
    public AlertsQBitConfig withReopenWindowMinutes(Integer reopenWindowMinutes)
    {
       this.reopenWindowMinutes = reopenWindowMinutes;
       return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Getter for reopenWindowMinutesByTypePrefix
+    *******************************************************************************/
+   public Map<String, Integer> getReopenWindowMinutesByTypePrefix()
+   {
+      return (this.reopenWindowMinutesByTypePrefix);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for reopenWindowMinutesByTypePrefix: default reopen windows
+    ** for alert types whose names start with a prefix (the longest matching
+    ** prefix wins). Default: health.* types reopen within 360 minutes, so a
+    ** brief health blip hours later reopens the same alert. A type's own
+    ** reopenWindowMinutes (alerts_type) wins over this.
+    *******************************************************************************/
+   public AlertsQBitConfig withReopenWindowMinutesByTypePrefix(Map<String, Integer> reopenWindowMinutesByTypePrefix)
+   {
+      this.reopenWindowMinutesByTypePrefix = reopenWindowMinutesByTypePrefix;
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** Set the default reopen window for alert types whose names start with a
+    ** prefix.
+    *******************************************************************************/
+   public AlertsQBitConfig withReopenWindowMinutesForTypePrefix(String prefix, Integer minutes)
+   {
+      if(this.reopenWindowMinutesByTypePrefix == null)
+      {
+         this.reopenWindowMinutesByTypePrefix = new LinkedHashMap<>();
+      }
+      this.reopenWindowMinutesByTypePrefix.put(prefix, minutes);
+      return (this);
+   }
+
+
+
+   /*******************************************************************************
+    ** The default reopen window for an alert type: the longest matching
+    ** prefix's, else reopenWindowMinutes.
+    *******************************************************************************/
+   public int reopenWindowMinutesFor(String alertTypeName)
+   {
+      String  longest = null;
+      Integer minutes = reopenWindowMinutes;
+      if(alertTypeName != null && reopenWindowMinutesByTypePrefix != null)
+      {
+         for(Map.Entry<String, Integer> entry : reopenWindowMinutesByTypePrefix.entrySet())
+         {
+            if(entry.getKey() != null && entry.getValue() != null && alertTypeName.startsWith(entry.getKey()) && (longest == null || entry.getKey().length() > longest.length()))
+            {
+               longest = entry.getKey();
+               minutes = entry.getValue();
+            }
+         }
+      }
+      return (minutes == null ? 30 : minutes);
    }
 
 

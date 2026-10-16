@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS alerts_type (
    quiet_period_minutes INTEGER,
    external_detail_ceiling VARCHAR(16),
    reminder_interval_minutes INTEGER,
+   reopen_window_minutes INTEGER,
    last_raised_at TIMESTAMP,
    open_count INTEGER,
    create_date TIMESTAMP,

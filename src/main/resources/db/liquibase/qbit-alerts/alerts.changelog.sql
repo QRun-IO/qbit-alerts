@@ -775,3 +775,9 @@ INSERT INTO qqq_fk_quarantine (table_name, column_name, row_id, missing_parent_i
 DELETE FROM alerts_escalation_step c WHERE c.channel_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM alerts_channel p WHERE p.id = c.channel_id);
 ALTER TABLE alerts_escalation_step ADD CONSTRAINT fk_alerts_escalation_step_channel_id FOREIGN KEY (channel_id) REFERENCES alerts_channel (id) ON DELETE RESTRICT;
 -- rollback ALTER TABLE alerts_escalation_step DROP CONSTRAINT IF EXISTS fk_alerts_escalation_step_channel_id;
+
+-- changeset qbit-alerts:55
+-- comment: Per-type reopen window: a raise this many minutes after a resolve reopens the same alert. Empty uses the qbit's default for the type.
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM information_schema.columns WHERE LOWER(table_name) = 'alerts_type' AND LOWER(column_name) = 'reopen_window_minutes'
+ALTER TABLE alerts_type ADD COLUMN reopen_window_minutes INTEGER;

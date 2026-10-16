@@ -1,5 +1,12 @@
 # Upgrading
 
+## Unreleased: quieter notifications
+
+1. **Run the changelog as usual.** Changeset 55 adds the nullable `alerts_type.reopen_window_minutes` column (guarded, additive).
+2. **Behavior changes to know about.**
+   - A resolve no longer marks the alert's bell entry unread; the entry is updated in place ("Resolved: ..."). A subscription whose events name RESOLVED and differ from the default set keeps the old behavior. Email, Slack and webhook resolve notices are unchanged.
+   - The reopen window is now per alert type: an alert type's **Reopen Window Minutes**, else `AlertsQBitConfig.withReopenWindowMinutesByTypePrefix` (default `health.` = 360 minutes), else `withReopenWindowMinutes` (default 30). A health check that blips again within 6 hours reopens the same alert and bell entry instead of creating a new one.
+
 ## Unreleased: starter defaults, setup card, table help
 
 1. **Add the defaults changelog** after `alerts.changelog.sql` in the host's master changelog:

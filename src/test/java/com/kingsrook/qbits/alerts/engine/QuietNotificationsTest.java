@@ -19,12 +19,15 @@ package com.kingsrook.qbits.alerts.engine;
 
 import java.time.Duration;
 import java.util.List;
+import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.BaseAlertsTest;
+import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.Resolution;
 import com.kingsrook.qbits.alerts.model.AlertsSubscription;
+import com.kingsrook.qbits.alerts.model.AlertsType;
 import com.kingsrook.qbits.alerts.notifications.NotificationService;
 import com.kingsrook.qqq.backend.core.actions.tables.DeleteAction;
 import com.kingsrook.qqq.backend.core.alerts.AlertSeverity;
@@ -45,11 +48,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /*******************************************************************************
  ** Notifications people should see or act on: a resolve updates the bell
  ** entry without marking it unread (unless the subscription asked for
- ** resolve notices on purpose), and a reopen reuses the same bell entry.
+ ** resolve notices on purpose), a reopen reuses the same bell entry, and
+ ** health types reopen within six hours instead of 30 minutes.
  *******************************************************************************/
 class QuietNotificationsTest extends BaseAlertsTest
 {
-   static final String TYPE = "test.widget.broken";
+   static final String TYPE   = "test.widget.broken";
+   static final String HEALTH = "health.database.degraded";
 
 
 
@@ -60,7 +65,8 @@ class QuietNotificationsTest extends BaseAlertsTest
    protected void customizeInstance(QInstance qInstance)
    {
       AlertsInstanceMetaData.ofOrWithNew(qInstance)
-         .withAlertType(new QAlertTypeMetaData().withName(TYPE).withLabel("Widget broken").withGroupName("widgets").withDefaultSeverity(AlertSeverity.ERROR));
+         .withAlertType(new QAlertTypeMetaData().withName(TYPE).withLabel("Widget broken").withGroupName("widgets").withDefaultSeverity(AlertSeverity.ERROR))
+         .withAlertType(new QAlertTypeMetaData().withName(HEALTH).withLabel("Database degraded").withGroupName("health").withDefaultSeverity(AlertSeverity.ERROR));
    }
 
 
@@ -155,6 +161,91 @@ class QuietNotificationsTest extends BaseAlertsTest
 
       assertThat(all(AlertsNotification.TABLE_NAME)).singleElement().matches(n -> "Widget q4 is broken".equals(n.getValueString("title")));
       assertThat(recipient(ADMIN).getValue("readAt")).isNotNull();
+   }
+
+
+
+   /*******************************************************************************
+    ** A health blip hours after the last one reopens the same alert and bell
+    ** entry instead of adding a second "Database is degraded".
+    *******************************************************************************/
+   @Test
+   void testHealthBlipReopensWithinSixHours() throws Exception
+   {
+      subscribe(ADMIN, AlertRouter.DEFAULT_SUBSCRIPTION_EVENTS);
+      QRecord first = runtime.getEngine().raise(new AlertSignal(HEALTH).withDedupKey("db1").withTitle("Database db1 is degraded"));
+      runtime.getEngine().resolve(HEALTH, "db1", Resolution.PRODUCER, null, null);
+      markRead(recipient(ADMIN));
+
+      clock.advance(Duration.ofHours(2));
+      ageDeliveries();
+      QRecord again = runtime.getEngine().raise(new AlertSignal(HEALTH).withDedupKey("db1").withTitle("Database db1 is degraded"));
+      assertThat(again.getValue("id")).isEqualTo(first.getValue("id"));
+      assertThat(again.getValueInteger("reopenCount")).isEqualTo(1);
+      assertThat(all(AlertsAlert.TABLE_NAME)).hasSize(1);
+      assertThat(all(AlertsNotification.TABLE_NAME)).singleElement().matches(n -> "Database db1 is degraded".equals(n.getValueString("title")));
+      assertThat(recipient(ADMIN).getValue("readAt")).isNull();
+
+      ////////////////////////////////////////////////////////
+      // past six hours it is a new problem: a new alert   //
+      ////////////////////////////////////////////////////////
+      runtime.getEngine().resolve(HEALTH, "db1", Resolution.PRODUCER, null, null);
+      clock.advance(Duration.ofHours(7));
+      QRecord fresh = runtime.getEngine().raise(new AlertSignal(HEALTH).withDedupKey("db1").withTitle("Database db1 is degraded"));
+      assertThat(fresh.getValue("id")).isNotEqualTo(first.getValue("id"));
+
+      //////////////////////////////////////////////////////////////
+      // other types keep the 30-minute window                    //
+      //////////////////////////////////////////////////////////////
+      QRecord widget = runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("w9"));
+      runtime.getEngine().resolve(TYPE, "w9", Resolution.PRODUCER, null, null);
+      clock.advance(Duration.ofHours(2));
+      assertThat(runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("w9")).getValue("id")).isNotEqualTo(widget.getValue("id"));
+   }
+
+
+
+   /*******************************************************************************
+    ** A type's own reopen window wins over the default for its name.
+    *******************************************************************************/
+   @Test
+   void testPerTypeReopenWindow() throws Exception
+   {
+      QRecord widget = runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("w8"));
+      runtime.asSystem(() -> AlertsDb.update(AlertsType.TABLE_NAME, new QRecord().withValue("id", widget.getValue("alertTypeId")).withValue("reopenWindowMinutes", 240)));
+      runtime.getEngine().resolve(TYPE, "w8", Resolution.PRODUCER, null, null);
+      clock.advance(Duration.ofHours(3));
+      assertThat(runtime.getEngine().raise(new AlertSignal(TYPE).withDedupKey("w8")).getValue("id")).isEqualTo(widget.getValue("id"));
+
+      QRecord health = runtime.getEngine().raise(new AlertSignal(HEALTH).withDedupKey("db2"));
+      runtime.asSystem(() -> AlertsDb.update(AlertsType.TABLE_NAME, new QRecord().withValue("id", health.getValue("alertTypeId")).withValue("reopenWindowMinutes", 10)));
+      runtime.getEngine().resolve(HEALTH, "db2", Resolution.PRODUCER, null, null);
+      clock.advance(Duration.ofMinutes(20));
+      assertThat(runtime.getEngine().raise(new AlertSignal(HEALTH).withDedupKey("db2")).getValue("id")).isNotEqualTo(health.getValue("id"));
+   }
+
+
+
+   /*******************************************************************************
+    ** Default windows by name prefix: the longest match wins.
+    *******************************************************************************/
+   @Test
+   void testReopenWindowByTypePrefix()
+   {
+      AlertsQBitConfig defaults = new AlertsQBitConfig();
+      assertThat(defaults.reopenWindowMinutesFor("health.database.degraded")).isEqualTo(360);
+      assertThat(defaults.reopenWindowMinutesFor("test.widget.broken")).isEqualTo(30);
+      assertThat(defaults.reopenWindowMinutesFor(null)).isEqualTo(30);
+
+      AlertsQBitConfig custom = new AlertsQBitConfig().withReopenWindowMinutes(15).withReopenWindowMinutesForTypePrefix("health.database.", 60);
+      assertThat(custom.reopenWindowMinutesFor("health.database.degraded")).isEqualTo(60);
+      assertThat(custom.reopenWindowMinutesFor("health.queue.slow")).isEqualTo(360);
+      assertThat(custom.reopenWindowMinutesFor("other")).isEqualTo(15);
+      assertThat(new AlertsQBitConfig().withReopenWindowMinutesByTypePrefix(null).reopenWindowMinutesFor("health.x")).isEqualTo(30);
+
+      List<String> errors = new java.util.ArrayList<>();
+      new AlertsQBitConfig().withBackendName(BACKEND_NAME).withReopenWindowMinutesForTypePrefix("health.", 0).validate(qInstance, errors);
+      assertThat(errors).anyMatch(e -> e.contains("reopen windows by type prefix"));
    }
 
 
