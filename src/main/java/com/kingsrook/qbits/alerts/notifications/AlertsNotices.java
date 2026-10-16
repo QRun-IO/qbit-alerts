@@ -37,7 +37,8 @@ import com.kingsrook.qqq.backend.core.alerts.QAlerts;
  ** qbit installed core uses its logging sink.
  **
  ** Core has no sign-in or API key events yet, so a host calls the security
- ** notices from its authentication customizer or API key screens.
+ ** notices from its authentication customizer or API key screens. There is
+ ** no notice for creating an API key: the person who created it just did it.
  *******************************************************************************/
 public final class AlertsNotices
 {
@@ -56,25 +57,14 @@ public final class AlertsNotices
 
    /*******************************************************************************
     ** A sign-in from a new device or place (where: e.g. "Firefox on Windows,
-    ** near Columbus, OH").
+    ** near Columbus, OH"). Call it only for a device or address not seen for
+    ** this user recently: the host has the sign-in history, this qbit does not.
     *******************************************************************************/
    public static void newSignIn(String userId, String where)
    {
       send(new NotificationSignal("New sign-in to your account")
          .withBody("A sign-in from " + where + ". If this wasn't you, change your password now.")
          .withSeverity(NotificationSeverity.WARNING), userId, null);
-   }
-
-
-
-   /*******************************************************************************
-    ** An API key was created for the user.
-    *******************************************************************************/
-   public static void apiKeyCreated(String userId, String keyLabel)
-   {
-      send(new NotificationSignal("API key created: " + keyLabel)
-         .withBody("A new API key was created on your account. If you didn't create it, revoke it now.")
-         .withSeverity(NotificationSeverity.INFO), userId, null);
    }
 
 

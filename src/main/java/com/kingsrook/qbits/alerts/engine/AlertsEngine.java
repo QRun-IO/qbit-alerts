@@ -63,8 +63,10 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  ** - Raise on an open (type, dedupKey) updates that alert: lastRaisedAt,
  **   occurrences, record refs. A severity increase records SEVERITY_CHANGED,
  **   unsnoozes and notifies again; a decrease only records it.
- ** - Raise on a key resolved less than reopenWindowMinutes ago reopens the
- **   same alert; later, a new alert is created (history stays on the old one).
+ ** - Raise on a key resolved within the type's reopen window (its own
+ **   reopenWindowMinutes, else 6 hours for health.* types and 30 minutes for
+ **   others, both configurable) reopens the same alert and its bell entry;
+ **   later, a new alert is created (history stays on the old one).
  ** - Flapping: flapThreshold open/resolve changes within flapWindowMinutes
  **   set flapping (one notice; further open/resolve notifications are
  **   suppressed until it is stable for the window).
@@ -155,7 +157,7 @@ public class AlertsEngine
          }
          else
          {
-            QRecord recent = recentlyResolved(signal.getAlertTypeName(), dedupKey, now);
+            QRecord recent = recentlyResolved(type, signal.getAlertTypeName(), dedupKey, now);
             if(recent != null)
             {
                alert = reopen(recent, type, signal, severity, monitorId, now, null, "Raised again within the reopen window");
@@ -680,14 +682,31 @@ public class AlertsEngine
    /*******************************************************************************
     ** The most recent alert for (type, key) resolved within the reopen window.
     *******************************************************************************/
-   private QRecord recentlyResolved(String alertTypeName, String dedupKey, Instant now) throws QException
+   private QRecord recentlyResolved(QRecord type, String alertTypeName, String dedupKey, Instant now) throws QException
    {
-      Instant cutoff = now.minus(runtime.getConfig().getReopenWindowMinutes(), ChronoUnit.MINUTES);
+      Instant cutoff = now.minus(reopenWindowMinutes(type, alertTypeName), ChronoUnit.MINUTES);
       return (AlertsDb.first(AlertsAlert.TABLE_NAME, AlertsDb.eq("alertTypeName", alertTypeName)
          .withCriteria("dedupKey", QCriteriaOperator.EQUALS, dedupKey)
          .withCriteria("status", QCriteriaOperator.EQUALS, Status.RESOLVED.name())
          .withCriteria("resolvedAt", QCriteriaOperator.GREATER_THAN_OR_EQUALS, cutoff)
          .withOrderBy(new QFilterOrderBy("resolvedAt", false))));
+   }
+
+
+
+   /*******************************************************************************
+    ** How long after a resolve a raise of the same (type, key) reopens the
+    ** alert: the type's own reopenWindowMinutes, else the configured default
+    ** for its name (6 hours for health.* types, 30 minutes otherwise).
+    *******************************************************************************/
+   int reopenWindowMinutes(QRecord type, String alertTypeName)
+   {
+      Integer perType = type == null ? null : type.getValueInteger("reopenWindowMinutes");
+      if(perType != null && perType > 0)
+      {
+         return (perType);
+      }
+      return (runtime.getConfig().reopenWindowMinutesFor(alertTypeName));
    }
 
 

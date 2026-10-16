@@ -434,19 +434,19 @@ class NotificationEmailAndNoticesTest extends BaseAlertsTest
       emailSettings("viewer-1", "SECURITY", "IMMEDIATE", "INFO");
       loginAs("viewer-1");
       AlertsNotices.newSignIn("viewer-1", "Firefox on Windows");
-      AlertsNotices.apiKeyCreated("viewer-1", "ci-bot");
       AlertsNotices.apiKeyExpiring("viewer-1", "ci-bot", Instant.parse("2026-11-01T00:00:00Z"));
       AlertsNotices.apiKeyExpiring("viewer-1", "ci-bot", Instant.parse("2026-11-01T00:00:00Z"));
       AlertsNotices.permissionChanged("viewer-1", "You were added to the Editors role");
       AlertsNotices.shared("viewer-1", "Sam shared a notebook with you", AlertLink.toPath("/app/widget", "Open"), "qbit-sql-workbench");
 
       List<QRecord> notifications = runtime.asSystem(() -> all(AlertsNotification.TABLE_NAME));
-      assertThat(notifications).hasSize(5);
-      assertThat(notifications).filteredOn(n -> "SECURITY".equals(n.getValueString("category"))).hasSize(4);
+      assertThat(notifications).hasSize(4);
+      assertThat(notifications).filteredOn(n -> "SECURITY".equals(n.getValueString("category"))).hasSize(3);
       assertThat(notifications).anyMatch(n -> n.getValueString("title").equals("API key expires Nov 1, 2026: ci-bot"));
+      assertThat(notifications).noneMatch(n -> n.getValueString("title").startsWith("API key created"));
 
       new NotificationEmailer(runtime).run();
-      assertThat(SENT).hasSize(4);
+      assertThat(SENT).hasSize(3);
       assertThat(SENT).noneMatch(message -> text(message).contains("change your password"));
    }
 

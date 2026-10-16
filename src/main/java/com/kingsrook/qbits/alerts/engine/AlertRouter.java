@@ -92,15 +92,28 @@ public class AlertRouter
 
    private static final int DUPLICATE_WINDOW_MINUTES = 10;
 
+   /** The events a new subscription gets unless someone chooses others. */
+   public static final String DEFAULT_SUBSCRIPTION_EVENTS = "RAISED,ESCALATED,REMINDER,RESOLVED";
+
    private final AlertsRuntime runtime;
 
 
 
    /*******************************************************************************
-    ** One destination for one notification.
+    ** One destination for one notification. explicitResolve: the subscription
+    ** behind it chose resolve notices on purpose (see explicitlyWantsResolved),
+    ** so a resolve brings the alert back to unread in that person's bell.
     *******************************************************************************/
-   record Destination(String userId, QRecord channel, Integer subscriptionId, String minSeverity, QRecord preference, String deliveryMode)
+   record Destination(String userId, QRecord channel, Integer subscriptionId, String minSeverity, QRecord preference, String deliveryMode, boolean explicitResolve)
    {
+      /***************************************************************************
+       ** A destination that is not from a subscription with explicit resolve
+       ** notices.
+       ***************************************************************************/
+      Destination(String userId, QRecord channel, Integer subscriptionId, String minSeverity, QRecord preference, String deliveryMode)
+      {
+         this(userId, channel, subscriptionId, minSeverity, preference, deliveryMode, false);
+      }
    }
 
 
@@ -337,6 +350,14 @@ public class AlertRouter
             notification.setValue("status", DeliveryStatus.SUPPRESSED.name());
             notification.setValue("suppressedReason", reason.name());
             AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
+            if(inApp && reason == SuppressedReason.DUPLICATE)
+            {
+               ///////////////////////////////////////////////////////////////////
+               // not a new notice, but keep the bell entry's text in step (a   //
+               // quick reopen must not leave it reading "Resolved")            //
+               ///////////////////////////////////////////////////////////////////
+               runtime.getNotifications().deliverAlert(destination.userId(), alert, now, false);
+            }
          }
          else if(digest)
          {
@@ -349,12 +370,21 @@ public class AlertRouter
          }
          else if(inApp)
          {
+            //////////////////////////////////////////////////////////////////////////
+            // a resolve is good news, not something to act on: it updates the     //
+            // alert's bell entry in place without marking it unread, unless the    //
+            // person's subscription asked for resolve notices on purpose           //
+            //////////////////////////////////////////////////////////////////////////
+            boolean quiet = kind == DeliveryKind.RESOLVED && !destination.explicitResolve();
             notification.setValue("status", DeliveryStatus.SENT.name());
             notification.setValue("sentAt", now);
             QRecord inserted = AlertsDb.insert(AlertsDelivery.TABLE_NAME, notification);
-            runtime.getNotifications().deliverAlert(destination.userId(), alert, now);
-            LOG.debug("In-app alert delivered", logPair("deliveryId", inserted.getValue("id")));
-            queued++;
+            runtime.getNotifications().deliverAlert(destination.userId(), alert, now, !quiet);
+            LOG.debug("In-app alert delivered", logPair("deliveryId", inserted.getValue("id")), logPair("quiet", quiet));
+            if(!quiet)
+            {
+               queued++;
+            }
          }
          else
          {
@@ -471,7 +501,8 @@ public class AlertRouter
             QRecord preference = AlertsDb.first(AlertsUserPreference.TABLE_NAME, AlertsDb.eq("userId", userId));
             for(QRecord channel : userChannels(subscription, preference))
             {
-               destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, subscriptionId, minName, preference, subscription.getValueString("deliveryMode")));
+               destinations.putIfAbsent("user:" + userId + ":" + channel.getValue("id"), new Destination(userId, channel, subscriptionId, minName, preference,
+                  subscription.getValueString("deliveryMode"), explicitlyWantsResolved(subscription.getValueString("events"))));
             }
          }
       }
@@ -781,7 +812,41 @@ public class AlertRouter
 
 
    /*******************************************************************************
-    ** Whether a subscription's events list includes this kind (empty: all).
+    ** Whether a subscription asked for resolve notices on purpose: its events
+    ** name RESOLVED and are not the default set (an empty list means "all
+    ** kinds", which is not a choice either).
+    *******************************************************************************/
+   static boolean explicitlyWantsResolved(String events)
+   {
+      if(!StringUtils.hasContent(events) || !includesKind(events, DeliveryKind.RESOLVED))
+      {
+         return (false);
+      }
+      return (!eventSet(events).equals(eventSet(DEFAULT_SUBSCRIPTION_EVENTS)));
+   }
+
+
+
+   /*******************************************************************************
+    ** A subscription's events as an upper-case set.
+    *******************************************************************************/
+   private static Set<String> eventSet(String events)
+   {
+      Set<String> set = new java.util.TreeSet<>();
+      for(String event : events.split("[,\\s]+"))
+      {
+         if(!event.isBlank())
+         {
+            set.add(event.trim().toUpperCase(java.util.Locale.ROOT));
+         }
+      }
+      return (set);
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether a subscription's events include a kind (empty: all kinds).
     *******************************************************************************/
    private static boolean includesKind(String events, DeliveryKind kind)
    {

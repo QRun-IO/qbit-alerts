@@ -34,6 +34,7 @@ import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsNotification;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationPreference;
 import com.kingsrook.qbits.alerts.model.AlertsNotificationRecipient;
+import com.kingsrook.qbits.alerts.model.AlertsPossibleValues;
 import com.kingsrook.qqq.backend.core.actions.tables.DeleteAction;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.UpdateAction;
@@ -72,6 +73,9 @@ public class NotificationService
    public static final String STATUS_SCHEDULED = "SCHEDULED";
    public static final String STATUS_SENT      = "SENT";
    public static final String STATUS_RETRACTED = "RETRACTED";
+
+   /** Put before a resolved alert's title in the bell. */
+   public static final String RESOLVED_PREFIX = "Resolved: ";
 
    static final int BATCH = 500;
 
@@ -333,10 +337,29 @@ public class NotificationService
     *******************************************************************************/
    public void deliverAlert(String userId, QRecord alert, Instant now) throws QException
    {
+      deliverAlert(userId, alert, now, true);
+   }
+
+
+
+   /*******************************************************************************
+    ** Put an alert in a user's bell. With markUnread false (a resolve) the
+    ** alert's existing bell entry is only updated in place, its title marked
+    ** "Resolved: ", and the user's read state is left as it was; nothing is
+    ** added when the alert was never in the bell. Returns whether the user's
+    ** bell entry was written. Call as the system user.
+    *******************************************************************************/
+   public boolean deliverAlert(String userId, QRecord alert, Instant now, boolean markUnread) throws QException
+   {
       Integer alertId   = alert.getValueInteger("id");
       String  sourceKey = "alert:" + alertId;
-      QRecord values    = new QRecord()
-         .withValue("title", StringUtils.safeTruncate(alert.getValueString("title"), 200))
+      String  title     = alert.getValueString("title");
+      if(!markUnread && AlertsPossibleValues.Status.RESOLVED.name().equals(alert.getValueString("status")))
+      {
+         title = RESOLVED_PREFIX + (title == null ? "" : title);
+      }
+      QRecord values = new QRecord()
+         .withValue("title", StringUtils.safeTruncate(title, 200))
          .withValue("body", alert.getValueString("summary"))
          .withValue("severity", severityOf(alert.getValueString("severity"), NotificationSeverity.WARNING).name())
          .withValue("category", NotificationCategory.ALERT.name())
@@ -352,6 +375,10 @@ public class NotificationService
       Integer notificationId;
       if(notification == null)
       {
+         if(!markUnread)
+         {
+            return (false);
+         }
          notificationId = AlertsDb.insert(AlertsNotification.TABLE_NAME, values
             .withValue("audienceType", NotificationAudience.Type.USERS.name())
             .withValue("status", STATUS_SENT)
@@ -367,6 +394,10 @@ public class NotificationService
 
       QRecord recipient = AlertsDb.first(AlertsNotificationRecipient.TABLE_NAME, AlertsDb.eq("notificationId", notificationId)
          .withCriteria("userId", QCriteriaOperator.EQUALS, userId));
+      if(!markUnread)
+      {
+         return (recipient != null);
+      }
       if(recipient == null)
       {
          AlertsDb.insert(AlertsNotificationRecipient.TABLE_NAME, newRecipient(notificationId, userId, now));
@@ -378,6 +409,7 @@ public class NotificationService
          AlertsDb.update(AlertsNotificationRecipient.TABLE_NAME, new QRecord().withValue("id", recipient.getValue("id"))
             .withValue("deliveredAt", now).withValue("readAt", null).withValue("dismissedAt", null));
       }
+      return (true);
    }
 
 

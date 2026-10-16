@@ -27,6 +27,7 @@ import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.customizers.AlertsNotificationCustomizer;
 import com.kingsrook.qbits.alerts.customizers.AlertsSubscriptionCustomizer;
 import com.kingsrook.qbits.alerts.customizers.AlertsWriteGuardCustomizer;
+import com.kingsrook.qbits.alerts.engine.AlertRouter;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
@@ -158,7 +159,7 @@ public final class AlertsTableMetaDataHelper
          .withSection(new QFieldSection("identity", new QIcon("badge"), Tier.T1, List.of("id", "label", "name", "groupId", "sourceName", "openCount")))
          .withSection(new QFieldSection("about", "About", new QIcon("info"), Tier.T2, List.of("description", "howToFix", "subjectTableName", "visibilityPermission")))
          .withSection(new QFieldSection("tuning", "Tuning", new QIcon("tune"), Tier.T2, List.of("enabled", "notify", "defaultSeverity", "severityOverride", "resolveMode",
-            "quietPeriodMinutes", "reminderIntervalMinutes", "escalationPolicyId", "externalDetailCeiling")))
+            "quietPeriodMinutes", "reopenWindowMinutes", "reminderIntervalMinutes", "escalationPolicyId", "externalDetailCeiling")))
          .withSection(widgetSection(JOIN_TYPE_MONITOR, "Monitors", "monitor_heart"))
          .withSection(widgetSection(JOIN_TYPE_ALERT, "Alerts", "notifications_active"))
          .withSection(new QFieldSection("system", new QIcon("calendar_month"), Tier.T3, List.of("installed", "lastRaisedAt", "createDate", "modifyDate")));
@@ -262,7 +263,7 @@ public final class AlertsTableMetaDataHelper
       table.getField("scopeType").setDefaultValue(AlertsPossibleValues.ScopeType.ALL.name());
       table.getField("minSeverity").setDefaultValue("WARNING");
       table.getField("deliveryMode").setDefaultValue(AlertsPossibleValues.DeliveryMode.IMMEDIATE.name());
-      table.getField("events").setDefaultValue("RAISED,ESCALATED,REMINDER,RESOLVED");
+      table.getField("events").setDefaultValue(AlertRouter.DEFAULT_SUBSCRIPTION_EVENTS);
       table.getField("enabled").setDefaultValue(true);
       table.getField("userId").setIsEditable(false);
       return (customize(table, AlertsSubscriptionCustomizer.class));

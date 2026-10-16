@@ -1,5 +1,15 @@
 # Upgrading
 
+## Unreleased: quieter notifications
+
+1. **Run the changelog as usual.** Changeset 55 adds the nullable `alerts_type.reopen_window_minutes` column (guarded, additive).
+2. **Behavior changes to know about.**
+   - A resolve no longer marks the alert's bell entry unread; the entry is updated in place ("Resolved: ..."). A subscription whose events name RESOLVED and differ from the default set keeps the old behavior. Email, Slack and webhook resolve notices are unchanged.
+   - "Alert signals dropped" (`alerts.sink.overflow`) now resolves itself once the queue has stayed below half full for a minute. An installed type row keeps its stored Resolve Mode label; the behavior does not depend on it.
+   - `AlertsNotices.apiKeyCreated` is removed. Delete the call; there is no replacement notice.
+   - Failed and partial job notifications are sent only for runs that were not interactive (frontend steps skipped: scheduled, background, API). A run on the process screens shows its result there instead.
+   - The reopen window is now per alert type: an alert type's **Reopen Window Minutes**, else `AlertsQBitConfig.withReopenWindowMinutesByTypePrefix` (default `health.` = 360 minutes), else `withReopenWindowMinutes` (default 30). A health check that blips again within 6 hours reopens the same alert and bell entry instead of creating a new one.
+
 ## Unreleased: starter defaults, setup card, table help
 
 1. **Add the defaults changelog** after `alerts.changelog.sql` in the host's master changelog:

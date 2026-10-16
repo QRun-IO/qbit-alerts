@@ -321,6 +321,10 @@ entries:
   summary: Minutes between reminders while an alert remains open and unacknowledged.
   content: |
     Set zero to disable reminders. If blank, Critical alerts default to 60 minutes; other severities have no reminders. Acknowledgement, snooze, resolution and suppression stop timed notifications.
+- key: table:alerts_type;field:reopenWindowMinutes
+  summary: Minutes after a resolve during which the same problem reopens its alert instead of starting a new one.
+  content: |
+    Empty uses the default: 6 hours for health checks (types named health.*) and 30 minutes for the rest, set by the application. A reopen updates the existing alert and its bell entry, so a short blip does not show up twice.
 - key: table:alerts_type;field:quietPeriodMinutes
   summary: Minutes with no new reports before an alert resolves itself; used when Resolve Mode is Quiet Period.
   content: |
@@ -419,6 +423,7 @@ entries:
   summary: Which kinds of notification to send, as a comma-separated list; empty means all.
   content: |
     Default is {{default:alerts_subscription.events}}. Raised also covers a reopened alert, a severity increase and an alert starting to flap. Reminders and escalations are sent immediately, including for digest subscriptions.
+    In the bell, a resolve only marks the alert's entry as resolved and leaves it read or unread as it was. To have resolves come back as unread, choose a list that names Resolved and differs from the default, such as Raised and Resolved.
 - key: table:alerts_subscription;field:scopeValue
   summary: What the scope matches on; its meaning depends on Scope Type.
   content: |
