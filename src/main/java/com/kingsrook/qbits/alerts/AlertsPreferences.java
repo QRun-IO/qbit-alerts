@@ -21,6 +21,7 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import com.kingsrook.qbits.alerts.engine.AlertRouter;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.ChannelType;
 import com.kingsrook.qbits.alerts.model.AlertsPossibleValues.DeliveryMode;
@@ -112,7 +113,7 @@ public final class AlertsPreferences
                   .withValue("userId", userId)
                   .withValue("scopeType", ScopeType.ALL.name())
                   .withValue("minSeverity", runtime.getConfig().getBootstrapMinSeverity().name())
-                  .withValue("events", "RAISED,ESCALATED,REMINDER,RESOLVED")
+                  .withValue("events", AlertRouter.DEFAULT_SUBSCRIPTION_EVENTS)
                   .withValue("deliveryMode", DeliveryMode.IMMEDIATE.name())
                   .withValue("channelOverrideIds", String.valueOf(inApp.getValue("id")))
                   .withValue("enabled", true)

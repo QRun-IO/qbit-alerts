@@ -419,6 +419,7 @@ entries:
   summary: Which kinds of notification to send, as a comma-separated list; empty means all.
   content: |
     Default is {{default:alerts_subscription.events}}. Raised also covers a reopened alert, a severity increase and an alert starting to flap. Reminders and escalations are sent immediately, including for digest subscriptions.
+    In the bell, a resolve only marks the alert's entry as resolved and leaves it read or unread as it was. To have resolves come back as unread, choose a list that names Resolved and differs from the default, such as Raised and Resolved.
 - key: table:alerts_subscription;field:scopeValue
   summary: What the scope matches on; its meaning depends on Scope Type.
   content: |

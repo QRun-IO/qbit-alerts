@@ -27,6 +27,7 @@ import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qbits.alerts.customizers.AlertsNotificationCustomizer;
 import com.kingsrook.qbits.alerts.customizers.AlertsSubscriptionCustomizer;
 import com.kingsrook.qbits.alerts.customizers.AlertsWriteGuardCustomizer;
+import com.kingsrook.qbits.alerts.engine.AlertRouter;
 import com.kingsrook.qbits.alerts.model.AlertsAlert;
 import com.kingsrook.qbits.alerts.model.AlertsChannel;
 import com.kingsrook.qbits.alerts.model.AlertsDelivery;
@@ -262,7 +263,7 @@ public final class AlertsTableMetaDataHelper
       table.getField("scopeType").setDefaultValue(AlertsPossibleValues.ScopeType.ALL.name());
       table.getField("minSeverity").setDefaultValue("WARNING");
       table.getField("deliveryMode").setDefaultValue(AlertsPossibleValues.DeliveryMode.IMMEDIATE.name());
-      table.getField("events").setDefaultValue("RAISED,ESCALATED,REMINDER,RESOLVED");
+      table.getField("events").setDefaultValue(AlertRouter.DEFAULT_SUBSCRIPTION_EVENTS);
       table.getField("enabled").setDefaultValue(true);
       table.getField("userId").setIsEditable(false);
       return (customize(table, AlertsSubscriptionCustomizer.class));

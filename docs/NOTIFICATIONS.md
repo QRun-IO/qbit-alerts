@@ -233,7 +233,7 @@ QAlerts.notify(new NotificationSignal("Your export failed")
 | Source | How | Category |
 |---|---|---|
 | Failed or partial jobs | The qbit's process lifecycle listener: a run that fails, or completes with error summary lines, notifies the user who started it (the session user; system runs are skipped). The link is the run's table, or `jobRunLinkPattern` with `{processName}` and `{processUUID}`. Turn it off with `notifyFailedJobs(false)`. | JOB |
-| Alerts they subscribe to | The router's in-app channel writes an ALERT notification per alert (sourceKey `alert:<id>`) and a recipient row per routed user. A repeat or reopen marks it unread again. | ALERT |
+| Alerts they subscribe to | The router's in-app channel writes an ALERT notification per alert (sourceKey `alert:<id>`) and a recipient row per routed user. A raise, reopen, severity increase, reminder or escalation marks it unread again. A resolve only updates it in place (title "Resolved: ...", read state unchanged), unless the subscription chose resolve notices on purpose (its events name RESOLVED and differ from the default set). | ALERT |
 | Shares, record locks, approvals | Producers call `QAlerts.notify(... user(id))`. The first wiring is the SQL Workbench notebook share in kof22. | SHARE |
 | Security notices | `AlertsSecurityNotices` (new sign-in, API key created, API key expiring, permission change). Core has no authentication events today, so hosts call it from their authentication customizer. A core hook is follow-up work (section 12, Q5). Security is never mutable in-app. | SECURITY |
 | Releases and marketing | Admin-authored notifications, or producers with an audience | RELEASE, MARKETING |

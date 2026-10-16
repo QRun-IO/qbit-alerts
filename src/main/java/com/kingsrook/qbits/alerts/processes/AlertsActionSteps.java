@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
 import com.kingsrook.qbits.alerts.AlertsSecurity;
+import com.kingsrook.qbits.alerts.engine.AlertRouter;
 import com.kingsrook.qbits.alerts.engine.AlertsDb;
 import com.kingsrook.qbits.alerts.engine.AlertsEngine;
 import com.kingsrook.qbits.alerts.engine.MonitorEvaluator;
@@ -414,7 +415,7 @@ public final class AlertsActionSteps
          .withValue("scopeValue", scopeValue)
          .withValue("minSeverity", StringUtils.hasContent(input.getValueString(AlertsAction.FIELD_MIN_SEVERITY)) ? input.getValueString(AlertsAction.FIELD_MIN_SEVERITY) : "WARNING")
          .withValue("deliveryMode", StringUtils.hasContent(input.getValueString(AlertsAction.FIELD_DELIVERY_MODE)) ? input.getValueString(AlertsAction.FIELD_DELIVERY_MODE) : "IMMEDIATE")
-         .withValue("events", "RAISED,ESCALATED,REMINDER,RESOLVED")
+         .withValue("events", AlertRouter.DEFAULT_SUBSCRIPTION_EVENTS)
          .withValue("enabled", true)));
       throwIfErrors(inserted);
       return (true);
