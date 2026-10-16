@@ -41,7 +41,9 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  ** The qbit's sink (design section 3.2): producers' signals go into a bounded
  ** in-memory queue drained by a virtual thread into the alerts tables, so a
  ** producer never waits on the database. If the queue overflows, the signal
- ** is dropped and counted and alerts.sink.overflow is raised once; past 1,000
+ ** is dropped and counted and alerts.sink.overflow is raised once; when the
+ ** queue has stayed below half full for a minute the drain thread resolves
+ ** it, so a later overflow raises it again; past 1,000
  ** signals a minute for one type, signals are counted, not stored, and
  ** alerts.producer.flood is raised (section 7.5).
  **
@@ -55,10 +57,14 @@ public class QbitAlertsSink implements AlertSinkInterface
    public static final String OVERFLOW_TYPE = "alerts.sink.overflow";
    public static final String FLOOD_TYPE    = "alerts.producer.flood";
 
+   /** The overflow alert's dedup key: the key earlier versions used implicitly, so an alert they left open resolves too. */
+   public static final String OVERFLOW_DEDUP_KEY = OVERFLOW_TYPE;
+
    static final int QUEUE_CAPACITY      = 10_000;
    static final int FLOOD_PER_MINUTE    = 1_000;
    static final long POLL_MILLIS        = 200;
    static final long STOP_WAIT_MILLIS   = 10_000;
+   static final long OVERFLOW_CLEAR_MILLIS = 60_000;
 
    private final AlertsRuntime          runtime;
    private final BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
@@ -67,6 +73,7 @@ public class QbitAlertsSink implements AlertSinkInterface
    private final AtomicLong             dropped = new AtomicLong();
    private final Map<String, AtomicInteger> perMinute = new ConcurrentHashMap<>();
    private volatile long                minute = -1;
+   private volatile long                drainedSinceMillis = -1;
    private volatile Thread              drainThread;
    private volatile boolean             stopping = false;
 
@@ -237,14 +244,87 @@ public class QbitAlertsSink implements AlertSinkInterface
       if(!queue.offer(runnable))
       {
          dropped.incrementAndGet();
-         if(overflowRaised.compareAndSet(false, true))
-         {
-            LOG.warn("The alerts queue is full; dropping signals", logPair("capacity", QUEUE_CAPACITY));
-            Thread.ofVirtual().start(() -> safely(() -> runtime.getEngine().raise(new AlertSignal(OVERFLOW_TYPE)
-               .withSeverity(AlertSeverity.ERROR)
-               .withTitle("Alert signals are being dropped")
-               .withSummary("The alerts queue was full, so some signals were not recorded."))));
-         }
+         overflowed();
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** A signal was dropped because the queue is full: raise the overflow alert
+    ** (once, until the queue has drained).
+    *******************************************************************************/
+   void overflowed()
+   {
+      drainedSinceMillis = -1;
+      if(overflowRaised.compareAndSet(false, true))
+      {
+         LOG.warn("The alerts queue is full; dropping signals", logPair("capacity", QUEUE_CAPACITY));
+         runMetaAlert(() -> runtime.getEngine().raise(new AlertSignal(OVERFLOW_TYPE)
+            .withDedupKey(OVERFLOW_DEDUP_KEY)
+            .withSeverity(AlertSeverity.ERROR)
+            .withTitle("Alert signals are being dropped")
+            .withSummary("The alerts queue was full, so some signals were not recorded.")));
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Called by the drain thread: once the overflow alert is raised and the
+    ** queue has stayed below half full for OVERFLOW_CLEAR_MILLIS, resolve the
+    ** alert and re-arm it, so a later overflow raises it again.
+    *******************************************************************************/
+   void checkOverflowCleared()
+   {
+      if(!overflowRaised.get())
+      {
+         return;
+      }
+      long now = runtime.now().toEpochMilli();
+      if(queue.size() >= QUEUE_CAPACITY / 2)
+      {
+         drainedSinceMillis = -1;
+         return;
+      }
+      if(drainedSinceMillis < 0)
+      {
+         drainedSinceMillis = now;
+         return;
+      }
+      if(now - drainedSinceMillis >= OVERFLOW_CLEAR_MILLIS && overflowRaised.compareAndSet(true, false))
+      {
+         drainedSinceMillis = -1;
+         LOG.info("The alerts queue has drained; resolving the overflow alert", logPair("dropped", dropped.get()));
+         runMetaAlert(() -> runtime.getEngine().resolve(OVERFLOW_TYPE, OVERFLOW_DEDUP_KEY, Resolution.PRODUCER, null,
+            "The queue stayed below half full for " + (OVERFLOW_CLEAR_MILLIS / 1000) + " seconds."));
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether the overflow alert is raised and not yet cleared.
+    *******************************************************************************/
+   boolean isOverflowRaised()
+   {
+      return (overflowRaised.get());
+   }
+
+
+
+   /*******************************************************************************
+    ** Record a meta-alert off the producer's thread (on it with synchronousSink).
+    *******************************************************************************/
+   private void runMetaAlert(EngineWork work)
+   {
+      if(Boolean.TRUE.equals(runtime.getConfig().getSynchronousSink()))
+      {
+         safely(work);
+      }
+      else
+      {
+         Thread.ofVirtual().start(() -> safely(work));
       }
    }
 
@@ -296,6 +376,7 @@ public class QbitAlertsSink implements AlertSinkInterface
                   {
                      work.run();
                   }
+                  checkOverflowCleared();
                }
                catch(InterruptedException e)
                {

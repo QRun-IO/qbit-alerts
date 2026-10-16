@@ -297,9 +297,9 @@ public class AlertsQBitProducer implements QBitMetaDataProducer<AlertsQBitConfig
             .withGroupName("alerts")
             .withDefaultSeverity(AlertSeverity.ERROR)
             .withVisibilityPermission(AlertsQBitConfig.PERMISSION_ADMIN)
-            .withResolveMode(ResolveMode.MANUAL)
-            .withDescription("The in-memory queue of producer signals was full, so some signals were not recorded.")
-            .withHowToFix("Find the producer that floods (see Noisiest Alert Types), and check the database is keeping up. Resolve this alert when it has stopped."),
+            .withResolveMode(ResolveMode.PRODUCER)
+            .withDescription("The in-memory queue of producer signals was full, so some signals were not recorded. It resolves itself once the queue has stayed below half full for a minute.")
+            .withHowToFix("Find the producer that floods (see Noisiest Alert Types), and check the database is keeping up."),
          new QAlertTypeMetaData()
             .withName(QbitAlertsSink.FLOOD_TYPE)
             .withLabel("Producer flooding alerts")
