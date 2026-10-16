@@ -80,6 +80,7 @@ public class AlertsQBitConfig implements QBitConfig
    private Boolean legacyAlertmanagerPath = false;
 
    private String backendName;
+   private String servicePrincipal = "alerts";
    private String schedulerName;
    private String messagingProviderName;
    private String fromAddress;
@@ -891,6 +892,32 @@ public class AlertsQBitConfig implements QBitConfig
    public AlertsQBitConfig withLegacyAlertmanagerPath(Boolean legacyAlertmanagerPath)
    {
       this.legacyAlertmanagerPath = legacyAlertmanagerPath;
+      return (this);
+   }
+
+
+   /*******************************************************************************
+    ** Getter for servicePrincipal: when the host declares this QQQ service
+    ** principal, per-recipient checks (alert visibility, follower record access,
+    ** audience) run on the recipient's behalf through it - their current access
+    ** intersected with the principal's - instead of a token-less automated
+    ** session (rejected under OAuth2). Alert recording and routing bookkeeping
+    ** stay on the system session so alerting never depends on the identity
+    ** provider being up.
+    *******************************************************************************/
+   public String getServicePrincipal()
+   {
+      return (this.servicePrincipal);
+   }
+
+
+
+   /*******************************************************************************
+    ** Fluent setter for servicePrincipal (default alerts).
+    *******************************************************************************/
+   public AlertsQBitConfig withServicePrincipal(String servicePrincipal)
+   {
+      this.servicePrincipal = servicePrincipal;
       return (this);
    }
 }

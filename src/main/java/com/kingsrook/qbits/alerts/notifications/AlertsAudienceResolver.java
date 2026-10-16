@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.kingsrook.qbits.alerts.AlertsRuntime;
+import com.kingsrook.qbits.alerts.AlertsSecurity;
 import com.kingsrook.qqq.backend.core.actions.customizers.QCodeLoader;
 import com.kingsrook.qqq.backend.core.alerts.NotificationAudience;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
@@ -33,8 +34,6 @@ import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
-import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleDispatcher;
-import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleInterface;
 import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
 
@@ -218,20 +217,14 @@ public class AlertsAudienceResolver
 
 
    /*******************************************************************************
-    ** A session for a user from the instance's authentication module (null
-    ** when it can't make one).
+    ** A session for a user: on their behalf via the alerts service principal
+    ** when declared, else the authentication module's (null when neither).
     *******************************************************************************/
    private QSession automatedSession(String userId)
    {
       try
       {
-         QInstance qInstance = runtime.getQInstance();
-         if(qInstance.getAuthentication() == null)
-         {
-            return (null);
-         }
-         QAuthenticationModuleInterface module = new QAuthenticationModuleDispatcher().getQModule(qInstance.getAuthentication());
-         return (module.createAutomatedSessionForUser(qInstance, userId));
+         return (AlertsSecurity.recipientSession(runtime.getQInstance(), runtime.getConfig().getServicePrincipal(), userId));
       }
       catch(Exception e)
       {
