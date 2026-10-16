@@ -26,6 +26,7 @@ import com.kingsrook.qqq.backend.core.actions.permissions.PermissionsHelper;
 import com.kingsrook.qqq.backend.core.actions.permissions.TablePermissionSubType;
 import com.kingsrook.qqq.backend.core.context.CapturedContext;
 import com.kingsrook.qqq.backend.core.context.QContext;
+import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.AbstractActionInput;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.security.MultiRecordSecurityLock;
@@ -34,6 +35,9 @@ import com.kingsrook.qqq.backend.core.model.metadata.security.RecordSecurityLock
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
 import com.kingsrook.qqq.backend.core.model.session.QSystemUserSession;
+import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleDispatcher;
+import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleInterface;
+import com.kingsrook.qqq.backend.core.serviceidentity.ServiceIdentities;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
 
 
@@ -306,5 +310,26 @@ public final class AlertsSecurity
    public static boolean isSystemUser()
    {
       return (QContext.getQSession() instanceof QSystemUserSession);
+   }
+
+
+   /*******************************************************************************
+    ** A session for a recipient: on their behalf through the alerts service
+    ** principal when the host declares it (QQQ service identities), else the
+    ** authentication module's automated session (previous behavior). Null when
+    ** neither can be made - callers fail closed.
+    *******************************************************************************/
+   public static QSession recipientSession(QInstance qInstance, String principalName, String userId) throws QException
+   {
+      if(qInstance == null || qInstance.getAuthentication() == null)
+      {
+         return (null);
+      }
+      if(StringUtils.hasContent(principalName) && ServiceIdentities.isDeclared(qInstance, principalName))
+      {
+         return (ServiceIdentities.sessionOnBehalfOf(qInstance, principalName, userId));
+      }
+      QAuthenticationModuleInterface module = new QAuthenticationModuleDispatcher().getQModule(qInstance.getAuthentication());
+      return (module.createAutomatedSessionForUser(qInstance, userId));
    }
 }
