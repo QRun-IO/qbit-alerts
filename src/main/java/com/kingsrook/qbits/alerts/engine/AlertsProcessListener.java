@@ -60,8 +60,12 @@ import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
  **   cached for a minute).
  ** - Job notifications (docs/NOTIFICATIONS.md 6.1): when a run started by a
  **   person fails, or completes with error summary lines (a partial run),
- **   that person gets a JOB notification linked to the run. System runs and
- **   the qbit's own processes are skipped. Off with notifyFailedJobs(false).
+ **   that person gets a JOB notification linked to the run. Only runs nobody
+ **   is watching notify: scheduled, background, API and other runs that skip
+ **   frontend steps. An interactive run (FrontendStepBehavior.BREAK, the
+ **   process screens) already shows its result, so it sends nothing. System
+ **   runs and the qbit's own processes are skipped. Off with
+ **   notifyFailedJobs(false).
  *******************************************************************************/
 public class AlertsProcessListener implements ProcessLifecycleListenerInterface
 {
@@ -230,10 +234,14 @@ public class AlertsProcessListener implements ProcessLifecycleListenerInterface
 
    /*******************************************************************************
     ** Send a JOB notification to the person who started the run (nothing for
-    ** system runs or sessions without a user).
+    ** interactive runs, system runs or sessions without a user).
     *******************************************************************************/
    private static void notifyStarter(AlertsRuntime runtime, RunProcessInput input, NotificationSeverity severity, String titleFormat, String body)
    {
+      if(isInteractive(input))
+      {
+         return;
+      }
       QSession session = QContext.getQSession();
       String   userId  = session == null || session instanceof QSystemUserSession ? null : AlertsSecurity.userId(session);
       if(userId == null)
@@ -252,6 +260,18 @@ public class AlertsProcessListener implements ProcessLifecycleListenerInterface
          .withSourceTableName(tableName)
          .withLink(jobLink(runtime, input.getProcessName(), input.getProcessUUID(), tableName))
          .withAudience(NotificationAudience.user(userId)));
+   }
+
+
+
+   /*******************************************************************************
+    ** Whether a person is watching the run on the process screens: they stop
+    ** at frontend steps (BREAK) and end on the result screen. Scheduled,
+    ** background, API and queue runs skip or fail on frontend steps.
+    *******************************************************************************/
+   public static boolean isInteractive(RunProcessInput input)
+   {
+      return (input != null && input.getFrontendStepBehavior() == RunProcessInput.FrontendStepBehavior.BREAK);
    }
 
 

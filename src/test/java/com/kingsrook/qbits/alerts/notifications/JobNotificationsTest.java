@@ -125,6 +125,35 @@ class JobNotificationsTest extends BaseAlertsTest
 
 
    /*******************************************************************************
+    ** A run the person watches on the process screens (BREAK) already shows
+    ** its result, so it sends nothing.
+    *******************************************************************************/
+   @Test
+   void testInteractiveRunNotifiesNobody() throws Exception
+   {
+      TestSteps.fail = true;
+      loginAs("viewer-1");
+      try
+      {
+         new RunProcessAction().execute(new RunProcessInput().withProcessName("nightlyThing").withFrontendStepBehavior(RunProcessInput.FrontendStepBehavior.BREAK));
+      }
+      catch(Exception e)
+      {
+         ////////////////////////////////////////
+         // the run's own failure is expected //
+         ////////////////////////////////////////
+      }
+      assertThat(runtime.asSystem(() -> all(AlertsNotification.TABLE_NAME))).isEmpty();
+
+      assertThat(AlertsProcessListener.isInteractive(null)).isFalse();
+      assertThat(AlertsProcessListener.isInteractive(new RunProcessInput())).isTrue();
+      assertThat(AlertsProcessListener.isInteractive(new RunProcessInput().withFrontendStepBehavior(RunProcessInput.FrontendStepBehavior.SKIP))).isFalse();
+      assertThat(AlertsProcessListener.isInteractive(new RunProcessInput().withFrontendStepBehavior(RunProcessInput.FrontendStepBehavior.FAIL))).isFalse();
+   }
+
+
+
+   /*******************************************************************************
     ** Turned off, nothing is sent.
     *******************************************************************************/
    @Test
