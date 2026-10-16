@@ -66,8 +66,6 @@ import com.kingsrook.qqq.backend.core.model.metadata.collaboration.FollowEvent;
 import com.kingsrook.qqq.backend.core.model.metadata.collaboration.RecordFollower;
 import com.kingsrook.qqq.backend.core.model.metadata.collaboration.RecordReference;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
-import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleDispatcher;
-import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleInterface;
 import com.kingsrook.qqq.backend.core.utils.CollectionUtils;
 import com.kingsrook.qqq.backend.core.utils.StringUtils;
 import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
@@ -882,18 +880,12 @@ public class AlertRouter
 
 
    /*******************************************************************************
-    ** A session for a user, from the instance's authentication module (null
-    ** when it can't make one).
+    ** A session for a user: on their behalf via the alerts service principal
+    ** when declared, else the authentication module's (null when neither).
     *******************************************************************************/
    private QSession automatedSession(String userId) throws QException
    {
-      QInstance qInstance = runtime.getQInstance();
-      if(qInstance.getAuthentication() == null)
-      {
-         return (null);
-      }
-      QAuthenticationModuleInterface module = new QAuthenticationModuleDispatcher().getQModule(qInstance.getAuthentication());
-      return (module.createAutomatedSessionForUser(qInstance, userId));
+      return (AlertsSecurity.recipientSession(runtime.getQInstance(), runtime.getConfig().getServicePrincipal(), userId));
    }
 
 
