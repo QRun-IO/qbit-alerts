@@ -3,7 +3,7 @@
 -- qbit-alerts starter defaults: the two channels every install needs, and the
 -- two groups the qbit itself files alerts under, so Delivery health and the
 -- group lists are not empty before the first alert.
--- Include it from the host's master changelog AFTER alerts.changelog.sql:
+-- Load this file from the host's master changelog AFTER alerts.changelog.sql:
 --
 --   - include: { file: db/liquibase/qbit-alerts/alerts-defaults.changelog.sql }
 --
