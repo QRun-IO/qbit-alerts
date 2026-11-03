@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows Keep
 
 ## [0.1.0] - Unreleased
 
+### Changed
+- Reconcile release-branch ancestry after an interrupted RC cut while retaining the develop SNAPSHOT revision. A subsequent release still requires the normal cut, verification and publication workflow.
+
 ### Fixed
 - SQL changelog headers: explanatory "-- Include it from the host..." comments were parsed as a licensed Liquibase `include` directive. Replaced with neutral wording; changeset bodies and schema are unchanged.
 - Under OAuth2, per-recipient checks (alert visibility for external channels, follower record access, audience sessions) never worked: they used token-less automated sessions, which OAuth2 rejects, so external sends fell back to the conservative rule. When the host declares the QQQ `alerts` service principal (`AlertsQBitConfig.withServicePrincipal`, default `alerts`), these checks run on the recipient's behalf through it: the recipient's current access intersected with the principal's. Alert recording and routing bookkeeping stay on the system session, so alerting does not depend on the identity provider being up. With no principal declared, behavior is unchanged. Needs the QQQ release with service identities (qqq#1255, #1256).
