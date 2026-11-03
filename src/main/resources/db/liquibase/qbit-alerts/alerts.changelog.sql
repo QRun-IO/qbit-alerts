@@ -1,7 +1,7 @@
 -- liquibase formatted sql
 
 -- qbit-alerts schema (QRun-IO/qqq docs/specs/2026-10-12-qbit-alerts-design.md section 4).
--- Include it from the host's master changelog:
+-- Load this file from the host's master changelog:
 --
 --   - include: { file: db/liquibase/qbit-alerts/alerts.changelog.sql }
 --
